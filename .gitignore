@@ -30,7 +30,12 @@ keystore.properties
 signing.properties
 
 # ---- Models (downloaded at runtime, never vendored) ----
-models/
+# NOT "models/" — that pattern is unanchored and matches any directory of that name
+# at any depth, which silently swallowed the entire io.github...themachine.models
+# source package, its UI package and its tests. They built locally, where the files
+# exist on disk, and only failed in CI. Match the downloaded artefacts by extension
+# instead; the runtime model directory lives in app-private storage on the device
+# and never appears in the repository at all.
 *.gguf
 *.bin
 *.onnx

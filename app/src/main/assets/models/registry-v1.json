@@ -1,0 +1,79 @@
+{
+  "registryVersion": 1,
+  "verifiedOn": "2026-09-01",
+  "note": "Every sha256 and byteSize here was read from the live Hugging Face LFS metadata or computed from an actual download on the date above, not copied from documentation. Verification is by SHA-256 on the downloaded bytes, so a wrong value here fails loudly rather than installing a corrupt model.",
+  "assets": [
+    {
+      "id": "stt-tiny-en",
+      "role": "STT",
+      "displayName": "Whisper tiny.en",
+      "detail": "Fastest. The default: speed matters more than transcript polish for short commands.",
+      "fileName": "ggml-tiny.en-q5_1.bin",
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin",
+      "sha256": "c77c5766f1cef09b6b7d47f21b546cbddd4157886b3b5d6d4f709e91e66c7c2b",
+      "byteSize": 32166155,
+      "minRamMb": 512,
+      "isDefault": true,
+      "license": "MIT",
+      "source": "ggerganov/whisper.cpp"
+    },
+    {
+      "id": "stt-base-en",
+      "role": "STT",
+      "displayName": "Whisper base.en",
+      "detail": "More accurate, roughly twice the work. Worth it if tiny.en mishears names.",
+      "fileName": "ggml-base.en-q5_1.bin",
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_1.bin",
+      "sha256": "4baf70dd0d7c4247ba2b81fafd9c01005ac77c2f9ef064e00dcf195d0e2fdd2f",
+      "byteSize": 59721011,
+      "minRamMb": 768,
+      "isDefault": false,
+      "license": "MIT",
+      "source": "ggerganov/whisper.cpp"
+    },
+    {
+      "id": "llm-gemma3-1b",
+      "role": "LLM",
+      "displayName": "Gemma 3 1B (QAT Q4_0)",
+      "detail": "The default. Quantisation-aware trained by Google, so it holds up far better at 4-bit than a post-hoc quantisation of the same size.",
+      "fileName": "gemma-3-1b-it-q4_0.gguf",
+      "url": "https://huggingface.co/vinimuchulski/gemma-3-1b-it-qat-q4_0-gguf/resolve/main/gemma-3-1b-it-q4_0.gguf",
+      "sha256": "cd2a46a3581fd385ee72688490370ef3e025b7e2daf016615593241b18bd6166",
+      "byteSize": 1003541152,
+      "minRamMb": 2048,
+      "isDefault": true,
+      "license": "Gemma Terms of Use",
+      "source": "Ungated mirror of google/gemma-3-1b-it-qat-q4_0-gguf, which is licence-gated and needs a token. The mirror's file is the same byte size as Google's (1003541152), and the companion mmproj file in this mirror has an identical sha256 to two other independent mirrors."
+    },
+    {
+      "id": "llm-gemma3-4b",
+      "role": "LLM",
+      "displayName": "Gemma 3 4B (QAT Q4_0)",
+      "detail": "Noticeably better at unusual phrasing, at roughly three times the size and latency. Only worth it on a phone with RAM to spare.",
+      "fileName": "gemma-3-4b-it-q4_0.gguf",
+      "url": "https://huggingface.co/vinimuchulski/gemma-3-4b-it-qat-q4_0-gguf/resolve/main/gemma-3-4b-it-q4_0.gguf",
+      "sha256": "2ca493d426ffcb43db27132f183a0230eda4a3621e58b328d55b665f1937a317",
+      "byteSize": 3155051328,
+      "minRamMb": 6144,
+      "isDefault": false,
+      "license": "Gemma Terms of Use",
+      "source": "Ungated mirror of google/gemma-3-4b-it-qat-q4_0-gguf. Same byte size as Google's (3155051328). Note this is larger than the ~2.6 GB quoted in CLAUDE.md."
+    },
+    {
+      "id": "tts-piper-amy",
+      "role": "TTS",
+      "displayName": "Piper en_US-amy-medium",
+      "detail": "The speaking voice. 22 kHz, one speaker.",
+      "fileName": "vits-piper-en_US-amy-medium.tar.bz2",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-amy-medium.tar.bz2",
+      "sha256": "9a5d1fc497f85e8022b785bff5f8105203b1e33099ee6265203efc70b0cb0264",
+      "byteSize": 67223746,
+      "minRamMb": 512,
+      "isDefault": true,
+      "archive": "TAR_BZ2",
+      "extractedByteSize": 85000000,
+      "license": "See the voice's MODEL_CARD",
+      "source": "sherpa-onnx tts-models tag. That tag is an asset host rather than a version, so the URL stays valid across sherpa-onnx releases."
+    }
+  ]
+}

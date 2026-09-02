@@ -163,12 +163,42 @@ jobs:
           if-no-files-found: error
 
   privacy-invariants:
-    name: Privacy invariants
+    name: Repository invariants
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Check out
         uses: actions/checkout@v7.0.1
+        with:
+          submodules: recursive
+
+      - name: No source file is excluded by .gitignore
+        run: |
+          set -euo pipefail
+          # A bare "models/" rule once matched the Kotlin source package of the same
+          # name and silently excluded four directories. It built locally, where the
+          # files are on disk, and only failed here. Cheap to check, expensive to miss.
+          ignored=$(git ls-files --others --ignored --exclude-standard --directory -- app/src \
+            | grep -vE '(^|/)(build|\.cxx)/' || true)
+          if [ -n "$ignored" ]; then
+            echo "::error::These paths under app/src are excluded by .gitignore:"
+            echo "$ignored"
+            exit 1
+          fi
+          echo "Nothing under app/src is ignored."
+
+      - name: Vendored submodules are unmodified
+        run: |
+          set -euo pipefail
+          # Formatting or analysis tools must never rewrite upstream code; a dirty
+          # submodule means one of them is reaching somewhere it should not.
+          dirty=$(git submodule foreach --quiet 'git status --porcelain | head -5' || true)
+          if [ -n "$dirty" ]; then
+            echo "::error::A submodule working tree has local modifications:"
+            echo "$dirty"
+            exit 1
+          fi
+          echo "Submodules are clean."
 
       - name: No analytics, crash reporting or telemetry dependencies
         run: |
