@@ -1,0 +1,115 @@
+/*
+ * The Machine — an offline voice assistant for Android.
+ * Copyright (C) 2026 Hasan Ismail
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version. See the LICENSE file in the project root for the full text.
+ */
+package io.github.hasanismail.themachine.llm
+
+import android.content.Context
+import android.util.Log
+import io.github.hasanismail.themachine.nativebridge.NativeBridge
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+
+/** A completion and how long it took. */
+data class Completion(val text: String, val millis: Long)
+
+/**
+ * Runs the language model.
+ *
+ * Loaded once per session and freed when the overlay closes. The model is mmapped,
+ * so a second summon within a short window is cheap even after the handle is freed —
+ * the pages are still in the file cache.
+ */
+class LlamaEngine(private val context: Context) {
+
+    @Volatile
+    private var handle: Long = 0
+
+    val isLoaded: Boolean get() = handle != 0L
+
+    suspend fun load(modelFile: File, contextSize: Int = DEFAULT_CONTEXT): Boolean =
+        withContext(Dispatchers.Default) {
+            if (!NativeBridge.load(context)) return@withContext false
+            if (!modelFile.isFile) {
+                Log.w(TAG, "llm model missing: ${modelFile.absolutePath}")
+                return@withContext false
+            }
+            unload()
+            handle = LlamaNative.nativeLoad(modelFile.absolutePath, contextSize, threadCount())
+            handle != 0L
+        }
+
+    /** Model name, parameter count and context size, for the diagnostics screen. */
+    suspend fun describe(): String = withContext(Dispatchers.Default) {
+        if (handle == 0L) "" else LlamaNative.nativeDescribe(handle)
+    }
+
+    /**
+     * Generates a completion, optionally constrained by a GBNF grammar.
+     *
+     * With a grammar the output is valid by construction, so callers do not need a
+     * retry loop for malformed output — there is no such state to recover from.
+     */
+    suspend fun generate(
+        prompt: String,
+        grammar: String = "",
+        maxTokens: Int = DEFAULT_MAX_TOKENS,
+    ): Completion = withContext(Dispatchers.Default) {
+        val current = handle
+        if (current == 0L) return@withContext Completion("", 0)
+        val startedAt = System.nanoTime()
+        val text = LlamaNative.nativeGenerate(current, prompt, grammar, maxTokens)
+        Completion(text.trim(), (System.nanoTime() - startedAt) / NANOS_PER_MILLI)
+    }
+
+    /** True if llama.cpp accepts this GBNF. */
+    suspend fun validateGrammar(grammar: String): Boolean = withContext(Dispatchers.Default) {
+        val current = handle
+        current != 0L && LlamaNative.nativeValidateGrammar(current, grammar)
+    }
+
+    /**
+     * Whether [grammar] would allow the model to produce [text].
+     *
+     * Distinct from [validateGrammar], which only asks whether the grammar parses. A
+     * grammar that parses can still be wrong in the way that matters.
+     */
+    suspend fun grammarAccepts(grammar: String, text: String): Boolean =
+        withContext(Dispatchers.Default) {
+            val current = handle
+            current != 0L && LlamaNative.nativeGrammarAccepts(current, grammar, text)
+        }
+
+    @Synchronized
+    fun unload() {
+        if (handle != 0L) {
+            LlamaNative.nativeFree(handle)
+            handle = 0
+        }
+    }
+
+    /** Leaves headroom for the UI; saturating every core makes the interface stutter. */
+    private fun threadCount(): Int =
+        (Runtime.getRuntime().availableProcessors() - 2).coerceIn(2, MAX_THREADS)
+
+    companion object {
+        private const val TAG = "TheMachine"
+        private const val NANOS_PER_MILLI = 1_000_000
+        private const val MAX_THREADS = 6
+
+        /** Enough for the tool list, the user's context files and one command. */
+        const val DEFAULT_CONTEXT = 2048
+
+        /**
+         * The longest legal tool call is well under this. The cap is what bounds the
+         * worst case when the model would otherwise keep emitting optional arguments.
+         */
+        const val DEFAULT_MAX_TOKENS = 80
+    }
+}

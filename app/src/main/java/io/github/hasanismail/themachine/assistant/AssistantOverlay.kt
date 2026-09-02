@@ -141,17 +141,31 @@ private fun SessionBody(state: SessionState) {
             )
         }
 
-        is SessionState.Heard -> {
+        is SessionState.Thinking -> {
             Text(text = state.transcript, style = MachineStatus, color = MachineColors.Bone)
-            Text(
-                text = "${state.millis} MS  ·  RTF ${"%.2f".format(state.realTimeFactor)}",
-                style = MachineLabel,
-                color = MachineColors.Asset,
+            Text("UNDERSTANDING", style = MachineLabel, color = MachineColors.Admin)
+            IndeterminateCells(
+                modifier = Modifier.fillMaxWidth().height(6.dp),
+                color = MachineColors.Admin,
             )
+        }
+
+        is SessionState.Done -> {
+            Text(text = state.transcript, style = MachineReadout, color = MachineColors.Dim)
             Text(
-                text = "Understanding the command and acting on it is the next phase.",
-                style = MachineReadout,
-                color = MachineColors.Ghost,
+                text = state.result.spoken,
+                style = MachineStatus,
+                color = if (state.result.success) MachineColors.Bone else MachineColors.Relevant,
+            )
+            state.result.detail?.let {
+                Text(it, style = MachineReadout, color = MachineColors.Dim)
+            }
+            Text(
+                text = state.tool.uppercase() + "   " +
+                    "${state.timing.sttMillis} + ${state.timing.llmMillis} MS  =  " +
+                    "${state.timing.totalMillis} MS",
+                style = MachineLabel,
+                color = if (state.result.success) MachineColors.Asset else MachineColors.Relevant,
             )
         }
 
@@ -167,7 +181,7 @@ private fun SessionBody(state: SessionState) {
 
 private fun SessionState.tone() = when (this) {
     is SessionState.Problem -> MachineColors.Relevant
-    is SessionState.Heard -> MachineColors.Asset
+    is SessionState.Done -> if (result.success) MachineColors.Asset else MachineColors.Relevant
     is SessionState.Listening -> MachineColors.Relevant
     else -> MachineColors.Admin
 }

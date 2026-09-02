@@ -32,10 +32,24 @@
       "source": "ggerganov/whisper.cpp"
     },
     {
+      "id": "llm-functiongemma-270m",
+      "role": "LLM",
+      "displayName": "FunctionGemma 270M",
+      "detail": "Experimental. Google tuned it for function calling and it is a third the size, but it speaks its own call format and that path is not finished yet.",
+      "fileName": "functiongemma-270m-it-q8_0.gguf",
+      "url": "https://huggingface.co/ggml-org/functiongemma-270m-it-GGUF/resolve/main/functiongemma-270m-it-q8_0.gguf",
+      "sha256": "83940d4dd9676710856f43523bed096164a595a96f6b34771610a03937de5270",
+      "byteSize": 291557792,
+      "minRamMb": 1024,
+      "isDefault": false,
+      "license": "Gemma Terms of Use",
+      "source": "ggml-org, the llama.cpp organisation's own GGUF conversion. Q8_0 rather than a 4-bit quant: at 270M parameters the weights are already small, and aggressive quantisation costs a tiny model far more than it costs a large one."
+    },
+    {
       "id": "llm-gemma3-1b",
       "role": "LLM",
       "displayName": "Gemma 3 1B (QAT Q4_0)",
-      "detail": "The default. Quantisation-aware trained by Google, so it holds up far better at 4-bit than a post-hoc quantisation of the same size.",
+      "detail": "The default. Picks the right tool reliably, including 24-hour conversions like \"half past six in the evening\".",
       "fileName": "gemma-3-1b-it-q4_0.gguf",
       "url": "https://huggingface.co/vinimuchulski/gemma-3-1b-it-qat-q4_0-gguf/resolve/main/gemma-3-1b-it-q4_0.gguf",
       "sha256": "cd2a46a3581fd385ee72688490370ef3e025b7e2daf016615593241b18bd6166",

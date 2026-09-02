@@ -47,6 +47,7 @@ import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
 import io.github.hasanismail.themachine.permissions.MachinePermissions
 import io.github.hasanismail.themachine.permissions.PermissionInspector
+import io.github.hasanismail.themachine.settings.MachineSettings
 import io.github.hasanismail.themachine.ui.machine.BootLine
 import io.github.hasanismail.themachine.ui.machine.BootSequence
 import io.github.hasanismail.themachine.ui.machine.MachineRule
@@ -99,6 +100,10 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
         val inspector = PermissionInspector(context)
         MachinePermissions.all.count { inspector.state(it).isSettled } to
             MachinePermissions.all.size
+    }
+    val adminName = remember(revision) {
+        // Read once per resume; it changes only when the user edits it on the Context page.
+        kotlinx.coroutines.runBlocking { MachineSettings(context).adminNameNow() }
     }
     val models = remember(revision) {
         val registry = ModelRegistry(context)
@@ -155,6 +160,12 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
                 value = "${access.first} / ${access.second}",
                 complete = access.first == access.second,
                 onClick = { context.startActivity(Intent(context, PermissionsActivity::class.java)) },
+            )
+            Door(
+                label = "CONTEXT",
+                value = adminName.uppercase(),
+                complete = true,
+                onClick = { context.startActivity(Intent(context, ContextActivity::class.java)) },
             )
             Door(
                 label = "MODELS",

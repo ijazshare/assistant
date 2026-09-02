@@ -18,154 +18,224 @@ import io.github.hasanismail.themachine.audio.CaptureEvent
 import io.github.hasanismail.themachine.audio.MachineSounds
 import io.github.hasanismail.themachine.audio.StopReason
 import io.github.hasanismail.themachine.audio.VoiceRecorder
+import io.github.hasanismail.themachine.context.MachineFiles
+import io.github.hasanismail.themachine.llm.LlamaEngine
+import io.github.hasanismail.themachine.llm.PromptDialect
+import io.github.hasanismail.themachine.models.ModelAsset
 import io.github.hasanismail.themachine.models.ModelRegistry
 import io.github.hasanismail.themachine.models.ModelRole
 import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
+import io.github.hasanismail.themachine.settings.MachineSettings
 import io.github.hasanismail.themachine.stt.WhisperEngine
+import io.github.hasanismail.themachine.tools.ContactLookup
+import io.github.hasanismail.themachine.tools.MachineTools
+import io.github.hasanismail.themachine.tools.ReminderStore
+import io.github.hasanismail.themachine.tools.ToolExecutor
+import io.github.hasanismail.themachine.tools.ToolResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Where the session is in the listen → understand → act pipeline. */
+/** Where the session is in the listen, understand, act pipeline. */
 sealed interface SessionState {
     data object Idle : SessionState
     data object Preparing : SessionState
     data class Listening(val level: Float, val heardSpeech: Boolean) : SessionState
     data object Transcribing : SessionState
-    data class Heard(val transcript: String, val millis: Long, val realTimeFactor: Float) : SessionState
+    data class Thinking(val transcript: String) : SessionState
+    data class Done(val transcript: String, val tool: String, val result: ToolResult, val timing: Timing) :
+        SessionState
+
     data class Problem(val message: String, val actionable: String? = null) : SessionState
 }
 
+/** Where the time went, so a regression against the latency budget is visible. */
+data class Timing(val sttMillis: Long, val llmMillis: Long) {
+    val totalMillis: Long get() = sttMillis + llmMillis
+}
+
 /**
- * Drives one spoken interaction.
+ * Drives one spoken interaction end to end: capture, transcribe, choose a tool, run it.
  *
- * Owns the Whisper context for the life of the session rather than per utterance —
- * loading the model is the single largest cost in the pipeline, and paying it once per
- * summon instead of once per sentence is what keeps a follow-up question fast.
+ * Both engines are loaded once per summon and freed when the overlay closes. Loading is
+ * the dominant cost, so paying it per utterance would spend the whole latency budget
+ * before any audio arrived.
  */
 class VoiceSession(private val context: Context, private val scope: CoroutineScope) {
 
     private val recorder = VoiceRecorder()
     private val whisper = WhisperEngine(context)
+    private val llama = LlamaEngine(context)
     private val storage = ModelStorage(context)
     private val registry = ModelRegistry(context)
+    private val settings = MachineSettings(context)
+    private val files = MachineFiles(context)
+    private val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context))
+
+    /** File name of whatever language model is loaded, for dialect selection. */
+    private var loadedModelName: String = ""
 
     private val _state = MutableStateFlow<SessionState>(SessionState.Idle)
     val state: StateFlow<SessionState> = _state.asStateFlow()
 
     /**
-     * Begins listening. Everything that can go wrong before the microphone opens —
-     * no permission, no model — is reported as a [SessionState.Problem] with something
-     * the user can actually do about it, rather than a silent no-op.
+     * Begins listening. Anything that can go wrong before the microphone opens is
+     * reported with something the user can actually do about it, not a silent no-op.
      */
     fun start() {
         scope.launch {
             if (!hasMicrophonePermission()) {
-                _state.value = SessionState.Problem(
+                fail(
                     "The Machine cannot hear you without microphone access.",
-                    "Open the app and grant Microphone under System access.",
+                    "Grant Microphone under System access.",
                 )
-                MachineSounds.play(MachineSounds.Cue.REJECT)
                 return@launch
             }
-
-            val model = installedSttModel()
-            if (model == null) {
-                _state.value = SessionState.Problem(
-                    "No speech model is installed yet.",
-                    "Open the app and download a model under Models.",
-                )
-                MachineSounds.play(MachineSounds.Cue.REJECT)
+            val sttModel = installed(ModelRole.STT)
+            if (sttModel == null) {
+                fail("No speech model is installed yet.", "Download one under Models.")
                 return@launch
             }
 
             _state.value = SessionState.Preparing
-            if (!whisper.isLoaded && !whisper.load(model)) {
-                _state.value = SessionState.Problem("The speech model could not be loaded.")
-                MachineSounds.play(MachineSounds.Cue.REJECT)
+            if (!whisper.isLoaded && !whisper.load(storage.target(sttModel))) {
+                fail("The speech model could not be loaded.")
                 return@launch
             }
-
+            // The language model loads in the background while the user is still
+            // speaking, so its load time overlaps the utterance instead of following it.
+            installed(ModelRole.LLM)?.let { asset ->
+                if (!llama.isLoaded) {
+                    loadedModelName = asset.fileName
+                    scope.launch { llama.load(storage.target(asset)) }
+                }
+            }
             listen()
         }
     }
 
     /**
-     * Lint cannot see that [start] refuses to get here without RECORD_AUDIO, so the
-     * check it wants has already happened one frame up — see hasMicrophonePermission().
+     * Lint cannot see that [start] refuses to get here without RECORD_AUDIO; the check
+     * it wants has already happened one frame up.
      */
     @android.annotation.SuppressLint("MissingPermission")
     private suspend fun listen() {
         _state.value = SessionState.Listening(level = 0f, heardSpeech = false)
         recorder.capture().collect { event ->
             when (event) {
-                is CaptureEvent.Level -> {
-                    val current = _state.value
-                    if (current is SessionState.Listening) {
-                        _state.value = current.copy(level = event.amplitude)
-                    }
-                }
-
-                CaptureEvent.SpeechStarted -> {
-                    val current = _state.value
-                    if (current is SessionState.Listening) {
-                        _state.value = current.copy(heardSpeech = true)
-                    }
-                }
-
-                is CaptureEvent.Failed -> {
-                    _state.value = SessionState.Problem(event.reason)
-                    MachineSounds.play(MachineSounds.Cue.REJECT)
-                }
-
-                is CaptureEvent.Finished -> transcribe(event)
+                is CaptureEvent.Level -> updateListening { it.copy(level = event.amplitude) }
+                CaptureEvent.SpeechStarted -> updateListening { it.copy(heardSpeech = true) }
+                is CaptureEvent.Failed -> fail(event.reason)
+                is CaptureEvent.Finished -> handle(event)
             }
         }
     }
 
-    private suspend fun transcribe(event: CaptureEvent.Finished) {
+    private inline fun updateListening(block: (SessionState.Listening) -> SessionState) {
+        val current = _state.value
+        if (current is SessionState.Listening) _state.value = block(current)
+    }
+
+    private suspend fun handle(event: CaptureEvent.Finished) {
         if (event.reason == StopReason.NO_SPEECH || event.samples.isEmpty()) {
-            _state.value = SessionState.Problem("I did not hear anything.")
-            MachineSounds.play(MachineSounds.Cue.REJECT)
+            fail("I did not hear anything.")
             return
         }
         MachineSounds.play(MachineSounds.Cue.DISENGAGE, volume = 0.4f)
         _state.value = SessionState.Transcribing
 
-        val result = whisper.transcribe(event.samples)
-        Log.i(
-            TAG,
-            "transcribed ${event.samples.size} samples in ${result.durationMillis} ms " +
-                "(rtf ${result.realTimeFactor}): \"${result.text}\"",
-        )
-
-        _state.value = if (result.text.isBlank()) {
-            MachineSounds.play(MachineSounds.Cue.REJECT)
-            SessionState.Problem("I heard something, but could not make out any words.")
-        } else {
-            MachineSounds.play(MachineSounds.Cue.CONFIRM, volume = 0.4f)
-            SessionState.Heard(result.text, result.durationMillis, result.realTimeFactor)
+        val heard = whisper.transcribe(event.samples)
+        if (heard.text.isBlank()) {
+            fail("I heard something, but could not make out any words.")
+            return
         }
+        Log.i(TAG, "heard [${heard.text}] in ${heard.durationMillis} ms")
+        _state.value = SessionState.Thinking(heard.text)
+        act(heard.text, heard.durationMillis)
     }
 
     /**
-     * Any installed model for the role will do — the user may have chosen base.en over
-     * the default, and that is a working recogniser.
+     * Turns the transcript into a tool call and runs it.
+     *
+     * The grammar guarantees a valid call, so there is no retry loop: a null parse
+     * would mean no grammar was applied, which is a programming error rather than a
+     * runtime condition.
      */
-    private fun installedSttModel() = registry.byRole(ModelRole.STT)
-        .firstOrNull { storage.quickState(it) == ModelState.Ready }
-        ?.let { storage.target(it) }
+    private suspend fun act(transcript: String, sttMillis: Long) {
+        if (!llama.isLoaded && !loadLanguageModel()) return
+
+        // The dialect owns the prompt, the grammar and the parser together, because a
+        // fine-tuned model only behaves if all three match the form it was trained on.
+        val dialect = PromptDialect.forModel(loadedModelName)
+        val prompt = dialect.buildPrompt(
+            transcript = transcript,
+            tools = MachineTools.all,
+            adminName = settings.adminNameNow(),
+            userContext = files.contextForPrompt(),
+        )
+        val completion = llama.generate(prompt, dialect.grammar(MachineTools.all))
+        Log.i(TAG, "model returned ${completion.text} in ${completion.millis} ms")
+
+        val call = dialect.parse(completion.text)
+        if (call == null) {
+            fail("I could not work out what to do with that.")
+            return
+        }
+
+        val result = executor.execute(call)
+        MachineSounds.play(
+            if (result.success) MachineSounds.Cue.CONFIRM else MachineSounds.Cue.REJECT,
+            volume = 0.45f,
+        )
+        _state.value = SessionState.Done(
+            transcript = transcript,
+            tool = call.tool,
+            result = result,
+            timing = Timing(sttMillis, completion.millis),
+        )
+    }
+
+    private suspend fun loadLanguageModel(): Boolean {
+        val asset = installed(ModelRole.LLM)
+        if (asset == null) {
+            fail("I heard you, but no language model is installed.", "Download one under Models.")
+            return false
+        }
+        loadedModelName = asset.fileName
+        if (!llama.load(storage.target(asset))) {
+            fail("The language model could not be loaded.")
+            return false
+        }
+        return true
+    }
+
+    private fun fail(message: String, actionable: String? = null) {
+        _state.value = SessionState.Problem(message, actionable)
+        MachineSounds.play(MachineSounds.Cue.REJECT)
+    }
+
+    /**
+     * The registry's default first, then anything else installed for the role.
+     *
+     * Order matters: without the preference, downloading an experimental model would
+     * silently take over the pipeline just by being listed earlier.
+     */
+    private fun installed(role: ModelRole): ModelAsset? {
+        val ready = registry.byRole(role).filter { storage.quickState(it) == ModelState.Ready }
+        return ready.firstOrNull { it.isDefault } ?: ready.firstOrNull()
+    }
 
     private fun hasMicrophonePermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
 
-    /** Frees the model. Called when the overlay goes away, not between utterances. */
+    /** Frees both models. Called when the overlay goes away, not between utterances. */
     fun release() {
         whisper.unload()
+        llama.unload()
         _state.value = SessionState.Idle
     }
 

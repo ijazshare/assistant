@@ -152,6 +152,18 @@
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
 
+        <!-- Fires reminders set through the create_reminder tool. -->
+        <receiver
+            android:name=".tools.ReminderReceiver"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ContextActivity"
+            android:exported="false"
+            android:label="Context"
+            android:parentActivityName=".ui.MainActivity"
+            android:theme="@style/Theme.TheMachine" />
+
         <!-- Long lists live on their own pages so the home screen stays readable. -->
         <activity
             android:name=".ui.PermissionsActivity"

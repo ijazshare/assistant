@@ -23,6 +23,9 @@ import java.io.File
  */
 class ModelRegistryTest {
 
+    /** Roughly a gigabyte: enough for the 1B language model, far short of the 4B. */
+    private val firstRunCeiling = 1_500_000_000L
+
     private val registry = ModelRegistry(
         File("src/main/assets/" + ModelRegistry.REGISTRY_PATH).readText(),
     )
@@ -90,12 +93,25 @@ class ModelRegistryTest {
     }
 
     @Test
-    fun `the defaults are the small ones`() {
-        // A first run that pulls the 3 GB model by mistake is a bad first run.
-        val llmDefault = registry.byRole(ModelRole.LLM).first { it.isDefault }
-        val llmOther = registry.byRole(ModelRole.LLM).filterNot { it.isDefault }
-        for (other in llmOther) {
-            assertThat(llmDefault.byteSize).isLessThan(other.byteSize)
+    fun `no role defaults to a model too large for a first run`() {
+        // A first run that pulls the 3 GB model by mistake is a bad first run. This was
+        // once written as "the default is the smallest", which stopped being true the
+        // moment a smaller experimental model was listed alongside the working one:
+        // smallest is not the property that matters, affordable-on-first-run is.
+        for (role in ModelRole.entries) {
+            val assets = registry.byRole(role)
+            if (assets.isEmpty()) continue
+            val default = assets.single { it.isDefault }
+            assertThat(default.byteSize).isAtMost(firstRunCeiling)
+        }
+    }
+
+    @Test
+    fun `every role has exactly one default`() {
+        for (role in ModelRole.entries) {
+            val assets = registry.byRole(role)
+            if (assets.isEmpty()) continue
+            assertThat(assets.count { it.isDefault }).isEqualTo(1)
         }
     }
 }
