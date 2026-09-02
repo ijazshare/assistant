@@ -94,12 +94,21 @@ class ModelRouter(private val context: Context) {
 
         if (text.isBlank()) return null
 
-        // The cache write is several megabytes and the answer is already in hand, so it
-        // happens after the caller has it rather than in front of the spoken reply.
+        // The cache write is several megabytes and the answer is already in hand, so
+        // both it and the unload happen after the caller has the reply.
         val reply = completion.copy(text = text)
-        if (!cacheWritten) {
-            cacheWritten = true
-            scope.launch { strong.saveState() }
+        scope.launch {
+            if (!cacheWritten) {
+                cacheWritten = true
+                strong.saveState()
+            }
+            // Freed as soon as it has answered. Holding three gigabytes of weights
+            // alongside the small model pushed the app into swap on an 11 GB phone —
+            // measured at 200 MB free and 1.2 GB swapped — and every command after the
+            // question decoded at under one token a second. A question costs a reload;
+            // a command must not.
+            strong.unload()
+            cacheWritten = false
         }
         return reply
     }

@@ -426,6 +426,24 @@ context files a second brain rather than a separate list the assistant keeps to 
 It persists correctly and is scheduled with exact alarms as specified. Worth confirming
 before it becomes expensive to change.
 
+### One model in memory at a time
+
+Loading the 4B beside the 1B fits on paper — about 5 GB on an 11 GB phone — and does not
+fit in practice. Measured with both resident: 200 MB free, 1.2 GB of the app swapped, and
+every command afterwards decoding at under one token per second. The small model is
+unloaded before a question goes to the large one, and the large one is freed as soon as
+it has answered. Both keep a prompt cache on disk, so the reload is a second or two.
+
+  |  | both resident | one at a time |
+  |---|---|---|
+  | free memory | 200 MB | 745 MB |
+  | app swapped | 1.2 GB | 287 MB |
+  | command after a question | 21-31 s | 0 ms from cache |
+  | question | 39 s | 9.8 s |
+
+The reference device is also thermally throttled to status 4 after a long session of this
+work, so every number here is a floor rather than the phone at its best.
+
 ### The adversarial review (2026-09-02)
 
 Four readers over the new code, every finding handed to a separate reader whose job was

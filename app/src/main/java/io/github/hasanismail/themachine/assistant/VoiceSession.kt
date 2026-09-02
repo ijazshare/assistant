@@ -346,6 +346,10 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         var llmMillis = completion.millis
 
         if (call.tool == MachineTools.ANSWER) {
+            // One model in memory at a time. The small one has already done its work for
+            // this command and is cheap to bring back; the large one is not, and the two
+            // together do not fit alongside everything else the phone is running.
+            llama.unload()
             val answer = router.answer(transcript, settings.adminNameNow(), files.contextForPrompt())
             call = if (answer != null) {
                 llmMillis += answer.millis
