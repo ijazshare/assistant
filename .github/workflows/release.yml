@@ -75,7 +75,13 @@ jobs:
         run: |
           set -euo pipefail
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          # `yes` is killed by SIGPIPE as soon as sdkmanager stops reading, which pipefail
+          # would report as a failed pipeline. Drop pipefail for this one call so a genuine
+          # sdkmanager failure still trips `set -e` on its own exit status.
+          set +o pipefail
           yes | "$sdkmanager" --licenses > /dev/null
+          set -o pipefail
           major='${{ steps.sdk.outputs.compile_sdk }}'
           # Drop preview lines FIRST: grep -o would truncate "android-37.2-beta3" down to
           # "android-37.2" and let a preview masquerade as the stable minor.

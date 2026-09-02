@@ -56,19 +56,28 @@ jobs:
             echo "ndk=$(read_key ndk)"
             echo "cmake=$(read_key cmake)"
           } | tee -a "$GITHUB_OUTPUT"
+          # ANDROID_HOME is a runner environment variable, so it is NOT visible in the
+          # ${{ env.* }} context that `with:` blocks are evaluated in. Republish it.
+          echo "ANDROID_SDK=$ANDROID_HOME" >> "$GITHUB_ENV"
 
       - name: Cache the pinned NDK
         id: ndk-cache
         uses: actions/cache@v6.1.0
         with:
-          path: ${{ env.ANDROID_HOME }}/ndk/${{ steps.sdk.outputs.ndk }}
+          path: ${{ env.ANDROID_SDK }}/ndk/${{ steps.sdk.outputs.ndk }}
           key: ndk-${{ runner.os }}-${{ steps.sdk.outputs.ndk }}
 
       - name: Install SDK components
         run: |
           set -euo pipefail
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          # `yes` is killed by SIGPIPE as soon as sdkmanager stops reading, which pipefail
+          # would report as a failed pipeline. Drop pipefail for this one call so a genuine
+          # sdkmanager failure still trips `set -e` on its own exit status.
+          set +o pipefail
           yes | "$sdkmanager" --licenses > /dev/null
+          set -o pipefail
 
           # There is deliberately no bare "platforms;android-37" package — the platform is
           # published as minor releases (37.0, 37.1, 37.2, ...). Resolve the newest stable
