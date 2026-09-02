@@ -31,6 +31,10 @@ updates:
     ignore:
       # The Compose BOM pins a consistent library set; bump it deliberately, not per-artifact.
       - dependency-name: "androidx.compose:*"
+      # The Gradle wrapper is pinned to AGP's declared default rather than to the newest
+      # release, so "a newer Gradle exists" is not by itself a reason to move. Bump it when
+      # AGP's compatibility table moves. See "Decisions and deviations" in PROGRESS.md.
+      - dependency-name: "gradle-wrapper"
 
   - package-ecosystem: "github-actions"
     directory: "/"

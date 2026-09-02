@@ -9,7 +9,7 @@ was decided and why, and which facts were verified against a live source rather 
 
 | Phase | Scope | Status |
 |---|---|---|
-| P0 | Repo + toolchain | **Complete** — full quality gate green locally; CI pending first run |
+| P0 | Repo + toolchain | **Complete** — gate green locally and in CI; APK verified on device |
 | P1 | Native bridge (whisper.cpp + llama.cpp submodules, JNI) | Not started |
 | P2 | Model manager (registry, resumable verified downloads) | Not started |
 | P3 | STT (AudioRecord, endpointing, Whisper) | Not started |
@@ -32,13 +32,47 @@ was decided and why, and which facts were verified against a live source rather 
 - `ci.yml` (build/lint/test + a privacy-invariant check) and `release.yml` (signed APK on a
   `v*` tag). AGPL-3.0 `LICENSE`, issue templates, PR template, `dependabot.yml`.
 
-### Verified green locally
+### Verified
 
 ```
 ./gradlew spotlessCheck detekt testDebugUnitTest lintDebug assembleDebug   → BUILD SUCCESSFUL
 ```
 
 Debug APK: 30.3 MB (unminified Compose + Hilt).
+
+- **CI green** on `main` — both jobs pass in 6m36s, APK and reports uploaded as artifacts.
+- **Runs on real hardware.** Installed and launched on the Z Flip8 (below): no crash, dark
+  theme and dynamic colour applied, edge-to-edge insets correct.
+
+### Test device
+
+Wireless ADB, paired and connected:
+
+| | |
+|---|---|
+| Device | Galaxy Z Flip8 (`SM-F776U1`, `b8q`) |
+| Android | 17, **API 37** — the same level the app targets |
+| SoC / cores | Snapdragon 8 Elite Gen 5 (`SM8850`), 8 cores |
+| RAM | 11.35 GB — comfortable even for Gemma 3 4B |
+| ABI list | `arm64-v8a` **only** (no 32-bit at all) |
+| `getconf PAGE_SIZE` | **4096** — this device is *not* a 16 KB device |
+| Free storage | 81 GB |
+
+```bash
+adb pair 192.168.4.131:<pairing-port> <code>   # pairing port + code from the pairing dialog
+adb connect 192.168.4.131:44983                # connect port from the main screen — a different port
+adb install -r -d app/build/outputs/apk/debug/app-debug.apk
+adb shell am start -n io.github.hasanismail.themachine.debug/io.github.hasanismail.themachine.ui.MainActivity
+```
+
+The wireless-debugging port changes whenever debugging is toggled or the phone reconnects to
+Wi-Fi, so re-pair rather than assuming 44983 still works. mDNS discovery (`adb mdns services`)
+returns nothing on this Windows host, so the connect port has to come off the phone's screen.
+
+> The 4 KB page size is **this** device. The reference S26 Ultra may well be a 16 KB device, so
+> the alignment work in P1 still has to happen and has to be verified on that phone specifically.
+> A screenshot is worth capturing with `adb shell screencap -p /sdcard/x.png && adb pull`;
+> piping `exec-out screencap` through PowerShell corrupts the binary.
 
 ### Toolchain — every version resolved against a live source on 2026-09-01
 
