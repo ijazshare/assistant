@@ -166,4 +166,88 @@ Java_io_github_hasanismail_themachine_nativebridge_NativeBridge_nativePageSize(
     return static_cast<jlong>(sysconf(_SC_PAGESIZE));
 }
 
+// ---------------------------------------------------------------------------
+// Whisper: speech to text.
+//
+// The context is created once per session and reused across utterances — loading
+// a model per utterance would dominate the latency budget. The handle is an
+// opaque jlong so Kotlin never sees a raw pointer type.
+// ---------------------------------------------------------------------------
+
+JNIEXPORT jlong JNICALL
+Java_io_github_hasanismail_themachine_stt_WhisperNative_nativeLoad(
+        JNIEnv *env, jobject /* this */, jstring modelPath) {
+    const std::string path = scoped_utf8(env, modelPath);
+    initialise_backends(nullptr);
+
+    whisper_context_params params = whisper_context_default_params();
+    // CPU only in v1; GPU is a later experiment. mmap keeps a warm reload cheap.
+    params.use_gpu = false;
+    params.flash_attn = false;
+
+    whisper_context *ctx = whisper_init_from_file_with_params(path.c_str(), params);
+    if (ctx == nullptr) {
+        LOGE("whisper: failed to load %s", path.c_str());
+        return 0;
+    }
+    LOGI("whisper: loaded %s", path.c_str());
+    return reinterpret_cast<jlong>(ctx);
+}
+
+JNIEXPORT void JNICALL
+Java_io_github_hasanismail_themachine_stt_WhisperNative_nativeFree(
+        JNIEnv * /* env */, jobject /* this */, jlong handle) {
+    if (handle == 0) return;
+    whisper_free(reinterpret_cast<whisper_context *>(handle));
+}
+
+/**
+ * Transcribes 16 kHz mono float PCM in [-1, 1].
+ *
+ * Tuned for short commands rather than transcription of long audio: greedy
+ * sampling, a single segment, no timestamps, English forced, and no carry-over
+ * context between utterances so one misheard command cannot bias the next.
+ */
+JNIEXPORT jstring JNICALL
+Java_io_github_hasanismail_themachine_stt_WhisperNative_nativeTranscribe(
+        JNIEnv *env, jobject /* this */, jlong handle, jfloatArray samples, jint threads) {
+    if (handle == 0) return env->NewStringUTF("");
+    auto *ctx = reinterpret_cast<whisper_context *>(handle);
+
+    const jsize count = env->GetArrayLength(samples);
+    jfloat *pcm = env->GetFloatArrayElements(samples, nullptr);
+    if (pcm == nullptr) return env->NewStringUTF("");
+
+    whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
+    params.n_threads        = threads > 0 ? threads : 4;
+    params.language         = "en";
+    params.translate        = false;
+    params.no_context       = true;
+    params.single_segment   = true;
+    params.no_timestamps    = true;
+    params.print_progress   = false;
+    params.print_realtime   = false;
+    params.print_timestamps = false;
+    params.print_special    = false;
+    params.suppress_blank   = true;
+    params.suppress_nst     = true;
+    params.temperature      = 0.0f;
+
+    const int rc = whisper_full(ctx, params, pcm, count);
+    env->ReleaseFloatArrayElements(samples, pcm, JNI_ABORT);
+
+    if (rc != 0) {
+        LOGE("whisper: whisper_full failed (%d)", rc);
+        return env->NewStringUTF("");
+    }
+
+    std::string text;
+    const int segments = whisper_full_n_segments(ctx);
+    for (int i = 0; i < segments; i++) {
+        const char *segment = whisper_full_get_segment_text(ctx, i);
+        if (segment != nullptr) text += segment;
+    }
+    return to_jstring(env, text);
+}
+
 } // extern "C"

@@ -272,3 +272,48 @@ fun StampBorder(
         },
     )
 }
+
+/**
+ * A live input level, drawn as a mirrored bar of cells.
+ *
+ * A bar rather than a scrolling waveform: the useful question while speaking is "is it
+ * hearing me", which a level answers instantly, and a waveform of 20 ms frames on a
+ * phone-width strip is mostly noise.
+ */
+@Composable
+fun LevelMeter(
+    level: Float,
+    modifier: Modifier = Modifier,
+    color: Color = MachineColors.Relevant,
+    cells: Int = 32,
+) {
+    // Eases the bar without hiding a real drop to silence, which is what the
+    // endpointer is about to act on.
+    val smoothed by animateFloatAsState(
+        targetValue = level.coerceIn(0f, 1f),
+        animationSpec = tween(90, easing = LinearEasing),
+        label = "level",
+    )
+    Box(
+        modifier = modifier.drawBehind {
+            val gap = 2f * density
+            val cellWidth = (size.width - gap * (cells - 1)) / cells
+            val lit = (smoothed * cells).toInt()
+            for (i in 0 until cells) {
+                // Grow from the middle out, so quiet speech still reads as centred.
+                val distanceFromCentre = kotlin.math.abs(i - cells / 2) * 2
+                val on = distanceFromCentre <= lit
+                val height = if (on) {
+                    size.height * (0.25f + 0.75f * (1f - distanceFromCentre / cells.toFloat()))
+                } else {
+                    size.height * 0.12f
+                }
+                drawRect(
+                    color = if (on) color else MachineColors.Rule,
+                    topLeft = Offset(i * (cellWidth + gap), (size.height - height) / 2f),
+                    size = Size(cellWidth, height),
+                )
+            }
+        },
+    )
+}

@@ -21,16 +21,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.hasanismail.themachine.audio.MachineSounds
 import io.github.hasanismail.themachine.ui.machine.IndeterminateCells
+import io.github.hasanismail.themachine.ui.machine.LevelMeter
 import io.github.hasanismail.themachine.ui.machine.MachineRule
 import io.github.hasanismail.themachine.ui.machine.TrackingBox
 import io.github.hasanismail.themachine.ui.machine.rememberSnapProgress
@@ -45,14 +50,26 @@ import kotlinx.coroutines.delay
 /**
  * What the side button brings up.
  *
- * Sits at the bottom of the screen over whatever the user was doing, the way an
- * assistant should — it is not a full-screen takeover. Tapping outside dismisses.
- *
- * The capture and parsing pipeline lands in P3–P7; until then this states plainly what
- * is and is not wired rather than miming a listening animation that does nothing.
+ * Sits at the bottom over whatever the user was doing rather than taking the screen —
+ * an assistant that hides the thing you are asking about is the wrong shape. Tapping
+ * outside dismisses.
  */
 @Composable
 fun AssistantOverlay(showCount: Int, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val session = remember { VoiceSession(context, scope) }
+    val state by session.state.collectAsStateWithLifecycle()
+
+    // Each summon starts a fresh listen; the session object outlives the reveal so the
+    // loaded Whisper context is not paid for again on a follow-up.
+    LaunchedEffect(showCount) {
+        if (showCount > 0) session.start()
+    }
+    DisposableEffect(Unit) {
+        onDispose { session.release() }
+    }
+
     TheMachineTheme {
         Box(
             modifier = Modifier
@@ -66,7 +83,7 @@ fun AssistantOverlay(showCount: Int, onDismiss: () -> Unit) {
                     .padding(12.dp)
                     .background(MachineColors.Void)
                     .scanlines(),
-                color = MachineColors.Relevant,
+                color = state.tone(),
                 progress = rememberSnapProgress(locked = true, durationMillis = 200),
                 cornerLength = 22.dp,
             ) {
@@ -79,37 +96,87 @@ fun AssistantOverlay(showCount: Int, onDismiss: () -> Unit) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("THE MACHINE", style = MachineLabel, color = MachineColors.Relevant)
+                        Text("THE MACHINE", style = MachineLabel, color = state.tone())
                         Text("TAP TO DISMISS", style = MachineLabel, color = MachineColors.Ghost)
                     }
                     MachineRule(Modifier.fillMaxWidth().height(1.dp))
 
                     Greeting(showCount)
-
-                    IndeterminateCells(
-                        modifier = Modifier.fillMaxWidth().height(6.dp),
-                        color = MachineColors.Relevant,
-                    )
-
-                    Text(
-                        text = "The side button now reaches The Machine. Speech capture, " +
-                            "transcription and command parsing are the next phases — until they " +
-                            "land this overlay has nothing to listen with.",
-                        style = MachineReadout,
-                        color = MachineColors.Dim,
-                    )
+                    SessionBody(state)
                 }
             }
         }
     }
 }
 
+@Composable
+private fun SessionBody(state: SessionState) {
+    when (state) {
+        SessionState.Idle, SessionState.Preparing -> {
+            Text("STANDBY", style = MachineLabel, color = MachineColors.Dim)
+            IndeterminateCells(
+                modifier = Modifier.fillMaxWidth().height(6.dp),
+                color = MachineColors.Admin,
+            )
+        }
+
+        is SessionState.Listening -> {
+            Text(
+                text = if (state.heardSpeech) "LISTENING" else "SPEAK NOW",
+                style = MachineLabel,
+                color = MachineColors.Relevant,
+            )
+            LevelMeter(
+                level = state.level,
+                modifier = Modifier.fillMaxWidth().height(28.dp),
+                color = MachineColors.Relevant,
+            )
+        }
+
+        SessionState.Transcribing -> {
+            Text("TRANSCRIBING", style = MachineLabel, color = MachineColors.Admin)
+            IndeterminateCells(
+                modifier = Modifier.fillMaxWidth().height(6.dp),
+                color = MachineColors.Admin,
+            )
+        }
+
+        is SessionState.Heard -> {
+            Text(text = state.transcript, style = MachineStatus, color = MachineColors.Bone)
+            Text(
+                text = "${state.millis} MS  ·  RTF ${"%.2f".format(state.realTimeFactor)}",
+                style = MachineLabel,
+                color = MachineColors.Asset,
+            )
+            Text(
+                text = "Understanding the command and acting on it is the next phase.",
+                style = MachineReadout,
+                color = MachineColors.Ghost,
+            )
+        }
+
+        is SessionState.Problem -> {
+            Text("UNABLE", style = MachineLabel, color = MachineColors.Relevant)
+            Text(state.message, style = MachineReadout, color = MachineColors.Bone)
+            state.actionable?.let {
+                Text(it, style = MachineReadout, color = MachineColors.Dim)
+            }
+        }
+    }
+}
+
+private fun SessionState.tone() = when (this) {
+    is SessionState.Problem -> MachineColors.Relevant
+    is SessionState.Heard -> MachineColors.Asset
+    is SessionState.Listening -> MachineColors.Relevant
+    else -> MachineColors.Admin
+}
+
 /**
  * The greeting, delivered a word at a time.
  *
- * The full stops between the words are the point — it is a system assembling a sentence
- * out of pieces, not a phrase being read aloud. Showing it all at once would throw that
- * away, so each word lands on its own with a tick.
+ * The full stops between the words are the point — a system assembling a sentence out
+ * of pieces, not a phrase read aloud. Showing it all at once throws that away.
  */
 @Composable
 private fun Greeting(showCount: Int) {
@@ -118,11 +185,11 @@ private fun Greeting(showCount: Int) {
 
     LaunchedEffect(showCount) {
         // A beat before the first word: the pause is what makes it land.
-        delay(220)
+        delay(GREETING_LEAD_IN_MS)
         for (i in words.indices) {
             shown = i + 1
             MachineSounds.play(MachineSounds.Cue.TICK, volume = 0.3f)
-            delay(340)
+            delay(GREETING_WORD_GAP_MS)
         }
     }
 
@@ -130,7 +197,10 @@ private fun Greeting(showCount: Int) {
         text = words.take(shown).joinToString(" "),
         style = MachineStatus,
         color = MachineColors.Bone,
-        // Reserve the full height up front so the panel does not grow line by line.
+        // Reserve the height up front so the panel does not grow line by line.
         minLines = 2,
     )
 }
+
+private const val GREETING_LEAD_IN_MS = 220L
+private const val GREETING_WORD_GAP_MS = 340L
