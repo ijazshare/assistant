@@ -51,8 +51,8 @@ class ToolGrammarTest {
 
     @Test
     fun `enumerated values appear as quoted json strings`() {
-        assertThat(grammar).contains("""\"am\"""")
-        assertThat(grammar).contains("""\"pm\"""")
+        assertThat(grammar).contains("""\"down\"""")
+        assertThat(grammar).contains("""\"back\"""")
     }
 
     @Test
@@ -67,10 +67,23 @@ class ToolGrammarTest {
                 // remaining quotes are unambiguously delimiters.
                 .replace("\\\"", "")
                 .replace(Regex("\"[^\"]*\""), " ")
+                // Character classes hold digits and ranges, not rule names.
+                .replace(Regex("""\[[^]]*]"""), " ")
                 .split(Regex("[^A-Za-z0-9-]+"))
                 .filter { it.isNotEmpty() && !it.all { c -> c.isDigit() } }
         }.toSet()
         assertThat(defined).containsAtLeastElementsIn(referenced)
+    }
+
+    @Test
+    fun `a bounded argument only admits values inside its range`() {
+        // set_alarm's hour is 1..12, so the rule must spell exactly those and nothing
+        // that could produce 16 — the answer the model gave for "half past six in the
+        // evening" back when it was free to convert to 24-hour time itself.
+        val index = MachineTools.all.indexOfFirst { it.name == MachineTools.SET_ALARM }
+        val hour = MachineTools.all[index].params.indexOfFirst { it.name == "hour" }
+        val rule = grammar.lines().first { it.startsWith("v$index-$hour ::=") }
+        assertThat(rule).isEqualTo("""v$index-$hour ::= [0-9] | "1" [0-9] | "2" [0-3]""")
     }
 
     @Test

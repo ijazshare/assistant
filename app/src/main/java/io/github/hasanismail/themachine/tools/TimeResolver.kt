@@ -23,13 +23,9 @@ package io.github.hasanismail.themachine.tools
  */
 object TimeResolver {
 
-    const val AM = "am"
-    const val PM = "pm"
-
     private const val SECONDS_PER_MINUTE = 60L
     private const val MINUTES_PER_HOUR = 60L
     private const val HOURS_PER_DAY = 24L
-    private const val NOON = 12
     private const val LAST_HOUR = 23
     private const val LAST_MINUTE = 59
 
@@ -53,22 +49,13 @@ object TimeResolver {
     }
 
     /**
-     * Converts a spoken hour to 24-hour time.
+     * Validates an hour on a 24-hour clock.
      *
-     * [meridiem] is what the model heard, if anything: "am", "pm", or null when the
-     * speaker did not say. An hour above 12 is already unambiguous and is passed
-     * through, so a model that does convert on its own is not broken by this.
+     * The grammar already refuses anything outside 0..23, so this is a second line
+     * rather than the first: it also covers a hand-written call and a future model whose
+     * output is not grammar-constrained.
      */
-    fun to24Hour(hour: Int?, meridiem: String?): Int? {
-        if (hour == null || hour < 0 || hour > LAST_HOUR) return null
-        val said = meridiem?.trim()?.lowercase()
-        return when {
-            hour > NOON -> hour
-            said == PM -> if (hour == NOON) NOON else hour + NOON
-            said == AM -> if (hour == NOON) 0 else hour
-            else -> hour
-        }
-    }
+    fun hourOf(hour: Int?): Int? = hour?.takeIf { it in 0..LAST_HOUR }
 
     /** Minutes, defaulting to o'clock, and rejecting anything outside the hour. */
     fun minuteOf(minute: Int?): Int? {

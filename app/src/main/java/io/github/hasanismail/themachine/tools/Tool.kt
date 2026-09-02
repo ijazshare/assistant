@@ -17,6 +17,15 @@ data class ToolParam(
     val required: Boolean = false,
     /** For [ParamType.ENUM]: the only values the grammar will permit. */
     val values: List<String> = emptyList(),
+    /**
+     * Bounds for an integer argument, enforced by the grammar rather than checked after.
+     *
+     * The model cannot then name an hour that is not on a clock: asked for "half past
+     * six in the evening" it had been answering 16, converting to a 24-hour value on its
+     * own and getting it wrong. With the range fixed at 1..12 that answer is not
+     * expressible, and the conversion stays where it can be tested.
+     */
+    val range: IntRange? = null,
 )
 
 enum class ParamType { STRING, INTEGER, BOOLEAN, ENUM }

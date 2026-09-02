@@ -35,32 +35,20 @@ class TimeResolverTest {
     }
 
     @Test
-    fun `converts an afternoon hour the way it was spoken`() {
-        // "half past six in the evening" — the case that came back as hour 2.
-        assertThat(TimeResolver.to24Hour(6, "pm")).isEqualTo(18)
-        assertThat(TimeResolver.to24Hour(7, "am")).isEqualTo(7)
-        assertThat(TimeResolver.to24Hour(11, "PM")).isEqualTo(23)
-    }
-
-    @Test
-    fun `handles the two midnights`() {
-        assertThat(TimeResolver.to24Hour(12, "am")).isEqualTo(0)
-        assertThat(TimeResolver.to24Hour(12, "pm")).isEqualTo(12)
-    }
-
-    @Test
-    fun `leaves an unambiguous hour alone`() {
-        // A model that converted on its own must not be converted a second time.
-        assertThat(TimeResolver.to24Hour(18, "pm")).isEqualTo(18)
-        assertThat(TimeResolver.to24Hour(9, null)).isEqualTo(9)
-        assertThat(TimeResolver.to24Hour(0, null)).isEqualTo(0)
+    fun `accepts every hour on a 24-hour clock`() {
+        assertThat(TimeResolver.hourOf(0)).isEqualTo(0)
+        assertThat(TimeResolver.hourOf(7)).isEqualTo(7)
+        // "half past six in the evening" — the case that came back as 16, and then as 12
+        // when the schema tried to take the conversion away from the model.
+        assertThat(TimeResolver.hourOf(18)).isEqualTo(18)
+        assertThat(TimeResolver.hourOf(23)).isEqualTo(23)
     }
 
     @Test
     fun `rejects an hour that is not on the clock`() {
-        assertThat(TimeResolver.to24Hour(null, "am")).isNull()
-        assertThat(TimeResolver.to24Hour(24, null)).isNull()
-        assertThat(TimeResolver.to24Hour(-1, null)).isNull()
+        assertThat(TimeResolver.hourOf(null)).isNull()
+        assertThat(TimeResolver.hourOf(24)).isNull()
+        assertThat(TimeResolver.hourOf(-1)).isNull()
     }
 
     @Test

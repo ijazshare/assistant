@@ -38,12 +38,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Where the session is in the listen, understand, act pipeline. */
 sealed interface SessionState {
     data object Idle : SessionState
     data object Preparing : SessionState
-    data class Listening(val level: Float, val heardSpeech: Boolean) : SessionState
+    data class Listening(
+        val level: Float,
+        val heardSpeech: Boolean,
+        /** What has been made out so far; grows while the user is still talking. */
+        val partial: String = "",
+    ) : SessionState
     data object Transcribing : SessionState
     data class Thinking(val transcript: String) : SessionState
     data class Done(val transcript: String, val tool: String, val result: ToolResult, val timing: Timing) :
@@ -74,6 +81,14 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private val settings = MachineSettings(context)
     private val files = MachineFiles(context)
     private val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context))
+
+    /**
+     * Guards the transcriber, which is one engine and cannot run twice at once.
+     *
+     * Partial passes take the lock only if it is free, so a slow one is skipped rather
+     * than queued; the final pass waits, because its result is the one that matters.
+     */
+    private val transcriber = Mutex()
 
     /** File name of whatever language model is loaded, for dialect selection. */
     private var loadedModelName: String = ""
@@ -128,8 +143,31 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             when (event) {
                 is CaptureEvent.Level -> updateListening { it.copy(level = event.amplitude) }
                 CaptureEvent.SpeechStarted -> updateListening { it.copy(heardSpeech = true) }
+                is CaptureEvent.Snapshot -> transcribePartial(event.samples)
                 is CaptureEvent.Failed -> fail(event.reason)
                 is CaptureEvent.Finished -> handle(event)
+            }
+        }
+    }
+
+    /**
+     * Transcribes what has been heard so far, so the words appear as they are spoken.
+     *
+     * Dropped silently if the transcriber is busy or the state has moved on: a partial
+     * is worth showing only while it is still current, and never worth delaying the
+     * microphone for.
+     */
+    private fun transcribePartial(samples: FloatArray) {
+        if (!whisper.isLoaded || samples.isEmpty()) return
+        if (!transcriber.tryLock()) return
+        scope.launch {
+            try {
+                val heard = whisper.transcribe(samples)
+                if (heard.text.isNotBlank()) {
+                    updateListening { it.copy(partial = heard.text) }
+                }
+            } finally {
+                transcriber.unlock()
             }
         }
     }
@@ -147,7 +185,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         MachineSounds.play(MachineSounds.Cue.DISENGAGE, volume = 0.4f)
         _state.value = SessionState.Transcribing
 
-        val heard = whisper.transcribe(event.samples)
+        val heard = transcriber.withLock { whisper.transcribe(event.samples) }
         if (heard.text.isBlank()) {
             fail("I heard something, but could not make out any words.")
             return

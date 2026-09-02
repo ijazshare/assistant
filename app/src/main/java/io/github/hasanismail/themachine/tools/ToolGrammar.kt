@@ -109,7 +109,10 @@ object ToolGrammar {
         return when (param.type) {
             ParamType.STRING -> "$rule ::= string"
 
-            ParamType.INTEGER -> "$rule ::= integer"
+            // A bounded argument becomes its own rule, so a value outside the range is
+            // not merely rejected downstream — it cannot be generated in the first place.
+            ParamType.INTEGER ->
+                "$rule ::= " + (param.range?.let { bounded(it) } ?: "integer")
 
             ParamType.BOOLEAN -> "$rule ::= boolean"
 
@@ -124,6 +127,50 @@ object ToolGrammar {
             }
         }
     }
+
+    /**
+     * A GBNF alternation matching exactly the integers in [range].
+     *
+     * Only one and two digit ranges are handled, which covers hours and minutes and
+     * anything else a spoken time contains; a wider bound is rejected outright rather
+     * than silently falling back to an unbounded integer, because a range that quietly
+     * stopped being enforced would be worse than never having asked for one.
+     */
+    private fun bounded(range: IntRange): String {
+        require(range.first >= 0 && range.last <= MAX_BOUNDED && range.first <= range.last) {
+            "Unsupported argument range $range"
+        }
+        val parts = mutableListOf<String>()
+
+        // Single digits, where the range reaches them at all.
+        if (range.first <= SINGLE_DIGIT_MAX) {
+            val low = range.first
+            val high = minOf(range.last, SINGLE_DIGIT_MAX)
+            parts += if (low == high) """"$low"""" else "[$low-$high]"
+        }
+
+        // Two digits, decomposed by tens so each alternative is a fixed tens digit or a
+        // run of whole tens.
+        if (range.last > SINGLE_DIGIT_MAX) {
+            val low = maxOf(range.first, SINGLE_DIGIT_MAX + 1)
+            val tensLow = low / TEN
+            val tensHigh = range.last / TEN
+            if (tensLow == tensHigh) {
+                parts += """"$tensLow" [${low % TEN}-${range.last % TEN}]"""
+            } else {
+                parts += """"$tensLow" [${low % TEN}-9]"""
+                if (tensHigh - tensLow > 1) {
+                    parts += "[${tensLow + 1}-${tensHigh - 1}] [0-9]"
+                }
+                parts += """"$tensHigh" [0-${range.last % TEN}]"""
+            }
+        }
+        return parts.joinToString(" | ")
+    }
+
+    private const val MAX_BOUNDED = 99
+    private const val SINGLE_DIGIT_MAX = 9
+    private const val TEN = 10
 
     /**
      * The string rule is taken verbatim from llama.cpp's own grammars/json.gbnf rather

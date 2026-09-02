@@ -77,7 +77,7 @@ class ToolExecutor(
      * already know is a liability, not a feature.
      */
     private fun setAlarm(call: ToolCall): ToolResult {
-        val hour = TimeResolver.to24Hour(call.int("hour"), call.string("meridiem"))
+        val hour = TimeResolver.hourOf(call.int("hour"))
             ?: return ToolResult.failed("I did not catch the time.")
         val minute = TimeResolver.minuteOf(call.int("minute"))
             ?: return ToolResult.failed("That is not a time I can set.")
@@ -112,7 +112,7 @@ class ToolExecutor(
 
     private suspend fun createReminder(call: ToolCall): ToolResult {
         val task = call.string("task") ?: return ToolResult.failed("What should I remind you about?")
-        val hour = TimeResolver.to24Hour(call.int("hour"), call.string("meridiem"))
+        val hour = TimeResolver.hourOf(call.int("hour"))
         val minute = TimeResolver.minuteOf(call.int("minute")) ?: 0
         return reminders.create(task, hour, minute, call.bool("tomorrow"))
     }

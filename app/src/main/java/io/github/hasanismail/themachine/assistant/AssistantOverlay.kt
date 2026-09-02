@@ -126,6 +126,15 @@ private fun SessionBody(state: SessionState) {
                 style = MachineLabel,
                 color = MachineColors.Relevant,
             )
+            // The words so far, while they are still being said. Held in place once it
+            // has any height, so the meter below does not jump on every partial.
+            if (state.partial.isNotBlank()) {
+                Text(
+                    text = state.partial,
+                    style = MachineStatus,
+                    color = MachineColors.Bone,
+                )
+            }
             LevelMeter(
                 level = state.level,
                 modifier = Modifier.fillMaxWidth().height(28.dp),

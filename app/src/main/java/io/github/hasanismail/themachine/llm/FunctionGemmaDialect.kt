@@ -115,31 +115,27 @@ object FunctionGemmaDialect : PromptDialect {
         appendLine()
 
         tools.forEachIndexed { index, tool ->
+            // Alphabetical, because the chat template sorts arguments and that is the
+            // order the model was trained to emit them in.
             val sorted = tool.params.sortedBy { it.name }
-            val required = sorted.withIndex().filter { it.value.required }
-            val hasOptional = sorted.any { !it.required }
+            appendLine("""call$index ::= "$CALL_START" "call:${tool.name}{" h$index-0 "}$CALL_END"""")
 
-            // Required pairs in alphabetical order (the template sorts them, so that is
-            // the shape the model saw), then any optional pairs as trailing repeats.
-            // Folding an optional pair's comma into its own group is what keeps every
-            // combination valid without the parenthesis gymnastics an interleaved
-            // required/optional sequence would need.
-            val requiredPart = required.joinToString(""" "," """) { (position, param) ->
-                """"${param.name}:" v$index-$position"""
+            sorted.forEachIndexed { position, param ->
+                val emitted = """"${param.name}:" v$index-$position"""
+                val next = position + 1
+                // Same chain as the JSON dialect, and for the same reason: a repeatable
+                // group lets one argument be emitted over and over until the token limit.
+                if (param.required) {
+                    appendLine("h$index-$position ::= $emitted t$index-$next")
+                    appendLine("""t$index-$position ::= "," $emitted t$index-$next""")
+                } else {
+                    appendLine("h$index-$position ::= $emitted t$index-$next | h$index-$next")
+                    appendLine("""t$index-$position ::= "," $emitted t$index-$next | t$index-$next""")
+                }
             }
-            val optionalPart = if (hasOptional) """ ("," opt$index)*""" else ""
-            val body = when {
-                required.isNotEmpty() -> "$requiredPart$optionalPart"
-                hasOptional -> """(opt$index ("," opt$index)*)?"""
-                else -> ""
-            }
-            val inner = if (body.isEmpty()) "" else " $body "
-            appendLine("""call$index ::= "$CALL_START" "call:${tool.name}{"$inner"}$CALL_END"""")
-        }
-        appendLine()
+            appendLine("h$index-${sorted.size} ::= \"\"")
+            appendLine("t$index-${sorted.size} ::= \"\"")
 
-        tools.forEachIndexed { index, tool ->
-            val sorted = tool.params.sortedBy { it.name }
             sorted.forEachIndexed { position, param ->
                 val rule = "v$index-$position"
                 appendLine(
@@ -156,26 +152,18 @@ object FunctionGemmaDialect : PromptDialect {
                     },
                 )
             }
-            val optional = sorted.withIndex().filter { !it.value.required }
-            if (optional.isNotEmpty()) {
-                appendLine(
-                    "opt$index ::= " + optional.joinToString(" | ") { (position, param) ->
-                        """"${param.name}:" v$index-$position"""
-                    },
-                )
-            }
         }
         // An explicit allow-list rather than [^<]: GBNF gives '<' its own meaning for
         // token references, and a bare one inside a character class takes the parser
-        // down a path it cannot return from — it aborts the process rather than
-        // reporting a bad grammar. Everything a tool argument legitimately contains is
-        // listed here instead.
+        // down a path it cannot return from.
         appendLine("""escaped ::= "$ESC" [a-zA-Z0-9 .,'!?@/:_+()&-]* "$ESC"""")
         appendLine("""integer ::= "-"? ("0" | [1-9] [0-9]{0,9})""")
         appendLine("""boolean ::= "true" | "false"""")
     }
 
-    private val CALL_PATTERN = Regex("""call:([a-z_]+)\{(.*)}""", RegexOption.DOT_MATCHES_ALL)
+    // Both braces escaped: Android's ICU engine rejects a bare '}' as a dangling
+    // quantifier, where the JVM's own engine had quietly tolerated it.
+    private val CALL_PATTERN = Regex("""call:([a-z_]+)\{(.*)\}""", RegexOption.DOT_MATCHES_ALL)
 
     override fun parse(raw: String): ToolCall? {
         val match = CALL_PATTERN.find(raw) ?: return null

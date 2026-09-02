@@ -50,6 +50,14 @@ sealed interface CaptureEvent {
 
     /** Capture could not start. */
     data class Failed(val reason: String) : CaptureEvent
+
+    /**
+     * Everything heard so far, emitted while the user is still speaking.
+     *
+     * Not a data class: an array in one gives value semantics that copy badly and lint
+     * rightly objects. Nothing compares these anyway — each is transcribed and dropped.
+     */
+    class Snapshot(val samples: FloatArray) : CaptureEvent
 }
 
 enum class StopReason {
@@ -118,6 +126,8 @@ class VoiceRecorder {
     ) {
         val collected = ArrayList<Float>(WhisperEngine.SAMPLE_RATE * INITIAL_SECONDS)
         val buffer = ShortArray(FRAME_SAMPLES)
+        var speaking = false
+        var framesSinceSnapshot = 0
 
         while (currentCoroutineContext().isActive) {
             val read = record.read(buffer, 0, buffer.size)
@@ -126,10 +136,21 @@ class VoiceRecorder {
             val rms = appendAndMeasure(buffer, read, collected)
             trySend(CaptureEvent.Level(displayLevel(rms)))
 
+            // Offer the audio so far often enough to feel live, rarely enough that the
+            // transcriber is not the reason the microphone stalls. The consumer is free
+            // to ignore one it has no time for.
+            if (speaking && ++framesSinceSnapshot >= FRAMES_PER_SNAPSHOT) {
+                framesSinceSnapshot = 0
+                trySend(CaptureEvent.Snapshot(collected.toFloatArray()))
+            }
+
             when (val verdict = endpointer.accept(rms)) {
                 FrameVerdict.Continue -> Unit
 
-                FrameVerdict.SpeechBegan -> trySend(CaptureEvent.SpeechStarted)
+                FrameVerdict.SpeechBegan -> {
+                    speaking = true
+                    trySend(CaptureEvent.SpeechStarted)
+                }
 
                 is FrameVerdict.Stop -> {
                     val samples = if (verdict.reason == StopReason.NO_SPEECH) {
@@ -182,5 +203,9 @@ class VoiceRecorder {
 
         const val BUFFER_MULTIPLIER = 4
         const val INITIAL_SECONDS = 4
+
+        /** Roughly half a second between partial transcriptions. */
+        val FRAMES_PER_SNAPSHOT = (SNAPSHOT_MILLIS / Endpointer.DEFAULT_FRAME_MILLIS).toInt()
+        const val SNAPSHOT_MILLIS = 500L
     }
 }

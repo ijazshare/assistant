@@ -92,7 +92,7 @@ class GrammarBisectTest {
         val grammar = MachineTools.grammar
         val samples = mapOf(
             MachineTools.SET_ALARM to
-                """{"tool":"set_alarm","arguments":{"hour":7,"minute":0,"meridiem":"am"}}""",
+                """{"tool":"set_alarm","arguments":{"hour":7,"minute":0}}""",
             MachineTools.SET_TIMER to """{"tool":"set_timer","arguments":{"minutes":10}}""",
             MachineTools.SHOW_ALARMS to """{"tool":"show_alarms"}""",
             MachineTools.CREATE_REMINDER to
@@ -119,7 +119,7 @@ class GrammarBisectTest {
             accepts(
                 "full alarm",
                 grammar,
-                """{"tool":"set_alarm","arguments":{"hour":7,"minute":5,"meridiem":"pm","label":"gym"}}""",
+                """{"tool":"set_alarm","arguments":{"hour":7,"minute":5,"label":"gym"}}""",
             ),
         ).isTrue()
         // The repeat that ran a reply to the token limit must now be impossible.
@@ -129,6 +129,24 @@ class GrammarBisectTest {
                 grammar,
                 """{"tool":"set_alarm","arguments":{"hour":7,"minute":5,"minute":5}}""",
             ),
+        ).isFalse()
+    }
+
+    @Test
+    fun anHourOutsideTheClockCannotBeGenerated() {
+        assumeTrue(engine.isLoaded)
+        val grammar = MachineTools.grammar
+        assertThat(accepts("hour 9", grammar, """{"tool":"set_alarm","arguments":{"hour":9}}"""))
+            .isTrue()
+        assertThat(accepts("hour 12", grammar, """{"tool":"set_alarm","arguments":{"hour":12}}"""))
+            .isTrue()
+        // 16 was what came back for "half past six in the evening"; it is now unsayable.
+        assertThat(accepts("hour 24", grammar, """{"tool":"set_alarm","arguments":{"hour":24}}"""))
+            .isFalse()
+        assertThat(accepts("hour 0", grammar, """{"tool":"set_alarm","arguments":{"hour":0}}"""))
+            .isTrue()
+        assertThat(
+            accepts("minute 75", grammar, """{"tool":"set_alarm","arguments":{"hour":7,"minute":75}}"""),
         ).isFalse()
     }
 

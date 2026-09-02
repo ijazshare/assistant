@@ -72,11 +72,30 @@ object PromptBuilder {
         // Few and deliberately unalike. A 1B model given a long list stops choosing and
         // starts copying: at roughly 620 prompt tokens every reply came back as the
         // first example verbatim, whatever had been asked.
-        appendLine("""alarm at 7 -> {"tool":"set_alarm","arguments":{"hour":7,"minute":0,"meridiem":"am"}}""")
+        appendLine("""alarm at 7 -> {"tool":"set_alarm","arguments":{"hour":7,"minute":0}}""")
+        // Carries two things at once: "<fraction> past <hour>" as an idiom, and an
+        // evening hour written in 24-hour form. Different numbers and a different part
+        // of the day than any phrase under test, so what transfers is the shape.
+        appendLine(
+            """half past ten at night -> """ +
+                """{"tool":"set_alarm","arguments":{"hour":22,"minute":30}}""",
+        )
         appendLine("""timer for three minutes -> {"tool":"set_timer","arguments":{"minutes":3}}""")
-        appendLine("""remind me to call Ali -> {"tool":"create_reminder","arguments":{"task":"call Ali"}}""")
+        // With a time on it, since a reminder without one was the only example and the
+        // model duly filed "at 6pm" as hour 6 — a notification twelve hours early.
+        appendLine(
+            """remind me to take the bins out at 8pm -> """ +
+                """{"tool":"create_reminder","arguments":{"task":"take the bins out","hour":20}}""",
+        )
         appendLine("""open Spotify -> {"tool":"open_app","arguments":{"app":"Spotify"}}""")
         appendLine("""what does this say -> {"tool":"read_screen"}""")
+        // Teaches the category, not the phrase: asked to arrange something out in the
+        // world, the model had been filing it as a reminder and inventing a time to
+        // fire it at, which is worse than saying no.
+        appendLine(
+            """order me a pizza -> """ +
+                """{"tool":"unsupported","arguments":{"reason":"I cannot order things."}}""",
+        )
         // Without this the model reliably sent "scroll down" to navigate, which is the
         // one pair of tools whose descriptions alone did not separate them.
         appendLine("""scroll down -> {"tool":"scroll","arguments":{"direction":"down"}}""")

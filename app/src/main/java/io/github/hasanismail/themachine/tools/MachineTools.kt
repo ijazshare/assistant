@@ -42,17 +42,23 @@ object MachineTools {
             name = SET_ALARM,
             description = "Alarm at a clock time: wake me at 7.",
             params = listOf(
-                // The hour exactly as spoken, with morning or evening reported separately
-                // rather than folded in. Asked for 24-hour time directly, the model read
-                // "half past six in the evening" as hour 2; TimeResolver does the
-                // conversion instead.
-                ToolParam("hour", ParamType.INTEGER, "The hour as said, 1 to 12.", required = true),
-                ToolParam("minute", ParamType.INTEGER, "Minutes past the hour, 0 if not said."),
+                // 24-hour, which is the form this model converts to readily and
+                // accurately. Splitting it into an hour plus am/pm was tried, on the
+                // theory that a small model should not be asked to convert at all, and
+                // was worse: it still reached for 18, and a 1..12 range simply truncated
+                // that to 12. The range remains, so an impossible hour stays impossible.
                 ToolParam(
-                    "meridiem",
-                    ParamType.ENUM,
-                    "am for morning, pm for afternoon or evening. Omit if not said.",
-                    values = listOf(TimeResolver.AM, TimeResolver.PM),
+                    "hour",
+                    ParamType.INTEGER,
+                    "Hour in 24-hour time, 0 to 23. Six in the evening is 18.",
+                    required = true,
+                    range = 0..23,
+                ),
+                ToolParam(
+                    "minute",
+                    ParamType.INTEGER,
+                    "Minutes past the hour, 0 if not said.",
+                    range = 0..59,
                 ),
                 ToolParam("label", ParamType.STRING, "What the alarm is for."),
             ),
@@ -65,9 +71,9 @@ object MachineTools {
                 // total, the model copied the number from whichever example looked
                 // nearest — "ten minute timer" came back as 180 because an example used
                 // three minutes.
-                ToolParam("hours", ParamType.INTEGER, "Number of hours said, if any."),
-                ToolParam("minutes", ParamType.INTEGER, "Number of minutes said, if any."),
-                ToolParam("seconds", ParamType.INTEGER, "Number of seconds said, if any."),
+                ToolParam("hours", ParamType.INTEGER, "Number of hours said, if any.", range = 0..23),
+                ToolParam("minutes", ParamType.INTEGER, "Number of minutes said, if any.", range = 0..59),
+                ToolParam("seconds", ParamType.INTEGER, "Number of seconds said, if any.", range = 0..59),
                 ToolParam("label", ParamType.STRING, "What the timer is for."),
             ),
         ),
@@ -80,13 +86,17 @@ object MachineTools {
             description = "Remember a task, optionally at a time.",
             params = listOf(
                 ToolParam("task", ParamType.STRING, "What to be reminded of.", required = true),
-                ToolParam("hour", ParamType.INTEGER, "The hour as said, 1 to 12, if a time was given."),
-                ToolParam("minute", ParamType.INTEGER, "Minutes past the hour, if a time was given."),
                 ToolParam(
-                    "meridiem",
-                    ParamType.ENUM,
-                    "am for morning, pm for afternoon or evening. Omit if not said.",
-                    values = listOf(TimeResolver.AM, TimeResolver.PM),
+                    "hour",
+                    ParamType.INTEGER,
+                    "Hour in 24-hour time, if a time was given. Six in the evening is 18.",
+                    range = 0..23,
+                ),
+                ToolParam(
+                    "minute",
+                    ParamType.INTEGER,
+                    "Minutes past the hour, if a time was given.",
+                    range = 0..59,
                 ),
                 ToolParam("tomorrow", ParamType.BOOLEAN, "True if it is for tomorrow rather than today."),
             ),
@@ -171,7 +181,7 @@ object MachineTools {
         ),
         Tool(
             name = UNSUPPORTED,
-            description = "Nothing else fits.",
+            description = "Nothing else fits: errands this phone cannot run, like booking or ordering.",
             params = listOf(
                 ToolParam("reason", ParamType.STRING, "Briefly, what was asked for.", required = true),
             ),
