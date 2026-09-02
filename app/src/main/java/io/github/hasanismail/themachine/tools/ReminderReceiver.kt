@@ -15,17 +15,61 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
 import io.github.hasanismail.themachine.R
 import io.github.hasanismail.themachine.ui.MainActivity
 
-/** Fires a reminder notification when its exact alarm comes due. */
+/**
+ * Shows a reminder when its alarm comes due, and handles the two things a person can do
+ * with it from the notification: tick it off, or push it back ten minutes.
+ */
 class ReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        val task = intent.getStringExtra(EXTRA_TASK) ?: return
+        val id = intent.getStringExtra(EXTRA_ID) ?: return
+        val task = intent.getStringExtra(EXTRA_TASK) ?: ""
+        when (intent.action) {
+            ACTION_DONE -> offMainThread {
+                ReminderStore(context).complete(id)
+                NotificationManagerCompat.from(context).cancel(id.hashCode())
+            }
+
+            ACTION_SNOOZE -> offMainThread {
+                val due = ReminderStore(context).snooze(id, task)
+                NotificationManagerCompat.from(context).cancel(id.hashCode())
+                Log.i(TAG, "reminder snoozed to $due")
+            }
+
+            else -> show(context, id, task)
+        }
+    }
+
+    /**
+     * File rewrites belong off the main thread, and a receiver is torn down as soon as
+     * onReceive returns unless it says otherwise.
+     */
+    private fun offMainThread(work: () -> Unit) {
+        val pending = goAsync()
+        Thread {
+            try {
+                work()
+            } finally {
+                pending.finish()
+            }
+        }.start()
+    }
+
+    private fun show(context: Context, id: String, task: String) {
+        // Blocked notifications are dropped by the platform without a word; the store
+        // warns at creation time, and this is the second chance to leave a trace.
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            Log.w(TAG, "reminder due but notifications are off: $task")
+            return
+        }
         ensureChannel(context)
 
         val open = PendingIntent.getActivity(
@@ -43,15 +87,27 @@ class ReminderReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setContentIntent(open)
+            .addAction(0, "Done", action(context, id, task, ACTION_DONE, SALT_DONE))
+            .addAction(0, "Snooze 10 min", action(context, id, task, ACTION_SNOOZE, SALT_SNOOZE))
             .setAutoCancel(true)
             .build()
 
-        // POST_NOTIFICATIONS may have been revoked since the reminder was set; notify()
-        // throws in that case, and a missed reminder should not take the process down.
-        runCatching {
-            NotificationManagerCompat.from(context).notify(task.hashCode(), notification)
-        }
+        NotificationManagerCompat.from(context).notify(id.hashCode(), notification)
     }
+
+    /** A distinct PendingIntent per button: same receiver, different action and data. */
+    private fun action(context: Context, id: String, task: String, action: String, salt: Int): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            id.hashCode() * SALT_STRIDE + salt,
+            Intent(context, ReminderReceiver::class.java).apply {
+                this.action = action
+                data = Uri.parse("themachine://task/$id/$salt")
+                putExtra(EXTRA_ID, id)
+                putExtra(EXTRA_TASK, task)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     private fun ensureChannel(context: Context) {
         val manager = context.getSystemService<NotificationManager>() ?: return
@@ -63,7 +119,15 @@ class ReminderReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        private const val TAG = "TheMachine"
+        const val EXTRA_ID = "id"
         const val EXTRA_TASK = "task"
-        private const val CHANNEL_ID = "reminders"
+        const val ACTION_FIRE = "io.github.hasanismail.themachine.REMINDER_FIRE"
+        const val ACTION_DONE = "io.github.hasanismail.themachine.REMINDER_DONE"
+        const val ACTION_SNOOZE = "io.github.hasanismail.themachine.REMINDER_SNOOZE"
+        const val CHANNEL_ID = "reminders"
+        private const val SALT_STRIDE = 31
+        private const val SALT_DONE = 1
+        private const val SALT_SNOOZE = 2
     }
 }

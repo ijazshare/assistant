@@ -81,6 +81,7 @@ class CommandCache(private val file: File) {
     fun learn(transcript: String, call: ToolCall, now: Long = System.currentTimeMillis()): Boolean {
         val key = CommandKey.of(transcript)?.takeIf { it.split(' ').size >= MIN_WORDS }
         if (key == null || call.tool !in CACHEABLE || CommandKey.isTimeRelative(transcript)) return false
+        if (!saidInWords(key, call)) return false
 
         synchronized(this) {
             load()
@@ -90,6 +91,56 @@ class CommandCache(private val file: File) {
         }
         Log.i(TAG, "cache: learned [$key] -> ${call.tool} ${call.arguments}")
         return true
+    }
+
+    /**
+     * Whether every argument the model produced can be traced to the words themselves.
+     *
+     * This is what stops a misreading from being frozen. "Half past six" resolved to
+     * minute 30 is right, but 30 appears nowhere in the phrase, so it cannot be told apart
+     * from a guess and is not cached; "6:30" can be, and is. A reminder whose task text
+     * was rewritten through the user's notes — "call my brother" becoming "call Osman" —
+     * depends on those notes and is left to the model each time. An app name the model
+     * un-mangled from a misheard phrase is left alone for the same reason.
+     */
+    private fun saidInWords(key: String, call: ToolCall): Boolean {
+        val said = Said(key.split(' ').toSet(), CommandKey.numbersIn(key))
+        val args = call.arguments
+        return when (call.tool) {
+            MachineTools.SET_ALARM -> said.hour(args["hour"]) && said.number(args["minute"])
+            MachineTools.SET_TIMER -> DURATION_PARTS.all { said.number(args[it]) }
+            MachineTools.CREATE_REMINDER -> said.reminder(args)
+            MachineTools.OPEN_APP -> said.text(args["app"])
+            else -> true
+        }
+    }
+
+    /** The words and numbers of a key, and what they vouch for. */
+    private class Said(private val words: Set<String>, private val numbers: Set<String>) {
+
+        /** An hour is vouched for by itself, its 12-hour form, or noon and midnight by name. */
+        fun hour(value: String?): Boolean {
+            val hour = value?.toIntOrNull() ?: return value == null
+            return hour.toString() in numbers ||
+                (hour > NOON && (hour - NOON).toString() in numbers) ||
+                (hour == 0 && (NOON.toString() in numbers || "midnight" in words)) ||
+                (hour == NOON && "noon" in words)
+        }
+
+        /** Zero is the model filling a default in, not a number it heard. */
+        fun number(value: String?): Boolean = value == null || value == "0" || value in numbers
+
+        /** Every word of a free-text argument must be a word of the command. */
+        fun text(value: String?): Boolean {
+            val normalised = CommandKey.of(value ?: return true) ?: return false
+            return normalised.split(' ').all { it in words }
+        }
+
+        fun reminder(args: Map<String, String>): Boolean =
+            hour(args["hour"]) &&
+                number(args["minute"]) &&
+                text(args["task"]) &&
+                (args["tomorrow"] == "true") == ("tomorrow" in words)
     }
 
     /** Drops one phrase, for when the user says the assistant got it wrong. */
@@ -151,13 +202,18 @@ class CommandCache(private val file: File) {
         /** A single word is not a command anyone would want run without being asked. */
         const val MIN_WORDS = 2
 
+        private const val NOON = 12
+        private val DURATION_PARTS = listOf("hours", "minutes", "seconds")
+
         /**
          * Tools whose call is decided by the words alone.
          *
          * Absent on purpose: `answer`, which reads the user's notes and the date;
-         * `unsupported`, which should be re-tried once a tool exists for it; and
+         * `unsupported`, which should be re-tried once a tool exists for it;
          * `send_message` and `call_contact`, where an instant wrong action reaches
-         * another person and the phrases are rarely repeated verbatim anyway.
+         * another person and the phrases are rarely repeated verbatim anyway; and
+         * `tap_text`, whose label has to match what is on screen exactly, which the
+         * normalised key cannot promise.
          */
         val CACHEABLE: Set<String> = setOf(
             MachineTools.SET_ALARM,
@@ -169,7 +225,6 @@ class CommandCache(private val file: File) {
             MachineTools.READ_NOTIFICATIONS,
             MachineTools.SCROLL,
             MachineTools.NAVIGATE,
-            MachineTools.TAP_TEXT,
         )
     }
 }

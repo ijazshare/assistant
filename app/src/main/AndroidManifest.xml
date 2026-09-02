@@ -157,6 +157,16 @@
             android:name=".tools.ReminderReceiver"
             android:exported="false" />
 
+        <!-- BOOT_COMPLETED is a protected broadcast: only the system can send it, so
+             exporting the receiver exposes nothing. -->
+        <receiver
+            android:name=".tools.ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".ui.HistoryActivity"
             android:exported="false"

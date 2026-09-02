@@ -29,9 +29,17 @@ object CommandKey {
      * means the same thing on any day.
      */
     val RELATIVE_TIME_WORDS: Set<String> = setOf(
-        "in", "later", "now", "today", "tonight", "this", "next", "after", "from",
-        "morning", "afternoon", "evening", "noon", "midnight", "soon", "shortly",
+        "in", "later", "now", "today", "tonight", "this", "next", "after", "before", "from",
+        "morning", "afternoon", "evening", "soon", "shortly", "every", "yesterday",
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        "january", "february", "march", "april", "may", "june", "july", "august",
+        "september", "october", "november", "december", "weekend",
     )
+
+    /** Every run of digits in a key, for checking that a number the model emitted was said. */
+    fun numbersIn(key: String): Set<String> = DIGITS.findAll(key).map { it.value }.toSet()
+
+    private val DIGITS = Regex("""\d+""")
 
     private val UNITS = mapOf(
         "min" to "minutes", "mins" to "minutes", "minute" to "minutes",

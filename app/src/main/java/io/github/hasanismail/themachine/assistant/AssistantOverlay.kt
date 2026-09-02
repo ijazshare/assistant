@@ -11,6 +11,7 @@ package io.github.hasanismail.themachine.assistant
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,19 +19,30 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.hasanismail.themachine.audio.MachineSounds
@@ -61,6 +73,11 @@ fun AssistantOverlay(showCount: Int, onDismiss: () -> Unit) {
     val session = remember { VoiceSession(context, scope) }
     val state by session.state.collectAsStateWithLifecycle()
 
+    // Each summon starts in voice mode with an empty draft; typing is a choice made per
+    // summon, not a setting.
+    var typing by remember(showCount) { mutableStateOf(false) }
+    var draft by remember(showCount) { mutableStateOf("") }
+
     // Each summon starts a fresh listen; the session object outlives the reveal so the
     // loaded Whisper context is not paid for again on a follow-up.
     LaunchedEffect(showCount) {
@@ -80,7 +97,15 @@ fun AssistantOverlay(showCount: Int, onDismiss: () -> Unit) {
             TrackingBox(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Above the keyboard when there is one, and deaf to the tap that
+                    // dismisses the session: a tap on the panel is aimed at the panel.
+                    .imePadding()
                     .padding(12.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                    )
                     .background(MachineColors.Void)
                     .scanlines(),
                 color = state.tone(),
@@ -97,15 +122,90 @@ fun AssistantOverlay(showCount: Int, onDismiss: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("THE MACHINE", style = MachineLabel, color = state.tone())
-                        Text("TAP TO DISMISS", style = MachineLabel, color = MachineColors.Ghost)
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text(
+                                text = if (typing) "SPEAK" else "TYPE",
+                                style = MachineLabel,
+                                color = MachineColors.Relevant,
+                                modifier = Modifier.clickable {
+                                    if (typing) {
+                                        typing = false
+                                        session.start()
+                                    } else {
+                                        session.stopListening()
+                                        typing = true
+                                    }
+                                },
+                            )
+                            Text("TAP TO DISMISS", style = MachineLabel, color = MachineColors.Ghost)
+                        }
                     }
                     MachineRule(Modifier.fillMaxWidth().height(1.dp))
 
                     Greeting(showCount)
+                    if (typing) {
+                        CommandField(
+                            value = draft,
+                            onValueChange = { draft = it },
+                            onSend = {
+                                val text = draft
+                                typing = false
+                                session.submitText(text)
+                            },
+                        )
+                    }
                     SessionBody(state)
                 }
             }
         }
+    }
+}
+
+/**
+ * A single line to type a command into, focused and with the keyboard up as soon as it
+ * appears. Send runs the command through exactly the path speech takes, minus the
+ * transcription.
+ */
+@Composable
+private fun CommandField(value: String, onValueChange: (String) -> Unit, onSend: () -> Unit) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = MachineStatus.copy(color = MachineColors.Bone),
+        cursorBrush = SolidColor(MachineColors.Relevant),
+        keyboardOptions = KeyboardOptions(
+            imeAction = ImeAction.Send,
+            capitalization = KeyboardCapitalization.Sentences,
+        ),
+        keyboardActions = KeyboardActions(
+            onSend = {
+                keyboard?.hide()
+                onSend()
+            },
+        ),
+        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+        decorationBox = { inner ->
+            Column {
+                Text("TYPE A COMMAND", style = MachineLabel, color = MachineColors.Admin)
+                Box(Modifier.padding(vertical = 6.dp)) {
+                    if (value.isEmpty()) {
+                        Text("timer ten minutes", style = MachineStatus, color = MachineColors.Ghost)
+                    }
+                    inner()
+                }
+                MachineRule(Modifier.fillMaxWidth().height(1.dp))
+            }
+        },
+    )
+    // Focus once the field exists and the window already holds focus; asking in the same
+    // frame the field appears can be dropped.
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboard?.show()
     }
 }
 

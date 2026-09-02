@@ -11,11 +11,21 @@ package io.github.hasanismail.themachine
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
+import io.github.hasanismail.themachine.tools.ReminderStore
 
 /**
- * Application entry point. Deliberately does almost nothing: the voice pipeline's
- * heavy pieces (Whisper, llama, Piper) are loaded per-session and freed on session
- * end, so there is nothing to warm up here.
+ * Application entry point. Does almost nothing: the voice pipeline's heavy pieces
+ * (Whisper, llama, Piper) are loaded per-session and freed on session end.
+ *
+ * The one job it has is re-arming reminders. A force-stop from App info clears the
+ * app's alarms exactly as a reboot does, and no receiver is told about it; the next
+ * time the process comes up is the first chance to put them back.
  */
 @HiltAndroidApp
-class TheMachineApplication : Application()
+class TheMachineApplication : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+        Thread { ReminderStore(this).rescheduleAll() }.apply { isDaemon = true }.start()
+    }
+}

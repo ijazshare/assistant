@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
 import android.util.Log
 import android.view.View
+import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -66,6 +67,12 @@ class MachineVoiceInteractionSession(context: Context) :
     }
 
     override fun onCreateContentView(): View {
+        // The platform builds this window focusable and able to take the keyboard; the one
+        // thing worth pinning is what happens when the keyboard appears. The default,
+        // adjustPan, scrolls the whole full-screen window. adjustNothing leaves layout to
+        // Compose, which pads the panel up above the keyboard itself.
+        window.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+
         val view = ComposeView(context).apply {
             setViewTreeLifecycleOwner(this@MachineVoiceInteractionSession)
             setViewTreeViewModelStoreOwner(this@MachineVoiceInteractionSession)
@@ -90,6 +97,9 @@ class MachineVoiceInteractionSession(context: Context) :
     }
 
     override fun onHide() {
+        // With a stack, so that a session that vanished can be traced to whoever hid it:
+        // the dismiss tap, the system, or something that stole focus.
+        Log.i("TheMachine", "assistant session hidden", Throwable("hide requested"))
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         super.onHide()
     }

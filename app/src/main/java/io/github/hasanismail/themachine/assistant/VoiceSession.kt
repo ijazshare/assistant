@@ -170,6 +170,21 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     }
 
     /**
+     * Stops the microphone without ending the session, for someone who would rather type.
+     *
+     * The engines stay loaded: a typed command still needs the language model, and the
+     * voice still speaks the reply.
+     */
+    fun stopListening() {
+        listening?.cancel()
+        listening = null
+        val current = _state.value
+        if (current is SessionState.Listening || current is SessionState.Preparing) {
+            _state.value = SessionState.Idle
+        }
+    }
+
+    /**
      * Runs a command the user typed rather than spoke.
      *
      * The microphone is stopped first: someone who has started typing has decided not to
@@ -180,8 +195,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         val typed = text.trim()
         if (typed.isEmpty()) return
         source = QuerySource.TYPED
-        listening?.cancel()
-        listening = null
+        stopListening()
         scope.launch {
             _state.value = SessionState.Thinking(typed)
             act(typed, sttMillis = 0)

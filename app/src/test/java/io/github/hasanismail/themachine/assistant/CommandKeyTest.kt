@@ -65,6 +65,16 @@ class CommandKeyTest {
         assertThat(CommandKey.isTimeRelative("remind me to call mom this evening")).isTrue()
         assertThat(CommandKey.isTimeRelative("set an alarm for later today")).isTrue()
         assertThat(CommandKey.isTimeRelative("wake me at 7 tonight")).isTrue()
+        // A day of the week or a repeat is a date, and dates move.
+        assertThat(CommandKey.isTimeRelative("remind me on Friday to pay rent")).isTrue()
+        assertThat(CommandKey.isTimeRelative("alarm every day at 7")).isTrue()
+    }
+
+    @Test
+    fun `the numbers in a key are found wherever they sit`() {
+        assertThat(CommandKey.numbersIn("alarm 6:30")).containsExactly("6", "30")
+        assertThat(CommandKey.numbersIn("timer 10 minutes")).containsExactly("10")
+        assertThat(CommandKey.numbersIn("open spotify")).isEmpty()
     }
 
     @Test

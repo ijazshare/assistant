@@ -75,6 +75,89 @@ class CommandCacheTest {
     }
 
     @Test
+    fun `a number the model produced must have been said`() {
+        val cache = cache()
+        // Right answer, but 30 is not in the words: indistinguishable from a guess.
+        assertThat(
+            cache.learn(
+                "wake me at half past six",
+                ToolCall(MachineTools.SET_ALARM, mapOf("hour" to "6", "minute" to "30")),
+            ),
+        ).isFalse()
+        // The same time said with digits can be checked, and is kept.
+        assertThat(
+            cache.learn(
+                "wake me at 6:30",
+                ToolCall(MachineTools.SET_ALARM, mapOf("hour" to "6", "minute" to "30")),
+            ),
+        ).isTrue()
+        // An evening hour in 24-hour form is backed by its 12-hour spoken form.
+        assertThat(
+            cache.learn(
+                "alarm for 6pm",
+                ToolCall(MachineTools.SET_ALARM, mapOf("hour" to "18", "minute" to "0")),
+            ),
+        ).isTrue()
+    }
+
+    @Test
+    fun `a task rewritten through the user's notes is not cached`() {
+        val cache = cache()
+        // "my brother" became "Osman" via memories.md; that depends on the notes, not the words.
+        assertThat(
+            cache.learn(
+                "remind me to call my brother",
+                ToolCall(MachineTools.CREATE_REMINDER, mapOf("task" to "call Osman")),
+            ),
+        ).isFalse()
+        assertThat(
+            cache.learn(
+                "remind me to buy milk",
+                ToolCall(MachineTools.CREATE_REMINDER, mapOf("task" to "buy milk")),
+            ),
+        ).isTrue()
+    }
+
+    @Test
+    fun `the tomorrow flag must match the word`() {
+        val cache = cache()
+        assertThat(
+            cache.learn(
+                "remind me tomorrow at 7 to call Ali",
+                ToolCall(
+                    MachineTools.CREATE_REMINDER,
+                    mapOf("task" to "call Ali", "hour" to "7", "tomorrow" to "true"),
+                ),
+            ),
+        ).isTrue()
+        assertThat(
+            cache.learn(
+                "remind me at 7 to call Ali",
+                ToolCall(
+                    MachineTools.CREATE_REMINDER,
+                    mapOf("task" to "call Ali", "hour" to "7", "tomorrow" to "true"),
+                ),
+            ),
+        ).isFalse()
+    }
+
+    @Test
+    fun `an app name the model corrected is not cached`() {
+        val cache = cache()
+        // Whisper heard "spot a fee"; the model knew what was meant. Leave that to the model.
+        assertThat(cache.learn("open spot a fee", ToolCall(MachineTools.OPEN_APP, mapOf("app" to "Spotify"))))
+            .isFalse()
+        assertThat(cache.learn("open the camera", ToolCall(MachineTools.OPEN_APP, mapOf("app" to "Camera"))))
+            .isTrue()
+    }
+
+    @Test
+    fun `tapping by label is never cached`() {
+        assertThat(cache().learn("tap log in", ToolCall(MachineTools.TAP_TEXT, mapOf("label" to "Log in"))))
+            .isFalse()
+    }
+
+    @Test
     fun `a single word is never cached`() {
         assertThat(cache().learn("timer", timer)).isFalse()
     }
@@ -94,7 +177,11 @@ class CommandCacheTest {
     fun `the least recently used phrase is evicted first`() {
         val cache = cache()
         for (i in 0 until CommandCache.MAX_ENTRIES) {
-            cache.learn("timer $i minutes", timer, now = i.toLong())
+            cache.learn(
+                "timer $i minutes",
+                ToolCall(MachineTools.SET_TIMER, mapOf("minutes" to "$i")),
+                now = i.toLong(),
+            )
         }
         assertThat(cache.size).isEqualTo(CommandCache.MAX_ENTRIES)
         cache.learn("open spotify", ToolCall(MachineTools.OPEN_APP, mapOf("app" to "Spotify")), now = 1_000_000)
