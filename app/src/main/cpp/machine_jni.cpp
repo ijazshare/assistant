@@ -755,7 +755,16 @@ Java_io_github_hasanismail_themachine_llm_LlamaNative_nativeGenerate(
         produced_total++;
         // After the accept above, never before it: the grammar has already advanced past
         // this token, and stopping here leaves it consistent.
-        if (!stop_at.empty() && out.find(stop_at) != std::string::npos) break;
+        if (!stop_at.empty()) {
+            const size_t at = out.find(stop_at);
+            if (at != std::string::npos) {
+                // Cut exactly at the marker. One token can carry the marker and the
+                // start of what follows, and the caller closes this fragment into JSON:
+                // an overshoot left it holding half an argument and unparseable.
+                out.resize(at + stop_at.size());
+                break;
+            }
+        }
         sample_us += std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - t_sampled).count();
 

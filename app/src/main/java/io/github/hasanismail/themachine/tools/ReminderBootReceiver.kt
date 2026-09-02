@@ -12,6 +12,8 @@ package io.github.hasanismail.themachine.tools
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
+import java.io.IOException
 
 /**
  * Re-arms every reminder after a reboot.
@@ -28,6 +30,9 @@ class ReminderBootReceiver : BroadcastReceiver() {
         Thread {
             try {
                 ReminderStore(context).rescheduleAll()
+            } catch (e: IOException) {
+                // An unreadable tasks file at boot must not become a crash on every boot.
+                Log.e("TheMachine", "reminder reschedule failed", e)
             } finally {
                 pending.finish()
             }

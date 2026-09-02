@@ -35,7 +35,11 @@ object JsonToolDialect : PromptDialect {
 
     override fun grammar(tools: List<Tool>): String = ToolGrammar.build(tools)
 
-    override val answerMarker: String = """"tool":"answer\""""
+    // Plain escapes, not a raw string: as a raw string this held a literal backslash,
+    // so it never matched anything the model wrote and the early stop never fired. The
+    // 1B then wrote out a whole answer, blew the token cap, and the question came back
+    // as "I could not work out what to do with that".
+    override val answerMarker: String = "\"tool\":\"answer\""
 
     override fun parse(raw: String): ToolCall? = ToolCallParser.parse(raw)
 }

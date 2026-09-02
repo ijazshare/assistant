@@ -165,7 +165,9 @@ class MachineAccessibilityService : AccessibilityService() {
      * actual view rather than a guessed coordinate.
      */
     fun clickNodeWithText(text: String): Boolean {
-        val root = rootInActiveWindow ?: return false
+        // The app's window, not the active one: while a command is running the active
+        // window is this assistant's own panel, which has no Send button in it.
+        val root = foregroundRoot() ?: return false
         return try {
             val match = findNode(root) { node ->
                 node.isClickable && node.matchesText(text)

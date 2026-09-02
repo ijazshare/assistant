@@ -35,30 +35,33 @@ class TesseractEngine(private val context: Context) {
      * Tesseract insists on a `tessdata/` directory under the path it is given, so the
      * file is copied into one the first time — four megabytes, once.
      */
-    fun load(traineddata: File): Boolean {
-        synchronized(this) {
-            if (api != null) return true
-            if (!traineddata.isFile) return false
+    fun load(traineddata: File): Boolean = synchronized(this) {
+        if (api != null) return@synchronized true
+        if (!traineddata.isFile) return@synchronized false
 
-            val home = File(context.filesDir, "ocr")
+        // Copying can fail on a full disk, and a screen the assistant cannot read is a
+        // worse answer than usual — not a crash in the middle of a command.
+        val home = File(context.filesDir, "ocr")
+        val copied = runCatching {
             val target = File(File(home, "tessdata").apply { mkdirs() }, traineddata.name)
             if (!target.isFile || target.length() != traineddata.length()) {
                 traineddata.copyTo(target, overwrite = true)
             }
+        }.onFailure { Log.e(TAG, "ocr: could not place tessdata", it) }
+        if (copied.isFailure) return@synchronized false
 
-            val tess = TessBaseAPI()
-            val ok = runCatching {
-                tess.init(home.absolutePath, LANGUAGE, TessBaseAPI.OEM_LSTM_ONLY)
-            }.onFailure { Log.e(TAG, "ocr: init threw", it) }.getOrDefault(false)
-            if (!ok) {
-                tess.recycle()
-                Log.e(TAG, "ocr: could not initialise from ${home.absolutePath}")
-                return false
-            }
-            api = tess
-            Log.i(TAG, "ocr: loaded ${traineddata.name}")
-            return true
+        val tess = TessBaseAPI()
+        val ok = runCatching {
+            tess.init(home.absolutePath, LANGUAGE, TessBaseAPI.OEM_LSTM_ONLY)
+        }.onFailure { Log.e(TAG, "ocr: init threw", it) }.getOrDefault(false)
+        if (!ok) {
+            tess.recycle()
+            Log.e(TAG, "ocr: could not initialise from ${home.absolutePath}")
+            return@synchronized false
         }
+        api = tess
+        Log.i(TAG, "ocr: loaded ${traineddata.name}")
+        true
     }
 
     /** Every line of text found in [bitmap], top to bottom, blank lines dropped. */

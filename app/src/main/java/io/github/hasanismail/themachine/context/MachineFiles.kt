@@ -74,37 +74,67 @@ class MachineFiles(private val root: File) {
      * in the trailing comment, which the reader never has to look at and the model is
      * never shown, so that an alarm can find its line again after a reboot.
      */
-    fun appendTask(task: String, due: LocalDateTime?): String {
+    fun appendTask(task: String, due: LocalDateTime?): String = synchronized(TASK_FILE_LOCK) {
         val target = file(TASKS)
         if (!target.exists()) target.writeText(TASKS.template)
         val id = UUID.randomUUID().toString().take(ID_LENGTH)
         val stamp = LocalDateTime.now().format(STAMP)
-        val dueText = due?.let { " — due ${it.format(DUE)}" } ?: ""
+        val dueText = due?.let { "$DUE_MARKER ${it.format(DUE)}" } ?: ""
         val dueField = due?.let { " due:${it.format(ISO)}" } ?: ""
         target.appendText("\n- [ ] $task$dueText  <!-- id:$id$dueField added $stamp -->")
-        return id
+        id
     }
 
     /** Every checklist line in the tasks file, in file order. */
-    fun readTasks(): List<TaskLine> {
+    fun readTasks(): List<TaskLine> = synchronized(TASK_FILE_LOCK) {
         val target = file(TASKS)
-        if (!target.isFile) return emptyList()
-        return target.readLines().mapNotNull { parseTask(it) }
+        if (!target.isFile) return@synchronized emptyList()
+        target.readLines().mapNotNull { parseTask(it) }
     }
 
     /** Ticks a task's box. False if no line carries that id. */
     fun completeTask(id: String): Boolean =
         rewriteTask(id) { line -> line.replaceFirst("- [ ]", "- [x]") }
 
-    /** Moves a task's due time, in both the words the user reads and the field the code does. */
+    /**
+     * Moves a task's due time, in both the words the user reads and the field the code
+     * reads.
+     *
+     * The line is edited in place rather than rebuilt from its parts. Rebuilding took
+     * the title as everything before the first " — due", so a task whose own title
+     * contained that phrase lost its ending permanently the first time it was snoozed.
+     */
     fun rescheduleTask(id: String, due: LocalDateTime): Boolean = rewriteTask(id) { line ->
-        val match = TASK_LINE.matchEntire(line.trimEnd()) ?: return@rewriteTask line
-        val title = match.groupValues[TITLE_GROUP].substringBefore(DUE_MARKER).trim()
-        val fields = match.groupValues[FIELDS_GROUP]
-            .let { DUE_FIELD.replace(it, "due:${due.format(ISO)}") }
-            .let { if (DUE_FIELD.containsMatchIn(it)) it else "$it due:${due.format(ISO)}" }
-            .trim()
-        "- [${match.groupValues[BOX_GROUP]}] $title$DUE_MARKER ${due.format(DUE)}  <!-- $fields -->"
+        val fields = COMMENT.find(line)?.groupValues?.get(1)
+        val withField = when {
+            fields == null -> line.trimEnd() + "  <!-- due:${due.format(ISO)} -->"
+
+            DUE_FIELD.containsMatchIn(fields) ->
+                line.replaceFirst(DUE_FIELD, "due:${due.format(ISO)}")
+
+            else -> line.replaceFirst("<!--$fields-->", "<!--$fields due:${due.format(ISO)} -->")
+        }
+        // The human-readable half, replaced only where one already exists.
+        if (DUE_TEXT.containsMatchIn(withField)) {
+            withField.replaceFirst(DUE_TEXT, "$DUE_MARKER ${due.format(DUE)}")
+        } else {
+            COMMENT.find(withField)
+                ?.let { withField.replaceRange(it.range.first, it.range.first, "$DUE_MARKER ${due.format(DUE)}  ") }
+                ?: (withField.trimEnd() + "$DUE_MARKER ${due.format(DUE)}")
+        }
+    }
+
+    /**
+     * Marks a task as delivered by dropping its due field, leaving the line otherwise
+     * untouched.
+     *
+     * Without this a reminder that fired while the process was dead was rescheduled by
+     * the very process start the alarm caused: its time was in the past, so it was
+     * re-armed five seconds out, fired again, and started over. A reminder set for the
+     * evening became a notification every five seconds until the phone was rebooted.
+     */
+    fun markDelivered(id: String): Boolean = rewriteTask(id) { line ->
+        line.replaceFirst(DUE_FIELD, "").replace("  ", " ").trimEnd()
     }
 
     private fun parseTask(line: String): TaskLine? {
@@ -112,16 +142,16 @@ class MachineFiles(private val root: File) {
         val fields = match.groupValues[FIELDS_GROUP]
         return TaskLine(
             id = ID_FIELD.find(fields)?.groupValues?.get(1),
-            title = match.groupValues[TITLE_GROUP].substringBefore(DUE_MARKER).trim(),
+            title = match.groupValues[TITLE_GROUP].replace(DUE_TEXT, "").trim(),
             due = DUE_FIELD.find(fields)?.groupValues?.get(1)
                 ?.let { runCatching { LocalDateTime.parse(it, ISO) }.getOrNull() },
             done = match.groupValues[BOX_GROUP].equals("x", ignoreCase = true),
         )
     }
 
-    private fun rewriteTask(id: String, transform: (String) -> String): Boolean {
+    private fun rewriteTask(id: String, transform: (String) -> String): Boolean = synchronized(TASK_FILE_LOCK) {
         val target = file(TASKS)
-        if (!target.isFile) return false
+        if (!target.isFile) return@synchronized false
         var changed = false
         val lines = target.readLines().map { line ->
             if (!changed && ID_FIELD.find(line)?.groupValues?.get(1) == id) {
@@ -132,7 +162,7 @@ class MachineFiles(private val root: File) {
             }
         }
         if (changed) target.writeText(lines.joinToString("\n"))
-        return changed
+        changed
     }
 
     /** Everything the model should be told, concatenated in a stable order. */
@@ -162,6 +192,24 @@ class MachineFiles(private val root: File) {
         private const val TITLE_GROUP = 2
         private const val FIELDS_GROUP = 3
         private val ID_FIELD = Regex("""\bid:(\S+)""")
+        private val COMMENT = Regex("""<!--(.*?)-->""")
+
+        /*
+         * The due text exactly as [DUE] writes it — "Tue 2 Sep, 7:00 PM" — and nothing
+         * looser. Matching any " — due ..." also matched a title that happened to say
+         * "pay the invoice — due date is Friday", and took the second half of it away.
+         */
+        private val DUE_TEXT =
+            Regex("""\s*$DUE_MARKER \w{3} \d{1,2} \w{3}, \d{1,2}:\d{2} [AP]M""")
+
+        /**
+         * Every read and write of the tasks file goes through this.
+         *
+         * Two reminders coming due in the same minute run two receiver threads, and
+         * ticking both off meant two read-modify-write cycles over one file: whichever
+         * wrote second silently undid the first.
+         */
+        private val TASK_FILE_LOCK = Any()
         private val DUE_FIELD = Regex("""\bdue:(\S+)""")
         private val INLINE_COMMENT = Regex("""\s*<!--.*?-->""")
 

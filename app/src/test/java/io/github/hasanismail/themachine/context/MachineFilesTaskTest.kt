@@ -96,6 +96,33 @@ class MachineFilesTaskTest {
     }
 
     @Test
+    fun `a delivered task keeps its place but loses its alarm`() {
+        val files = files()
+        val id = files.appendTask("call Ali", due)
+        assertThat(files.markDelivered(id)).isTrue()
+        val task = files.readTasks().single()
+        // Still open, still readable, still identified — simply no longer due, which is
+        // what stops a fired reminder from arming itself again on the next process start.
+        assertThat(task.due).isNull()
+        assertThat(task.title).isEqualTo("call Ali")
+        assertThat(task.id).isEqualTo(id)
+        assertThat(task.done).isFalse()
+    }
+
+    @Test
+    fun `a title containing the due marker survives a reschedule`() {
+        val files = files()
+        // The model does produce these, and the line used to be rebuilt from everything
+        // before the first " — due", which cut the title in half permanently.
+        val id = files.appendTask("pay the invoice — due date is Friday", due)
+        assertThat(files.rescheduleTask(id, due.plusMinutes(10))).isTrue()
+        val task = files.readTasks().single()
+        assertThat(task.title).contains("pay the invoice")
+        assertThat(task.title).contains("Friday")
+        assertThat(task.due).isEqualTo(due.plusMinutes(10))
+    }
+
+    @Test
     fun `the model never sees the bookkeeping`() {
         val files = files()
         val id = files.appendTask("call Ali", due)

@@ -55,7 +55,7 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val log = remember { QueryLog(context) }
     val cache = remember {
-        CommandCache(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
+        CommandCache.shared(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
     }
     var records by remember { mutableStateOf(log.recent()) }
     var learned by remember { mutableStateOf(cache.size) }

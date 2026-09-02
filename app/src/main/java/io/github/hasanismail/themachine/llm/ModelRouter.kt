@@ -18,6 +18,10 @@ import io.github.hasanismail.themachine.models.ModelRegistry
 import io.github.hasanismail.themachine.models.ModelRole
 import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -33,6 +37,9 @@ import kotlinx.coroutines.sync.withLock
  * and the phone has room for it, and declined honestly when not.
  */
 class ModelRouter(private val context: Context) {
+
+    /** Outlives any one session, so a cache write is not cancelled by the overlay closing. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val storage = ModelStorage(context)
     private val registry = ModelRegistry(context)
@@ -71,14 +78,16 @@ class ModelRouter(private val context: Context) {
         val text = firstSentence(completion.text.substringBefore("<end_of_turn>").trim())
         Log.i(TAG, "strong answered in ${completion.millis} ms: $text")
 
-        // Written after the first answer of a session, not by the caller: this engine
-        // belongs to the router, and a question asked in a later session should not pay
-        // the prefill again. Measured cold 12.8 s, warm 2 s.
+        if (text.isBlank()) return null
+
+        // The cache write is several megabytes and the answer is already in hand, so it
+        // happens after the caller has it rather than in front of the spoken reply.
+        val reply = completion.copy(text = text)
         if (!cacheWritten) {
             cacheWritten = true
-            strong.saveState()
+            scope.launch { strong.saveState() }
         }
-        return if (text.isBlank()) null else completion.copy(text = text)
+        return reply
     }
 
     /**
@@ -89,8 +98,7 @@ class ModelRouter(private val context: Context) {
      * than thrown away, because the first clause is usually the answer.
      */
     private fun firstSentence(text: String): String {
-        val end = text.indexOfFirst { it in SENTENCE_ENDS }
-        if (end < 0) return text
+        val end = SENTENCE_END.find(text)?.range?.first ?: return text
         return text.substring(0, end + 1).trim()
     }
 
@@ -128,7 +136,9 @@ class ModelRouter(private val context: Context) {
     }
 
     fun release() {
-        strong.unload()
+        // Off the caller's thread: unload takes the monitor an in-flight decode holds,
+        // and that caller is the main thread closing the overlay.
+        scope.launch { strong.unload() }
         cacheWritten = false
     }
 
@@ -138,7 +148,14 @@ class ModelRouter(private val context: Context) {
         /** Context, compute buffer and the rest of the app, over the mapped weights. */
         const val HEADROOM_BYTES = 1_200L * 1024 * 1024
         const val MIB = 1024L * 1024
-        val SENTENCE_ENDS = charArrayOf('.', '!', '?')
+
+        /**
+         * A sentence ends at a full stop that is not inside a number.
+         *
+         * Cutting at the first '.' turned "Pi is approximately 3.14159." into "Pi is
+         * approximately 3." — a correct answer made wrong on the way to being spoken.
+         */
+        val SENTENCE_END = Regex("""[.!?](?=\s|$)""")
         const val NANOS_PER_MILLI = 1_000_000L
     }
 }

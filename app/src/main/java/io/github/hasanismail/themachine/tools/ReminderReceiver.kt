@@ -21,7 +21,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
 import io.github.hasanismail.themachine.R
+import io.github.hasanismail.themachine.context.MachineFiles
 import io.github.hasanismail.themachine.ui.MainActivity
+import java.io.IOException
 
 /**
  * Shows a reminder when its alarm comes due, and handles the two things a person can do
@@ -44,7 +46,12 @@ class ReminderReceiver : BroadcastReceiver() {
                 Log.i(TAG, "reminder snoozed to $due")
             }
 
-            else -> show(context, id, task)
+            else -> {
+                // Recorded as delivered before it is shown, so a process start caused by
+                // this very alarm does not find it overdue and arm it all over again.
+                offMainThread { MachineFiles(context).markDelivered(id) }
+                show(context, id, task)
+            }
         }
     }
 
@@ -57,6 +64,10 @@ class ReminderReceiver : BroadcastReceiver() {
         Thread {
             try {
                 work()
+            } catch (e: IOException) {
+                // A full disk while ticking a task off should lose the tick, not the
+                // process: this runs on a bare thread, where an escape is fatal.
+                Log.e(TAG, "reminder action failed", e)
             } finally {
                 pending.finish()
             }

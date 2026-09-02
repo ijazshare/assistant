@@ -102,7 +102,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context))
     private val piper = PiperEngine()
     private val router = ModelRouter(context)
-    private val cache = CommandCache(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
+    private val cache = CommandCache.shared(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
     private val history = QueryLog(context)
 
     /** Where the current command came from, for the record. */
@@ -141,6 +141,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      */
     fun start() {
         source = QuerySource.VOICE
+        // A second summon before the first gave up used to stack a second recorder on
+        // the same microphone.
+        listening?.cancel()
         listening = scope.launch {
             if (!hasMicrophonePermission()) {
                 fail(

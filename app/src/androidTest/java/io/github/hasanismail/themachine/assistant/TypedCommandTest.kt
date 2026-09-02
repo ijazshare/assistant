@@ -57,7 +57,7 @@ class TypedCommandTest {
     @Before
     fun freshStart() {
         // A clean slate, so the first command is a genuine model resolution.
-        CommandCache(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME)).clear()
+        CommandCache.shared(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME)).clear()
         QueryLog(context).clear()
         session = VoiceSession(context, scope)
     }
@@ -116,7 +116,7 @@ class TypedCommandTest {
         assertThat(state).isInstanceOf(SessionState.Done::class.java)
         state as SessionState.Done
         // Whatever it chose, the reply depends on more than the words and is never cached.
-        val cache = CommandCache(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
+        val cache = CommandCache.shared(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
         assertThat(cache.lookup("who painted the Mona Lisa")).isNull()
     }
 

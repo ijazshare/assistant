@@ -101,6 +101,39 @@ class CommandCacheTest {
     }
 
     @Test
+    fun `a minute the model dropped is not frozen`() {
+        val cache = cache()
+        // "6:30" with the model answering minute 0: the alarm is wrong, and caching it
+        // would make it wrong every morning after.
+        assertThat(
+            cache.learn("alarm for 6:30", ToolCall(MachineTools.SET_ALARM, mapOf("hour" to "6", "minute" to "0"))),
+        ).isFalse()
+        // The same phrase read correctly is fine.
+        assertThat(
+            cache.learn("alarm for 6:30", ToolCall(MachineTools.SET_ALARM, mapOf("hour" to "6", "minute" to "30"))),
+        ).isTrue()
+    }
+
+    @Test
+    fun `a phrase with no clock in it is learned even if it contains a veto word`() {
+        // "this" is a relative-time word, but "read this" has no time in it at all and
+        // was permanently barred from the fast path.
+        assertThat(cache().learn("read this", ToolCall(MachineTools.READ_SCREEN, emptyMap()))).isTrue()
+        assertThat(cache().learn("open spotify now", ToolCall(MachineTools.OPEN_APP, mapOf("app" to "Spotify"))))
+            .isTrue()
+    }
+
+    @Test
+    fun `an entry naming a tool that may not be cached is ignored on load`() {
+        val file = File(folder.root, "cache.json")
+        file.writeText(
+            """{"entries":[{"key":"open spotify","tool":"send_message",""" +
+                """"arguments":{"recipient":"Ali","body":"hi"},"lastUsedEpochMillis":0}]}""",
+        )
+        assertThat(CommandCache(file).lookup("open Spotify")).isNull()
+    }
+
+    @Test
     fun `a task rewritten through the user's notes is not cached`() {
         val cache = cache()
         // "my brother" became "Osman" via memories.md; that depends on the notes, not the words.

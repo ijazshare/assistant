@@ -30,7 +30,7 @@ import java.io.File
  * depend on when they were said — see [CommandKey.isTimeRelative]. A phrase that fails
  * either rule takes the ordinary path every time, which costs a second and is correct.
  */
-class CommandCache(private val file: File) {
+class CommandCache internal constructor(private val file: File) {
 
     @Serializable
     data class Entry(
@@ -80,7 +80,8 @@ class CommandCache(private val file: File) {
      */
     fun learn(transcript: String, call: ToolCall, now: Long = System.currentTimeMillis()): Boolean {
         val key = CommandKey.of(transcript)?.takeIf { it.split(' ').size >= MIN_WORDS }
-        if (key == null || call.tool !in CACHEABLE || CommandKey.isTimeRelative(transcript)) return false
+        val clockBound = call.tool in TIME_BEARING && CommandKey.isTimeRelative(transcript)
+        if (key == null || call.tool !in CACHEABLE || clockBound) return false
         if (!saidInWords(key, call)) return false
 
         synchronized(this) {
@@ -107,7 +108,7 @@ class CommandCache(private val file: File) {
         val said = Said(key.split(' ').toSet(), CommandKey.numbersIn(key))
         val args = call.arguments
         return when (call.tool) {
-            MachineTools.SET_ALARM -> said.hour(args["hour"]) && said.number(args["minute"])
+            MachineTools.SET_ALARM -> said.hour(args["hour"]) && said.minute(args["hour"], args["minute"])
             MachineTools.SET_TIMER -> DURATION_PARTS.all { said.number(args[it]) }
             MachineTools.CREATE_REMINDER -> said.reminder(args)
             MachineTools.OPEN_APP -> said.text(args["app"])
@@ -130,6 +131,27 @@ class CommandCache(private val file: File) {
         /** Zero is the model filling a default in, not a number it heard. */
         fun number(value: String?): Boolean = value == null || value == "0" || value in numbers
 
+        /**
+         * Minutes, refusing a default when the phrase plainly said some.
+         *
+         * "Set an alarm for 6:30" with the model answering minute 0 used to pass, because
+         * a zero counts as "none were said" — and the 6:30 alarm was then frozen at 6:00
+         * for good. A number in the phrase that no argument claims means the model
+         * dropped something.
+         */
+        fun minute(hourValue: String?, value: String?): Boolean {
+            // A minute the model actually named has to appear in the phrase.
+            if (value != null && value != "0") return value in numbers
+            // A defaulted minute is only believable if nothing in the phrase is going
+            // unaccounted for.
+            val claimed = setOfNotNull(hourValue, twelveHourForm(hourValue))
+            return numbers.none { it !in claimed }
+        }
+
+        /** The spoken form of an afternoon hour, which is what the key would contain. */
+        private fun twelveHourForm(hourValue: String?): String? =
+            hourValue?.toIntOrNull()?.takeIf { it > NOON }?.let { (it - NOON).toString() }
+
         /** Every word of a free-text argument must be a word of the command. */
         fun text(value: String?): Boolean {
             val normalised = CommandKey.of(value ?: return true) ?: return false
@@ -138,7 +160,7 @@ class CommandCache(private val file: File) {
 
         fun reminder(args: Map<String, String>): Boolean =
             hour(args["hour"]) &&
-                number(args["minute"]) &&
+                minute(args["hour"], args["minute"]) &&
                 text(args["task"]) &&
                 (args["tomorrow"] == "true") == ("tomorrow" in words)
     }
@@ -170,7 +192,12 @@ class CommandCache(private val file: File) {
         loaded = true
         if (!file.isFile) return
         runCatching { json.decodeFromString<Stored>(file.readText()) }
-            .onSuccess { stored -> stored.entries.forEach { entries[it.key] = it } }
+            // Filtered on the way in as well as on the way out: the file is ordinary
+            // JSON in shared storage, and an entry naming send_message would otherwise
+            // be run instantly and silently on a phrase that never asked for it.
+            .onSuccess { stored ->
+                stored.entries.filter { it.tool in CACHEABLE }.forEach { entries[it.key] = it }
+            }
             .onFailure { Log.w(TAG, "cache: unreadable, starting empty", it) }
     }
 
@@ -197,6 +224,21 @@ class CommandCache(private val file: File) {
     companion object {
         private const val TAG = "TheMachine"
         const val MAX_ENTRIES = 300
+
+        private val instances = HashMap<String, CommandCache>()
+
+        /**
+         * The one cache for a file, for the life of the process.
+         *
+         * The map is the cache and the file is only its backing store, so a second
+         * object over the same path keeps serving entries the first one erased and
+         * writes them back on its next save. "Forget learned" appeared to do nothing:
+         * the screen cleared its own copy while the assistant went on answering from
+         * the copy it had already loaded.
+         */
+        fun shared(file: File): CommandCache = synchronized(instances) {
+            instances.getOrPut(file.absolutePath) { CommandCache(file) }
+        }
         const val FILE_NAME = "command-cache.json"
 
         /** A single word is not a command anyone would want run without being asked. */
@@ -204,6 +246,19 @@ class CommandCache(private val file: File) {
 
         private const val NOON = 12
         private val DURATION_PARTS = listOf("hours", "minutes", "seconds")
+
+        /**
+         * Tools whose arguments are read off the clock.
+         *
+         * Only these care whether the phrase was relative. Applying the veto to every
+         * tool meant "read this" was never learned, because "this" is in the list —
+         * a phrase with no time in it at all, permanently barred from the fast path.
+         */
+        val TIME_BEARING: Set<String> = setOf(
+            MachineTools.SET_ALARM,
+            MachineTools.SET_TIMER,
+            MachineTools.CREATE_REMINDER,
+        )
 
         /**
          * Tools whose call is decided by the words alone.

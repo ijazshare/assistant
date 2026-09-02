@@ -67,7 +67,7 @@ import kotlinx.coroutines.delay
  * outside dismisses.
  */
 @Composable
-fun AssistantOverlay(showCount: Int, onDismiss: () -> Unit) {
+fun AssistantOverlay(showCount: Int, hidden: Boolean, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val session = remember { VoiceSession(context, scope) }
@@ -82,6 +82,12 @@ fun AssistantOverlay(showCount: Int, onDismiss: () -> Unit) {
     // loaded Whisper context is not paid for again on a follow-up.
     LaunchedEffect(showCount) {
         if (showCount > 0) session.start()
+    }
+    // Dismissing the overlay ends the command. Without this the microphone stayed open
+    // behind whatever the user went back to, and an alarm they had changed their mind
+    // about was still set and still spoken aloud.
+    LaunchedEffect(hidden) {
+        if (hidden) session.stopListening()
     }
     DisposableEffect(Unit) {
         onDispose { session.release() }

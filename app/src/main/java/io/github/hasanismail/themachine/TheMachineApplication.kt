@@ -10,6 +10,7 @@
 package io.github.hasanismail.themachine
 
 import android.app.Application
+import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 import io.github.hasanismail.themachine.tools.ReminderStore
 
@@ -26,6 +27,9 @@ class TheMachineApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        Thread { ReminderStore(this).rescheduleAll() }.apply { isDaemon = true }.start()
+        Thread {
+            runCatching { ReminderStore(this).rescheduleAll() }
+                .onFailure { Log.e("TheMachine", "reminder reschedule failed", it) }
+        }.apply { isDaemon = true }.start()
     }
 }
