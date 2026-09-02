@@ -174,8 +174,17 @@ class ModelRouter(private val context: Context) {
     private companion object {
         const val TAG = "TheMachine"
 
-        /** Context, compute buffer and the rest of the app, over the mapped weights. */
-        const val HEADROOM_BYTES = 1_200L * 1024 * 1024
+        /**
+         * What the model needs beyond its own weights: the key-value cache (about
+         * 270 MB at this context size) and the compute buffer (about 160 MB), plus room
+         * for the rest of the app.
+         *
+         * It was 1200 MB, set while both models were resident. With one at a time that
+         * is no longer the shape of the problem, and it refused to answer on a phone with
+         * four gigabytes free — asking for 4208 MB when 4156 were available, so every
+         * question came back "I need more free memory".
+         */
+        const val HEADROOM_BYTES = 640L * 1024 * 1024
         const val MIB = 1024L * 1024
 
         /**
