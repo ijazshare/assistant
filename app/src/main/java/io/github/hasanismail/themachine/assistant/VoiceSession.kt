@@ -45,6 +45,7 @@ import io.github.hasanismail.themachine.tts.PiperEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -117,6 +118,14 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * this the two would race and load the model twice.
      */
     private val modelLoading = Mutex()
+
+    /**
+     * Outlives the session, for the work that must finish after it closes.
+     *
+     * The session's own scope belongs to the overlay's composition and is cancelled the
+     * moment it goes away, which is exactly when the engines need freeing.
+     */
+    private val teardown = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Guards the transcriber, which is one engine and cannot run twice at once.
@@ -299,9 +308,10 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * condition.
      */
     private suspend fun act(transcript: String, sttMillis: Long) {
-        cache.lookup(transcript)?.let { known ->
-            Log.i(TAG, "cache hit [$transcript] -> ${known.tool} ${known.arguments}")
-            carryOut(transcript, known, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
+        val known = withContext(Dispatchers.IO) { cache.lookup(transcript) }
+        known?.let {
+            Log.i(TAG, "cache hit [$transcript] -> ${it.tool} ${it.arguments}")
+            carryOut(transcript, it, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
             return
         }
 
@@ -341,9 +351,22 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
                 llmMillis += answer.millis
                 ToolCall(MachineTools.ANSWER, mapOf("text" to answer.text))
             } else {
+                // Said out loud, so it has to name the actual obstacle: telling someone
+                // to download a model they already have is worse than saying nothing.
                 ToolCall(
-                    MachineTools.UNSUPPORTED,
-                    mapOf("reason" to "Questions need the larger model. Download it under Models."),
+                    MachineTools.ANSWER,
+                    mapOf(
+                        "text" to when (router.lastRefusal) {
+                            ModelRouter.Refusal.NO_MEMORY ->
+                                "I need more free memory to answer questions."
+
+                            ModelRouter.Refusal.FAILED ->
+                                "The larger model would not load, so I cannot answer that."
+
+                            else ->
+                                "I can only do that with the larger model. It is under Models."
+                        },
+                    ),
                 )
             }
         }
@@ -375,24 +398,25 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     ) {
         val result = executor.execute(reconciled(transcript, call))
 
-        // Only a call the model produced and that then succeeded is worth learning. A
-        // failure might be a misread; a cache hit is already known.
-        if (resolution == Resolution.MODEL && result.success) cache.learn(transcript, call)
-
-        history.append(
-            QueryRecord(
-                atEpochMillis = System.currentTimeMillis(),
-                transcript = transcript,
-                source = source,
-                resolution = resolution,
-                tool = call.tool,
-                arguments = call.arguments,
-                spoken = result.spoken,
-                success = result.success,
-                sttMillis = sttMillis,
-                llmMillis = llmMillis,
-            ),
+        // Learning and recording both touch the disk, and neither is worth a frame of
+        // the reply. Only a call the model produced and that then succeeded is learned:
+        // a failure might be a misread, and a cache hit is already known.
+        val record = QueryRecord(
+            atEpochMillis = System.currentTimeMillis(),
+            transcript = transcript,
+            source = source,
+            resolution = resolution,
+            tool = call.tool,
+            arguments = call.arguments,
+            spoken = result.spoken,
+            success = result.success,
+            sttMillis = sttMillis,
+            llmMillis = llmMillis,
         )
+        teardown.launch {
+            if (resolution == Resolution.MODEL && result.success) cache.learn(transcript, call)
+            history.append(record)
+        }
         Log.i(
             TAG,
             "session done: ${call.tool} -> ${result.spoken} " +
@@ -482,11 +506,16 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     /** Frees both models. Called when the overlay goes away, not between utterances. */
     fun release() {
-        executor.release()
-        router.release()
+        // Piper and the router stop themselves promptly; whisper and llama take the
+        // monitor an in-flight decode holds, and this is the main thread closing an
+        // overlay. Freeing them is handed to a scope that outlives the session.
         piper.release()
-        whisper.unload()
-        llama.unload()
+        router.release()
+        teardown.launch {
+            executor.release()
+            whisper.unload()
+            llama.unload()
+        }
         _state.value = SessionState.Idle
     }
 

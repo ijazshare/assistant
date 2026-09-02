@@ -3,7 +3,7 @@
 Running record of the build. Written so a future session can resume cold: what is done, what
 was decided and why, and which facts were verified against a live source rather than assumed.
 
-**Last updated:** 2026-09-02
+**Last updated:** 2026-09-02 (second session)
 
 ## Phase status
 
@@ -18,6 +18,15 @@ was decided and why, and which facts were verified against a live source rather 
 | P6 | Executors + task store | **Mostly done** — all 14 tools dispatch; tasks persist as markdown, not Room (see below) |
 | P7 | Assistant session + onboarding | **Mostly done** — side button opens a full session end to end |
 | P8 | Settings + release | Partly — settings screens exist; signed release flow untested |
+
+### What the assistant does now
+
+Commands run from the side button or by typing. A phrase whose meaning is fixed is
+learned on first success and runs instantly ever after, with no model involved. Questions
+go to the larger model; everything else is decided by the small one in a single call.
+Reminders fire, survive reboots and clock changes, and answer Done and Snooze. The screen
+is read from the accessibility tree, or from pixels when the tree is empty. Every command
+is recorded, on the device, in a file the user can read.
 
 ### Measured on the reference device (Galaxy Z Flip8, SM8850, thermally throttled)
 
@@ -416,6 +425,31 @@ them to the same markdown files the user can open and edit, which is what makes 
 context files a second brain rather than a separate list the assistant keeps to itself.
 It persists correctly and is scheduled with exact alarms as specified. Worth confirming
 before it becomes expensive to change.
+
+### The adversarial review (2026-09-02)
+
+Four readers over the new code, every finding handed to a separate reader whose job was
+to refute it: 34 candidates, 29 survived, the dangerous ones fixed. Worth repeating on
+anything substantial — most of these were invisible to the test suite because the tests
+were written by the same reasoning that wrote the code.
+
+The one that mattered most: a reminder that fired while the app was dead re-armed itself,
+because the alarm started the process and the process rescheduled everything overdue. An
+evening reminder became a notification every five seconds until reboot. Fixed by dropping
+the due field on delivery.
+
+Patterns worth remembering, all of which bit here:
+
+- **Two objects over one file.** The screen and the assistant each held a cache; clearing
+  one had no effect on the other, which then wrote its stale copy back.
+- **A default that cannot be told from a reading.** A minute of zero meant both "none were
+  said" and "the model dropped them", so a wrong alarm time was cached as correct.
+- **A guard applied too widely.** The relative-time veto used the word "this", so
+  "read this" could never be learned.
+- **Raw strings and escapes.** The answer marker held a literal backslash and matched
+  nothing; the enum literal earlier needed a trailing quote a raw string cannot carry.
+- **Work on the main thread inside the latency budget.** Cache reads, history writes and
+  engine teardown all sat in front of the reply.
 
 ### Not done
 - Wake word "hey root" — deferred by Hasan.

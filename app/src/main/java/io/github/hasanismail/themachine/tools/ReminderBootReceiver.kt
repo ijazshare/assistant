@@ -24,8 +24,21 @@ import java.io.IOException
  */
 class ReminderBootReceiver : BroadcastReceiver() {
 
+    private companion object {
+        /**
+         * A reminder is stored as a local time and armed as an instant, so moving the
+         * clock moves the reminder: flying two timezones east made a seven o'clock
+         * reminder fire at five.
+         */
+        val REBUILD_ON = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            Intent.ACTION_TIME_CHANGED,
+        )
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (intent.action !in REBUILD_ON) return
         val pending = goAsync()
         Thread {
             try {

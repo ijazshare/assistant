@@ -53,11 +53,20 @@ class ModelRouter(private val context: Context) {
     val strongModel: ModelAsset?
         get() {
             val ready = registry.byRole(ModelRole.LLM).filter { storage.quickState(it) == ModelState.Ready }
-            val fast = ready.firstOrNull { it.isDefault } ?: ready.firstOrNull()
-            return ready.filter { it !== fast }.maxByOrNull { it.byteSize }
+            val fast = ready.firstOrNull { it.isDefault } ?: ready.firstOrNull() ?: return null
+            // The biggest installed model, which may be the one already answering
+            // commands. "Biggest that is not the default" picked a 270M experiment over
+            // the 1B when both were installed, and left a lone 4B unable to answer at all.
+            return ready.maxByOrNull { it.byteSize }?.takeIf { it.byteSize >= fast.byteSize }
         }
 
     val isStrongLoaded: Boolean get() = strong.isLoaded
+
+    /** Why a question could not be answered, for a reply that says something useful. */
+    enum class Refusal { NO_MODEL, NO_MEMORY, FAILED }
+
+    var lastRefusal: Refusal? = null
+        private set
 
     /**
      * Answers a question with the larger model, or returns null if it cannot: no such
@@ -68,7 +77,12 @@ class ModelRouter(private val context: Context) {
      * which turns each token into a re-read from flash.
      */
     suspend fun answer(question: String, adminName: String, userContext: String): Completion? {
-        val asset = strongModel ?: return null
+        lastRefusal = null
+        val asset = strongModel
+        if (asset == null) {
+            lastRefusal = Refusal.NO_MODEL
+            return null
+        }
         if (!ensureLoaded(asset)) return null
         val completion = strong.generate(
             prompt = AnswerPrompt.build(question, adminName, userContext),
@@ -114,6 +128,7 @@ class ModelRouter(private val context: Context) {
         if (strong.isLoaded) return@withLock true
         val available = availableBytes()
         if (available < asset.byteSize + HEADROOM_BYTES) {
+            lastRefusal = Refusal.NO_MEMORY
             Log.w(
                 TAG,
                 "strong model skipped: ${available / MIB} MiB free, need ${(asset.byteSize + HEADROOM_BYTES) / MIB}",
@@ -122,6 +137,7 @@ class ModelRouter(private val context: Context) {
         }
         val started = System.nanoTime()
         val ok = strong.load(storage.target(asset))
+        if (!ok) lastRefusal = Refusal.FAILED
         Log.i(
             TAG,
             "strong model ${if (ok) "loaded" else "failed"} in ${(System.nanoTime() - started) / NANOS_PER_MILLI} ms",

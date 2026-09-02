@@ -10,6 +10,7 @@
 package io.github.hasanismail.themachine.tools
 
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -73,7 +74,7 @@ class ReminderStore(private val context: Context) {
         val spokenTime = due.format(SPOKEN_TIME)
         when {
             // Promising a reminder that can never be shown would be a lie; say so now.
-            !NotificationManagerCompat.from(context).areNotificationsEnabled() -> ToolResult.ok(
+            !notificationsWillShow() -> ToolResult.ok(
                 "I will remind you to $task at $spokenTime, but notifications are off.",
                 "Allow Notifications under System access, or the reminder will be silent.",
             )
@@ -166,6 +167,20 @@ class ReminderStore(private val context: Context) {
         },
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
+
+    /**
+     * Whether a reminder would actually appear.
+     *
+     * The app-wide switch is not the only one: long-pressing a delivered reminder and
+     * choosing "turn off notifications" silences the Reminders channel while leaving the
+     * app enabled, and a reminder promised under that setting cannot be kept.
+     */
+    private fun notificationsWillShow(): Boolean {
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return false
+        val channel = manager.getNotificationChannel(ReminderReceiver.CHANNEL_ID) ?: return true
+        return channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
 
     private companion object {
         const val TAG = "TheMachine"

@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -117,8 +118,13 @@ fun ContextScreen(modifier: Modifier = Modifier) {
             FileEditor(
                 spec = spec,
                 value = drafts[spec.id].orEmpty(),
-                onChange = { text ->
-                    drafts[spec.id] = text
+                // Saved when the field loses focus, not on every keystroke. Writing the
+                // whole file per character meant a task the assistant appended while the
+                // screen was open was overwritten by a draft that predated it — typing
+                // one letter erased the reminder just set.
+                onChange = { text -> drafts[spec.id] = text },
+                onCommit = {
+                    val text = drafts[spec.id].orEmpty()
                     scope.launch(Dispatchers.IO) { files.write(spec, text) }
                 },
             )
@@ -178,7 +184,12 @@ private fun NameField(value: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-private fun FileEditor(spec: MachineFile, value: String, onChange: (String) -> Unit) {
+private fun FileEditor(
+    spec: MachineFile,
+    value: String,
+    onChange: (String) -> Unit,
+    onCommit: () -> Unit,
+) {
     TrackingBox(
         modifier = Modifier.fillMaxWidth(),
         color = MachineColors.Irrelevant,
@@ -208,6 +219,10 @@ private fun FileEditor(spec: MachineFile, value: String, onChange: (String) -> U
                     .fillMaxWidth()
                     // Tall enough to write in, capped so one file cannot fill the screen.
                     .heightIn(min = 120.dp, max = 320.dp)
+                    // Saved when the field loses focus. Saving per keystroke wrote a
+                    // draft that predated anything the assistant had appended while the
+                    // screen was open, so typing one letter erased a just-set reminder.
+                    .onFocusChanged { if (!it.isFocused) onCommit() }
                     .background(MachineColors.PanelActive)
                     .padding(8.dp),
             )

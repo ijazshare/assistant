@@ -51,6 +51,7 @@ class MachineAccessibilityService : AccessibilityService() {
         private const val TAP_DURATION_MS = 60L
         private const val SWIPE_DURATION_MS = 300L
         private const val GESTURE_TIMEOUT_MS = 5_000L
+        private const val SCREENSHOT_TIMEOUT_MS = 4_000L
 
         @Volatile
         private var instance: MachineAccessibilityService? = null
@@ -186,7 +187,15 @@ class MachineAccessibilityService : AccessibilityService() {
      * allows it the capture is of the foreground window alone, so the assistant's own
      * overlay does not end up reading itself.
      */
-    suspend fun screenshot(): Bitmap? = suspendCancellableCoroutine { continuation ->
+    suspend fun screenshot(): Bitmap? = withTimeoutOrNull(SCREENSHOT_TIMEOUT_MS) { capture() }
+
+    /**
+     * One capture attempt, resuming exactly once.
+     *
+     * The system can drop the callback entirely when the service is unbound between the
+     * request and the answer, which is what the timeout above is for.
+     */
+    private suspend fun capture(): Bitmap? = suspendCancellableCoroutine { continuation ->
         // Where the app's window sits. Some builds hand back the whole display whichever
         // capture call is used, and a picture of the display contains this assistant's
         // own panel and the keyboard — which the OCR then reads back as the screen.
@@ -202,12 +211,12 @@ class MachineAccessibilityService : AccessibilityService() {
                         ?.copy(Bitmap.Config.ARGB_8888, false)
                 }.getOrNull()
                 buffer.close()
-                continuation.resume(bitmap?.let { cropped(it, crop) })
+                if (continuation.isActive) continuation.resume(bitmap?.let { cropped(it, crop) })
             }
 
             override fun onFailure(errorCode: Int) {
                 Log.w(TAG, "screenshot refused: $errorCode")
-                continuation.resume(null)
+                if (continuation.isActive) continuation.resume(null)
             }
         }
 
@@ -225,7 +234,7 @@ class MachineAccessibilityService : AccessibilityService() {
             }
         }.onFailure {
             Log.w(TAG, "screenshot threw", it)
-            continuation.resume(null)
+            if (continuation.isActive) continuation.resume(null)
         }
     }
 
@@ -352,6 +361,17 @@ class MachineAccessibilityService : AccessibilityService() {
         return haystack.any { it.contains(needle, ignoreCase = true) }
     }
 
+    private fun collectNodes(
+        node: AccessibilityNodeInfo,
+        into: MutableList<AccessibilityNodeInfo>,
+        predicate: (AccessibilityNodeInfo) -> Boolean,
+    ) {
+        if (predicate(node)) into += node
+        for (i in 0 until node.childCount) {
+            collectNodes(node.getChild(i) ?: continue, into, predicate)
+        }
+    }
+
     private fun findNode(
         node: AccessibilityNodeInfo,
         predicate: (AccessibilityNodeInfo) -> Boolean,
@@ -373,12 +393,19 @@ class MachineAccessibilityService : AccessibilityService() {
         root: AccessibilityNodeInfo,
         text: String,
     ): AccessibilityNodeInfo? {
-        val labelled = findNode(root) { it.matchesText(text) } ?: return null
-        var candidate: AccessibilityNodeInfo? = labelled
-        while (candidate != null && !candidate.isClickable) {
-            candidate = candidate.parent
+        // Every match, not the first: a list screen usually carries the word in its
+        // heading as well as in the row, and the heading has no clickable ancestor at
+        // all — so committing to the first match found nothing and gave up.
+        val matches = ArrayList<AccessibilityNodeInfo>()
+        collectNodes(root, matches) { it.matchesText(text) }
+        for (labelled in matches) {
+            var candidate: AccessibilityNodeInfo? = labelled
+            while (candidate != null && !candidate.isClickable) {
+                candidate = candidate.parent
+            }
+            if (candidate != null) return candidate
         }
-        return candidate
+        return null
     }
 
     private fun collectText(node: AccessibilityNodeInfo, into: MutableList<String>, limit: Int) {
