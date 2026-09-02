@@ -21,6 +21,12 @@ internal object LlamaNative {
     /** True if llama.cpp accepts this GBNF. Used to isolate a bad rule. */
     external fun nativeValidateGrammar(handle: Long, grammar: String): Boolean
 
+    /** Writes the cached keys and values to [path]. */
+    external fun nativeSaveState(handle: Long, path: String): Boolean
+
+    /** Restores a cache written by [nativeSaveState]; false if it could not be used. */
+    external fun nativeLoadState(handle: Long, path: String): Boolean
+
     /** Whether the grammar accepts [text] in full, token by token. */
     external fun nativeGrammarAccepts(handle: Long, grammar: String, text: String): Boolean
 

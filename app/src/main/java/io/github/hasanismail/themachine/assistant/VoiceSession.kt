@@ -98,6 +98,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     /** File name of whatever language model is loaded, for dialect selection. */
     private var loadedModelName: String = ""
 
+    /** Whether this session has already written its prompt cache. */
+    private var cacheWritten = false
+
     private val _state = MutableStateFlow<SessionState>(SessionState.Idle)
     val state: StateFlow<SessionState> = _state.asStateFlow()
 
@@ -259,6 +262,14 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             result = result,
             timing = Timing(sttMillis, completion.millis),
         )
+        // Written while the user is listening to the answer, not when the session ends:
+        // by then the model is being freed, and a save racing an unload would lose to it.
+        // Once per session is enough — the cached prefix is the same every time.
+        if (!cacheWritten) {
+            cacheWritten = true
+            scope.launch { llama.saveState() }
+        }
+
         // Said after the state is published, so the reply is on screen while it is being
         // spoken rather than after.
         piper.speak(result.spoken)

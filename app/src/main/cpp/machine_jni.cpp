@@ -482,6 +482,74 @@ Java_io_github_hasanismail_themachine_llm_LlamaNative_nativeGrammarAccepts(
     return accepted ? JNI_TRUE : JNI_FALSE;
 }
 
+/**
+ * Writes the keys and values for the tokens currently cached, so the next session can
+ * start where this one left off.
+ *
+ * Prefix reuse already removes prefill from every command after the first. This removes
+ * it from the first as well: the file is a few megabytes and reads back in a fraction of
+ * a second, against the ten-plus seconds prefilling four hundred tokens costs on a
+ * thermally throttled phone.
+ */
+JNIEXPORT jboolean JNICALL
+Java_io_github_hasanismail_themachine_llm_LlamaNative_nativeSaveState(
+        JNIEnv *env, jobject /* this */, jlong handle, jstring pathStr) {
+    if (handle == 0) return JNI_FALSE;
+    auto *session = reinterpret_cast<llama_session *>(handle);
+    if (session->cached.empty()) return JNI_FALSE;
+    const std::string path = scoped_utf8(env, pathStr);
+
+    // Written beside its destination and moved into place, so an interrupted write
+    // cannot leave a truncated cache that would be loaded and believed.
+    const std::string temp = path + ".part";
+    const size_t written = llama_state_seq_save_file(
+            session->ctx, temp.c_str(), 0, session->cached.data(), session->cached.size());
+    if (written == 0) {
+        LOGE("llama: could not save state");
+        remove(temp.c_str());
+        return JNI_FALSE;
+    }
+    remove(path.c_str());
+    if (rename(temp.c_str(), path.c_str()) != 0) {
+        LOGE("llama: could not move state into place");
+        remove(temp.c_str());
+        return JNI_FALSE;
+    }
+    LOGI("llama: saved %zu tokens of state (%zu bytes)", session->cached.size(), written);
+    return JNI_TRUE;
+}
+
+/**
+ * Restores a previously saved cache, leaving the context untouched if it cannot be read.
+ *
+ * A stale or mismatched file is a normal thing to find — the model may have changed, or
+ * the prompt — so failure here is quiet and simply means the next prompt is prefilled.
+ */
+JNIEXPORT jboolean JNICALL
+Java_io_github_hasanismail_themachine_llm_LlamaNative_nativeLoadState(
+        JNIEnv *env, jobject /* this */, jlong handle, jstring pathStr) {
+    if (handle == 0) return JNI_FALSE;
+    auto *session = reinterpret_cast<llama_session *>(handle);
+    const std::string path = scoped_utf8(env, pathStr);
+
+    std::vector<llama_token> tokens(static_cast<size_t>(session->n_ctx));
+    size_t count = 0;
+    size_t read = 0;
+    try {
+        read = llama_state_seq_load_file(session->ctx, path.c_str(), 0,
+                                         tokens.data(), tokens.size(), &count);
+    } catch (const std::exception &e) {
+        LOGE("llama: state load threw: %s", e.what());
+        read = 0;
+    }
+    if (read == 0 || count == 0) return JNI_FALSE;
+
+    tokens.resize(count);
+    session->cached = tokens;
+    LOGI("llama: restored %zu tokens of state", count);
+    return JNI_TRUE;
+}
+
 JNIEXPORT jboolean JNICALL
 Java_io_github_hasanismail_themachine_llm_LlamaNative_nativeValidateGrammar(
         JNIEnv *env, jobject /* this */, jlong handle, jstring grammarStr) {

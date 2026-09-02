@@ -31,6 +31,9 @@ class LlamaEngine(private val context: Context) {
     @Volatile
     private var handle: Long = 0
 
+    /** Where this model's prompt cache lives; set when the model is loaded. */
+    private var cacheFile: File? = null
+
     val isLoaded: Boolean get() = handle != 0L
 
     suspend fun load(modelFile: File, contextSize: Int = DEFAULT_CONTEXT): Boolean =
@@ -42,8 +45,26 @@ class LlamaEngine(private val context: Context) {
             }
             unload()
             handle = LlamaNative.nativeLoad(modelFile.absolutePath, contextSize, threadCount())
+            if (handle != 0L) {
+                // Best effort: a cache from an older prompt or a different model simply
+                // will not load, and the next prompt is prefilled as it always was.
+                cacheFile = File(modelFile.parentFile, modelFile.name + CACHE_SUFFIX)
+                LlamaNative.nativeLoadState(handle, cacheFile!!.absolutePath)
+            }
             handle != 0L
         }
+
+    /**
+     * Writes the current prompt cache to disk, so the next session skips its prefill.
+     *
+     * Called when a session ends rather than after each reply: the contents would be
+     * identical, and the write is several megabytes.
+     */
+    suspend fun saveState(): Boolean = withContext(Dispatchers.Default) {
+        val current = handle
+        val file = cacheFile
+        current != 0L && file != null && LlamaNative.nativeSaveState(current, file.absolutePath)
+    }
 
     /** Model name, parameter count and context size, for the diagnostics screen. */
     suspend fun describe(): String = withContext(Dispatchers.Default) {
@@ -105,6 +126,9 @@ class LlamaEngine(private val context: Context) {
 
         /** Enough for the tool list, the user's context files and one command. */
         const val DEFAULT_CONTEXT = 2048
+
+        /** Appended to the model's own file name, so a cache follows its model. */
+        const val CACHE_SUFFIX = ".prompt-cache"
 
         /**
          * The longest legal tool call is well under this. The cap is what bounds the
