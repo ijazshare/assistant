@@ -40,6 +40,18 @@ enum class PermissionState {
 
     /** Cannot be held in advance; consent happens at the moment of use. */
     ASK_EVERY_TIME,
+
+    /**
+     * Switched on in Settings, but not running.
+     *
+     * Android leaves an accessibility service listed as enabled after its process is
+     * replaced — an app update, or a force-stop — and does not always bind it again.
+     * The switch is on, the service is dead, and every screen command fails while the
+     * settings screen insists the permission was granted. Saying GRANTED here is the
+     * difference between a user who knows to toggle it and one who thinks the app is
+     * broken.
+     */
+    ENABLED_NOT_RUNNING,
     ;
 
     /**
@@ -66,11 +78,7 @@ class PermissionInspector(private val context: Context) {
             PermissionState.NOT_GRANTED
         }
 
-        MachinePermissions.ACCESSIBILITY -> if (isAccessibilityServiceEnabled()) {
-            PermissionState.GRANTED
-        } else {
-            PermissionState.NOT_GRANTED
-        }
+        MachinePermissions.ACCESSIBILITY -> accessibilityState()
 
         MachinePermissions.OVERLAY -> if (Settings.canDrawOverlays(context)) {
             PermissionState.GRANTED
@@ -151,6 +159,18 @@ class PermissionInspector(private val context: Context) {
         return enabled.split(':').any {
             ComponentName.unflattenFromString(it) == expected
         }
+    }
+
+    /**
+     * Enabled and running, enabled but dead, or off.
+     *
+     * Both halves are needed. The settings list is the only way to see that the user
+     * said yes; the live instance is the only way to see that the system acted on it.
+     */
+    fun accessibilityState(): PermissionState = when {
+        !isAccessibilityServiceEnabled() -> PermissionState.NOT_GRANTED
+        MachineAccessibilityService.connected() != null -> PermissionState.GRANTED
+        else -> PermissionState.ENABLED_NOT_RUNNING
     }
 
     fun isNotificationListenerEnabled(): Boolean =

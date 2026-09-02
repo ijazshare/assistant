@@ -26,6 +26,7 @@ object TimeResolver {
     private const val SECONDS_PER_MINUTE = 60L
     private const val MINUTES_PER_HOUR = 60L
     private const val HOURS_PER_DAY = 24L
+    private const val NOON = 12
     private const val LAST_HOUR = 23
     private const val LAST_MINUTE = 59
 
@@ -56,6 +57,54 @@ object TimeResolver {
      * output is not grammar-constrained.
      */
     fun hourOf(hour: Int?): Int? = hour?.takeIf { it in 0..LAST_HOUR }
+
+    /**
+     * Corrects the model's hour against the hour that was actually said.
+     *
+     * A 1B model converts to 24-hour time by pattern rather than by arithmetic, and gets
+     * it wrong often enough to matter: "half past six in the evening" came back as 16.
+     * The words are not ambiguous — six, and evening — and that sum is one line of
+     * Kotlin, so it is done here rather than hoped for.
+     *
+     * Only an explicit part-of-day cue triggers this. Without one the model's answer
+     * stands, because "alarm at seven" genuinely does not say which seven.
+     */
+    fun reconcileHour(transcript: String, hour: Int?): Int? {
+        val resolved = hourOf(hour) ?: return hour
+        // "6pm" is one token to a plain split, and neither the number six nor the word
+        // pm; the boundary between a digit and a letter has to be made explicit first.
+        val words = transcript.lowercase()
+            .replace(DIGIT_LETTER_BOUNDARY, " ")
+            .split(WORD_BREAK)
+            .filter { it.isNotEmpty() }
+        val evening = words.any { it in EVENING_CUES }
+        val morning = words.any { it in MORNING_CUES }
+        if (evening == morning) return resolved
+
+        // The first clock-sized number is the hour; a later one is its minutes.
+        val said = words.firstNotNullOfOrNull { word ->
+            (SPOKEN_NUMBERS[word] ?: word.takeWhile { it.isDigit() }.toIntOrNull())
+                ?.takeIf { it in 1..NOON }
+        } ?: return resolved
+
+        val corrected = when {
+            evening && said == NOON -> NOON
+            evening -> said + NOON
+            said == NOON -> 0
+            else -> said
+        }
+        return corrected
+    }
+
+    private val WORD_BREAK = Regex("""[^a-z0-9]+""")
+    private val DIGIT_LETTER_BOUNDARY = Regex("""(?<=\d)(?=[a-z])""")
+    private val EVENING_CUES = setOf("pm", "evening", "night", "tonight", "afternoon")
+    private val MORNING_CUES = setOf("am", "morning")
+    private val SPOKEN_NUMBERS = mapOf(
+        "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5, "six" to 6,
+        "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10, "eleven" to 11, "twelve" to 12,
+        "noon" to 12, "midday" to 12,
+    )
 
     /** Minutes, defaulting to o'clock, and rejecting anything outside the hour. */
     fun minuteOf(minute: Int?): Int? {

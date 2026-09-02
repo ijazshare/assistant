@@ -103,9 +103,9 @@ class ToolCallOnDeviceTest {
         }
     }
 
-    /** What the executor will actually set, rather than the raw field the model emitted. */
-    private fun resolvedHour(args: Map<String, String>): Int? =
-        TimeResolver.hourOf(args["hour"]?.toIntOrNull())
+    /** What the assistant will actually set: the model's hour, reconciled with the words. */
+    private fun resolvedHour(utterance: String, args: Map<String, String>): Int? =
+        TimeResolver.reconcileHour(utterance, args["hour"]?.toIntOrNull())
 
     private fun resolvedSeconds(args: Map<String, String>): Int? = TimeResolver.totalSeconds(
         args["hours"]?.toIntOrNull(),
@@ -115,18 +115,20 @@ class ToolCallOnDeviceTest {
 
     @Test
     fun setsAnAlarmAtTheRightTime() {
-        val (tool, args) = parse("set an alarm for 7 am")
+        val utterance = "set an alarm for 7 am"
+        val (tool, args) = parse(utterance)
         assertThat(tool).isEqualTo(MachineTools.SET_ALARM)
-        assertThat(resolvedHour(args)).isEqualTo(7)
+        assertThat(resolvedHour(utterance, args)).isEqualTo(7)
     }
 
     @Test
     fun understandsAfternoonTimes() {
         // The most common way a 24-hour conversion goes wrong. The model reports the
         // hour it heard and whether it was evening; the conversion is TimeResolver's.
-        val (tool, args) = parse("wake me at half past six in the evening")
+        val utterance = "wake me at half past six in the evening"
+        val (tool, args) = parse(utterance)
         assertThat(tool).isEqualTo(MachineTools.SET_ALARM)
-        assertThat(resolvedHour(args)).isEqualTo(18)
+        assertThat(resolvedHour(utterance, args)).isEqualTo(18)
     }
 
     @Test

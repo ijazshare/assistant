@@ -15,6 +15,7 @@ import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
 import android.accessibilityservice.GestureDescription
 import android.graphics.Bitmap
 import android.graphics.Path
+import android.graphics.Rect
 import android.os.Build
 import android.util.Log
 import android.view.Display
@@ -184,6 +185,11 @@ class MachineAccessibilityService : AccessibilityService() {
      * overlay does not end up reading itself.
      */
     suspend fun screenshot(): Bitmap? = suspendCancellableCoroutine { continuation ->
+        // Where the app's window sits. Some builds hand back the whole display whichever
+        // capture call is used, and a picture of the display contains this assistant's
+        // own panel and the keyboard — which the OCR then reads back as the screen.
+        var crop: Rect? = null
+
         val callback = object : TakeScreenshotCallback {
             override fun onSuccess(result: ScreenshotResult) {
                 val buffer = result.hardwareBuffer
@@ -194,7 +200,7 @@ class MachineAccessibilityService : AccessibilityService() {
                         ?.copy(Bitmap.Config.ARGB_8888, false)
                 }.getOrNull()
                 buffer.close()
-                continuation.resume(bitmap)
+                continuation.resume(bitmap?.let { cropped(it, crop) })
             }
 
             override fun onFailure(errorCode: Int) {
@@ -203,10 +209,12 @@ class MachineAccessibilityService : AccessibilityService() {
             }
         }
 
-        val front = windows.firstOrNull {
-            it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive
-        } ?: windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
-
+        // The app's own window, not the display: capturing the display puts this
+        // assistant's panel and the keyboard into the picture, and the OCR dutifully
+        // reads them back as if they were the screen.
+        val front = foregroundWindow()
+        crop = front?.let { window -> Rect().also { window.getBoundsInScreen(it) } } ?: uncoveredBounds()
+        Log.i(TAG, "screenshot: window=${front?.id} crop=$crop")
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && front != null) {
                 takeScreenshotOfWindow(front.id, mainExecutor, callback)
@@ -220,13 +228,81 @@ class MachineAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * The part of the display the assistant is not sitting on top of.
+     *
+     * While the overlay is open the app underneath is often absent from the window list
+     * altogether, so there is no window to capture on its own and the whole display is
+     * taken instead. What must not survive into the OCR is this assistant's own panel
+     * and the keyboard above it — otherwise "read the screen" comes back reciting
+     * "THE MACHINE. TYPE. TAP TO DISMISS." Both are anchored to the bottom, so the
+     * honest crop is everything above the highest of them.
+     */
+    private fun uncoveredBounds(): Rect? {
+        val mine = packageName
+        var ceiling = Int.MAX_VALUE
+        for (window in windows) {
+            val top = when {
+                // The keyboard's window is exactly as tall as the keyboard.
+                window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD ->
+                    Rect().also { window.getBoundsInScreen(it) }.top
+
+                else -> {
+                    val root = window.root
+                    val ours = if (root?.packageName?.toString() == mine) contentTop(root) else null
+                    root?.recycleCompat()
+                    ours
+                }
+            }
+            if (top != null && top > 0) ceiling = minOf(ceiling, top)
+        }
+        if (ceiling == Int.MAX_VALUE) return null
+        return Rect(0, 0, Int.MAX_VALUE, ceiling)
+    }
+
+    /**
+     * Where this assistant's own panel begins.
+     *
+     * Its window is full-screen and almost entirely transparent — a tap anywhere
+     * dismisses it — so the window's own bounds say the assistant covers everything,
+     * which is true of the window and false of the picture. The panel's actual top is
+     * the highest node in it that carries any text.
+     */
+    private fun contentTop(node: AccessibilityNodeInfo): Int? {
+        var top: Int? = null
+        val hasWords = !node.text.isNullOrBlank() || !node.contentDescription.isNullOrBlank()
+        if (hasWords) {
+            val bounds = Rect().also { node.getBoundsInScreen(it) }
+            if (!bounds.isEmpty) top = bounds.top
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val childTop = contentTop(child)
+            child.recycleCompat()
+            if (childTop != null) top = minOf(top ?: childTop, childTop)
+        }
+        return top
+    }
+
+    /** The capture reduced to [bounds], when it is larger than the window it was for. */
+    private fun cropped(bitmap: Bitmap, bounds: Rect?): Bitmap {
+        if (bounds == null || bounds.isEmpty) return bitmap
+        val left = bounds.left.coerceIn(0, bitmap.width)
+        val top = bounds.top.coerceIn(0, bitmap.height)
+        val width = (bounds.right.coerceAtMost(bitmap.width) - left).coerceAtMost(bitmap.width - left)
+        val height = (bounds.bottom.coerceAtMost(bitmap.height) - top).coerceAtMost(bitmap.height - top)
+        if (width <= 0 || height <= 0) return bitmap
+        if (width == bitmap.width && height == bitmap.height) return bitmap
+        return runCatching { Bitmap.createBitmap(bitmap, left, top, width, height) }.getOrDefault(bitmap)
+    }
+
+    /**
      * Every piece of text currently on screen, in traversal order.
      *
      * Returned to the caller and never stored: this is read at the moment a command
      * needs it, used to answer that command, and dropped.
      */
     fun readScreenText(limit: Int = 200): List<String> {
-        val root = rootInActiveWindow ?: return emptyList()
+        val root = foregroundRoot() ?: return emptyList()
         val out = ArrayList<String>()
         try {
             collectText(root, out, limit)
@@ -234,6 +310,34 @@ class MachineAccessibilityService : AccessibilityService() {
             root.recycleCompat()
         }
         return out
+    }
+
+    /**
+     * The app the user is looking at, which is not necessarily the active window.
+     *
+     * While the assistant is open its own overlay holds focus, so the obvious
+     * `rootInActiveWindow` returns the panel itself: asked to read the screen, the
+     * assistant read its own buttons back — "THE MACHINE. TYPE. TAP TO DISMISS." Our
+     * own windows are skipped, and the topmost application window is used instead.
+     */
+    private fun foregroundWindow(): AccessibilityWindowInfo? {
+        val mine = packageName
+        return windows
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            .firstOrNull { window ->
+                // A window whose root cannot be read is not one worth reading; without
+                // this a null root counts as "not ours" and is chosen over the real app.
+                val root = window.root ?: return@firstOrNull false
+                val theirs = root.packageName?.toString() != mine
+                root.recycleCompat()
+                theirs
+            }
+    }
+
+    private fun foregroundRoot(): AccessibilityNodeInfo? {
+        val mine = packageName
+        return foregroundWindow()?.root
+            ?: rootInActiveWindow?.takeIf { it.packageName?.toString() != mine }
     }
 
     /** The package currently in the foreground, for "what am I looking at". */

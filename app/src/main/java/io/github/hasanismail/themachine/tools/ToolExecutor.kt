@@ -15,6 +15,7 @@ import android.content.Intent
 import android.provider.AlarmClock
 import android.util.Log
 import io.github.hasanismail.themachine.ocr.ScreenReader
+import io.github.hasanismail.themachine.permissions.PermissionInspector
 import io.github.hasanismail.themachine.services.MachineAccessibilityService
 import io.github.hasanismail.themachine.services.MachineNotificationListener
 import kotlinx.coroutines.Dispatchers
@@ -233,10 +234,24 @@ class ToolExecutor(
         return ToolResult.ok(spoken, items.joinToString("\n") { "${it.packageName}  ${it.title}  ${it.text}" })
     }
 
-    private fun accessibilityMissing() = ToolResult.failed(
-        "I cannot touch the screen yet.",
-        "Turn on the accessibility service under System access.",
-    )
+    /**
+     * Why a screen command could not run, distinguishing "you never switched it on" from
+     * "it is switched on and the system has not started it". The second used to be
+     * reported as the first, which sent the user to a screen where the switch was
+     * already on and told them nothing.
+     */
+    private fun accessibilityMissing(): ToolResult =
+        if (PermissionInspector(context).isAccessibilityServiceEnabled()) {
+            ToolResult.failed(
+                "Accessibility is switched on, but Android has not started it.",
+                "Turn it off and on again under System access. This happens after an app update.",
+            )
+        } else {
+            ToolResult.failed(
+                "I cannot touch the screen yet.",
+                "Turn on the accessibility service under System access.",
+            )
+        }
 
     // ---- Helpers ------------------------------------------------------------------
 

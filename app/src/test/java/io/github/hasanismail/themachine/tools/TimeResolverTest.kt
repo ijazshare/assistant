@@ -52,6 +52,41 @@ class TimeResolverTest {
     }
 
     @Test
+    fun `an evening hour the model got wrong is corrected from the words`() {
+        // The exact failure: the model answered 16, the words say six and evening.
+        assertThat(TimeResolver.reconcileHour("wake me at half past six in the evening", 16)).isEqualTo(18)
+        assertThat(TimeResolver.reconcileHour("remind me to call Ali at 6pm", 6)).isEqualTo(18)
+        assertThat(TimeResolver.reconcileHour("quarter past nine tonight", 9)).isEqualTo(21)
+        assertThat(TimeResolver.reconcileHour("half past ten at night", 22)).isEqualTo(22)
+    }
+
+    @Test
+    fun `a morning hour stays a morning hour`() {
+        assertThat(TimeResolver.reconcileHour("set an alarm for 7 am", 7)).isEqualTo(7)
+        assertThat(TimeResolver.reconcileHour("wake me at eight in the morning", 20)).isEqualTo(8)
+        assertThat(TimeResolver.reconcileHour("alarm at 12 am", 12)).isEqualTo(0)
+    }
+
+    @Test
+    fun `noon and midnight are not shifted past themselves`() {
+        assertThat(TimeResolver.reconcileHour("alarm at 12 pm", 12)).isEqualTo(12)
+        assertThat(TimeResolver.reconcileHour("wake me at noon", 12)).isEqualTo(12)
+    }
+
+    @Test
+    fun `without a cue the model is left alone`() {
+        // "Alarm at seven" genuinely does not say which seven.
+        assertThat(TimeResolver.reconcileHour("set an alarm for 7", 7)).isEqualTo(7)
+        assertThat(TimeResolver.reconcileHour("wake me at 18:00", 18)).isEqualTo(18)
+        assertThat(TimeResolver.reconcileHour("remind me to buy milk", null)).isNull()
+    }
+
+    @Test
+    fun `minutes are not mistaken for the hour`() {
+        assertThat(TimeResolver.reconcileHour("alarm for 6:30 pm", 6)).isEqualTo(18)
+    }
+
+    @Test
     fun `defaults minutes to the hour and rejects the impossible`() {
         assertThat(TimeResolver.minuteOf(null)).isEqualTo(0)
         assertThat(TimeResolver.minuteOf(30)).isEqualTo(30)

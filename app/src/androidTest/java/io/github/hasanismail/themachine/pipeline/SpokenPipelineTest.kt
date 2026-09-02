@@ -143,7 +143,10 @@ class SpokenPipelineTest {
         val heard = transcribe("alarm.wav")
         val (tool, args) = toolFor(heard)
         assertThat(tool).isEqualTo(MachineTools.SET_ALARM)
-        assertThat(TimeResolver.hourOf(args["hour"]?.toIntOrNull()))
+        // Reconciled against the words, exactly as VoiceSession does before executing:
+        // the model converts to 24-hour time by pattern and gets it wrong often enough
+        // that the pipeline's answer is the corrected one, not its first guess.
+        assertThat(TimeResolver.reconcileHour(heard, args["hour"]?.toIntOrNull()))
             .isEqualTo(18)
     }
 

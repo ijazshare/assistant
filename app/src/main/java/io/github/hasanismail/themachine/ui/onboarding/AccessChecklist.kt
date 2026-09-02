@@ -274,13 +274,21 @@ private fun PermissionState.tone(): Color = when (this) {
     PermissionState.NOT_GRANTED -> MachineColors.Dim
     PermissionState.PERMANENTLY_DENIED -> MachineColors.Relevant
     PermissionState.ASK_EVERY_TIME -> MachineColors.Irrelevant
+    PermissionState.ENABLED_NOT_RUNNING -> MachineColors.Relevant
 }
 
 private fun PermissionState.caption(): String = when (this) {
     PermissionState.GRANTED -> "GRANTED"
+
     PermissionState.NOT_GRANTED -> "NOT GRANTED"
+
     PermissionState.PERMANENTLY_DENIED -> "BLOCKED"
+
     PermissionState.ASK_EVERY_TIME -> "ASKED EACH USE"
+
+    // On in Settings, not started by Android. Naming it is the whole point: the switch
+    // the user would go and check is already on.
+    PermissionState.ENABLED_NOT_RUNNING -> "ON BUT NOT RUNNING"
 }
 
 private fun Context.findActivity(): Activity? {

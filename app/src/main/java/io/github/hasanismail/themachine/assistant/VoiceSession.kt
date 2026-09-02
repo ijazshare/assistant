@@ -37,6 +37,7 @@ import io.github.hasanismail.themachine.stt.WhisperEngine
 import io.github.hasanismail.themachine.tools.ContactLookup
 import io.github.hasanismail.themachine.tools.MachineTools
 import io.github.hasanismail.themachine.tools.ReminderStore
+import io.github.hasanismail.themachine.tools.TimeResolver
 import io.github.hasanismail.themachine.tools.ToolCall
 import io.github.hasanismail.themachine.tools.ToolExecutor
 import io.github.hasanismail.themachine.tools.ToolResult
@@ -346,6 +347,21 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         carryOut(transcript, call, sttMillis, llmMillis, Resolution.MODEL)
     }
 
+    /**
+     * Corrects an hour the model converted badly, using the words it was given.
+     *
+     * The only place the transcript and the resolved call are both in hand, which is
+     * what this needs: the executor sees a call and never the sentence behind it.
+     */
+    private fun reconciled(transcript: String, call: ToolCall): ToolCall {
+        val timed = call.tool == MachineTools.SET_ALARM || call.tool == MachineTools.CREATE_REMINDER
+        val stated = call.arguments["hour"]?.toIntOrNull()
+        val corrected = if (timed && stated != null) TimeResolver.reconcileHour(transcript, stated) else null
+        if (corrected == null || corrected == stated) return call
+        Log.i(TAG, "hour corrected from $stated to $corrected for [$transcript]")
+        return call.copy(arguments = call.arguments + ("hour" to corrected.toString()))
+    }
+
     /** Executes a resolved call, then records, remembers, shows and speaks the outcome. */
     private suspend fun carryOut(
         transcript: String,
@@ -354,7 +370,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         llmMillis: Long,
         resolution: Resolution,
     ) {
-        val result = executor.execute(call)
+        val result = executor.execute(reconciled(transcript, call))
 
         // Only a call the model produced and that then succeeded is worth learning. A
         // failure might be a misread; a cache hit is already known.
