@@ -32,9 +32,16 @@ object AnswerPrompt {
         now: LocalDateTime = LocalDateTime.now(),
     ): String = buildString {
         append(TURN_START).appendLine("user")
+        // "If you do not know, say so" was in here, and the model took the invitation:
+        // it answered "I don't know who painted the Mona Lisa." The permission to refuse
+        // has to be narrower than the instruction to answer, or a 4B will take the
+        // cheaper option. It is also told it has no internet, because otherwise it
+        // declines current-affairs questions by explaining that it cannot browse.
         appendLine(
-            "You are $adminName's assistant on their phone. Answer the question in one or two " +
-                "short sentences, plainly and directly. If you do not know, say so in one sentence.",
+            "You are $adminName's assistant on their phone. Answer from your own knowledge, " +
+                "in ONE short sentence, plainly and directly. Do not add a second sentence. " +
+                "You are offline, so do not mention searching or browsing. Say you are not " +
+                "sure only when you really are not.",
         )
         if (userContext.isNotBlank()) {
             appendLine()
@@ -48,8 +55,13 @@ object AnswerPrompt {
         append(TURN_START).appendLine("model")
     }
 
-    /** Enough for two sentences; a question does not deserve a paragraph read aloud. */
-    const val MAX_TOKENS = 80
+    /**
+     * One sentence. Asked for two the 4B filled the second with whatever came to hand —
+     * "a leap year has an extra month of February", and an unprompted opinion about the
+     * user's brother — so the room for it is gone. It is also the answer being read
+     * aloud, where a second sentence is a second thing to sit through.
+     */
+    const val MAX_TOKENS = 44
 
     private const val CONTEXT_BUDGET = 800
     private val NOW_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE HH:mm, d MMMM yyyy")

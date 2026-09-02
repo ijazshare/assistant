@@ -39,6 +39,9 @@ class ModelRouter(private val context: Context) {
     private val strong = LlamaEngine(context)
     private val loading = Mutex()
 
+    /** Whether this router has already written the larger model's prompt cache. */
+    private var cacheWritten = false
+
     /** File name of the larger model, or null if none is installed. */
     val strongModel: ModelAsset?
         get() {
@@ -65,14 +68,38 @@ class ModelRouter(private val context: Context) {
             grammar = "",
             maxTokens = AnswerPrompt.MAX_TOKENS,
         )
-        val text = completion.text.substringBefore("<end_of_turn>").trim()
+        val text = firstSentence(completion.text.substringBefore("<end_of_turn>").trim())
         Log.i(TAG, "strong answered in ${completion.millis} ms: $text")
+
+        // Written after the first answer of a session, not by the caller: this engine
+        // belongs to the router, and a question asked in a later session should not pay
+        // the prefill again. Measured cold 12.8 s, warm 2 s.
+        if (!cacheWritten) {
+            cacheWritten = true
+            strong.saveState()
+        }
         return if (text.isBlank()) null else completion.copy(text = text)
     }
 
-    /** Written after the first answer so the next session skips the prefill. */
+    /**
+     * The first sentence, and nothing after it.
+     *
+     * The token cap can stop the model mid-word, and a spoken half-sentence is worse
+     * than a short one. A cap-truncated reply with no terminator is kept whole rather
+     * than thrown away, because the first clause is usually the answer.
+     */
+    private fun firstSentence(text: String): String {
+        val end = text.indexOfFirst { it in SENTENCE_ENDS }
+        if (end < 0) return text
+        return text.substring(0, end + 1).trim()
+    }
+
+    /** Forces the prompt cache out now, for a caller that is about to shut everything down. */
     suspend fun saveState() {
-        if (strong.isLoaded) strong.saveState()
+        if (strong.isLoaded && !cacheWritten) {
+            cacheWritten = true
+            strong.saveState()
+        }
     }
 
     private suspend fun ensureLoaded(asset: ModelAsset): Boolean = loading.withLock {
@@ -102,6 +129,7 @@ class ModelRouter(private val context: Context) {
 
     fun release() {
         strong.unload()
+        cacheWritten = false
     }
 
     private companion object {
@@ -110,6 +138,7 @@ class ModelRouter(private val context: Context) {
         /** Context, compute buffer and the rest of the app, over the mapped weights. */
         const val HEADROOM_BYTES = 1_200L * 1024 * 1024
         const val MIB = 1024L * 1024
+        val SENTENCE_ENDS = charArrayOf('.', '!', '?')
         const val NANOS_PER_MILLI = 1_000_000L
     }
 }
