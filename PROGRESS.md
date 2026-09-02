@@ -15,7 +15,7 @@ was decided and why, and which facts were verified against a live source rather 
 | P3 | STT (AudioRecord, endpointing, Whisper) | **Complete** — plus live partial transcripts while speaking |
 | P4 | LLM parsing (GBNF grammar, TimeResolver, tool calls) | **Complete** — 14 tools, grammar-constrained, verified on device |
 | P5 | TTS (sherpa-onnx + Piper) | **Complete** — replies and problems are spoken |
-| P6 | Executors + task store | **Mostly done** — all 14 tools dispatch; Room task store still to come |
+| P6 | Executors + task store | **Mostly done** — all 14 tools dispatch; tasks persist as markdown, not Room (see below) |
 | P7 | Assistant session + onboarding | **Mostly done** — side button opens a full session end to end |
 | P8 | Settings + release | Partly — settings screens exist; signed release flow untested |
 
@@ -409,8 +409,14 @@ Both under `https://github.com/k2-fsa/sherpa-onnx`. URLs re-verified HTTP 200 wi
 - **Git Bash rewrites `/sdcard/...` into a Windows path.** `adb push` reports success and
   the file lands nowhere useful. Set `MSYS_NO_PATHCONV=1` and give the source as `C:/...`.
 
-### Not done
+### Needs Hasan's decision
 
-- Room task store (reminders currently live in `ReminderStore`).
+Locked decision 7 says tasks are stored in Room. They are not: `ReminderStore` writes
+them to the same markdown files the user can open and edit, which is what makes the
+context files a second brain rather than a separate list the assistant keeps to itself.
+It persists correctly and is scheduled with exact alarms as specified. Worth confirming
+before it becomes expensive to change.
+
+### Not done
 - Wake word "hey root" — deferred by Hasan.
 - Signed release build has never been exercised.
