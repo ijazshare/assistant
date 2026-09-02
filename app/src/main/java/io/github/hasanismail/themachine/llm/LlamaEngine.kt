@@ -78,17 +78,21 @@ class LlamaEngine(private val context: Context) {
      *
      * With a grammar the output is valid by construction, so callers do not need a
      * retry loop for malformed output — there is no such state to recover from.
+     *
+     * [stopAt] ends generation as soon as the output contains it, for a caller that
+     * will discard everything after that point anyway.
      */
     suspend fun generate(
         prompt: String,
         grammar: String = "",
         maxTokens: Int = DEFAULT_MAX_TOKENS,
+        stopAt: String = "",
     ): Completion = withContext(Dispatchers.Default) {
         val current = handle
         if (current == 0L) return@withContext Completion("", 0)
         val startedAt = System.nanoTime()
         val text = synchronized(this@LlamaEngine) {
-            if (handle == 0L) "" else LlamaNative.nativeGenerate(handle, prompt, grammar, maxTokens)
+            if (handle == 0L) "" else LlamaNative.nativeGenerate(handle, prompt, grammar, maxTokens, stopAt)
         }
         Completion(text.trim(), (System.nanoTime() - startedAt) / NANOS_PER_MILLI)
     }

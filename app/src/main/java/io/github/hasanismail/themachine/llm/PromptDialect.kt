@@ -40,6 +40,12 @@ interface PromptDialect {
     /** GBNF constraining the model to a well-formed call. */
     fun grammar(tools: List<Tool>): String
 
+    /**
+     * Text that, once emitted, means the call is an `answer`. Generation stops there: the
+     * words the small model would write next are replaced by the larger model's.
+     */
+    val answerMarker: String
+
     fun parse(raw: String): ToolCall?
 
     companion object {

@@ -78,6 +78,36 @@ class AnswerQualityTest {
         assertThat(echoes).isAtMost(questions.size)
     }
 
+    /** The same questions through the larger model, which is what answers them for real. */
+    @Test
+    fun theLargerModelAnswersWithoutEchoing() {
+        val router = ModelRouter(context)
+        assumeTrue("No larger model installed", router.strongModel != null)
+
+        val questions = listOf(
+            "who painted the Mona Lisa",
+            "what is the capital of France",
+            "how many days are in a leap year",
+            "what is my brother called",
+        )
+        var echoes = 0
+        var answered = 0
+        try {
+            for (question in questions) {
+                val reply = runBlocking { router.answer(question, "Hasan", "- Osman is my brother.") }
+                val text = reply?.text ?: ""
+                val echoed = text.lowercase().trimEnd('?', '.', '!') == question.lowercase()
+                if (echoed) echoes++
+                if (text.isNotBlank()) answered++
+                Log.i(TAG, "STRONG [$question] -> \"$text\" (${reply?.millis} ms)")
+            }
+        } finally {
+            router.release()
+        }
+        assertThat(answered).isEqualTo(questions.size)
+        assertThat(echoes).isEqualTo(0)
+    }
+
     private companion object {
         const val TAG = "TheMachine"
     }

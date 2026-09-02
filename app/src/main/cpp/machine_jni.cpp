@@ -564,13 +564,17 @@ Java_io_github_hasanismail_themachine_llm_LlamaNative_nativeValidateGrammar(
 
 JNIEXPORT jstring JNICALL
 Java_io_github_hasanismail_themachine_llm_LlamaNative_nativeGenerate(
-        JNIEnv *env, jobject /* this */, jlong handle, jstring promptStr,
-        jstring grammarStr, jint maxTokens) {
+        JNIEnv *env, jobject /* this */, jlong handle, jstring promptStr, jstring grammarStr,
+        jint maxTokens, jstring stopAtStr) {
     if (handle == 0) return env->NewStringUTF("");
     auto *session = reinterpret_cast<llama_session *>(handle);
 
     const std::string prompt  = scoped_utf8(env, promptStr);
     const std::string grammar = scoped_utf8(env, grammarStr);
+    // Generation ends as soon as the output contains this, if it is non-empty. The
+    // caller uses it to stop a tool call the moment its name is known, when the rest of
+    // the call is about to be thrown away anyway.
+    const std::string stop_at = scoped_utf8(env, stopAtStr);
 
     const int n_prompt = -llama_tokenize(
             session->vocab, prompt.c_str(), static_cast<int32_t>(prompt.size()),
@@ -749,6 +753,9 @@ Java_io_github_hasanismail_themachine_llm_LlamaNative_nativeGenerate(
         if (n > 0) out.append(piece, n);
 
         produced_total++;
+        // After the accept above, never before it: the grammar has already advanced past
+        // this token, and stopping here leaves it consistent.
+        if (!stop_at.empty() && out.find(stop_at) != std::string::npos) break;
         sample_us += std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - t_sampled).count();
 

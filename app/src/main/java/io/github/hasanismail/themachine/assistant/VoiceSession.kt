@@ -24,6 +24,7 @@ import io.github.hasanismail.themachine.history.QueryRecord
 import io.github.hasanismail.themachine.history.QuerySource
 import io.github.hasanismail.themachine.history.Resolution
 import io.github.hasanismail.themachine.llm.LlamaEngine
+import io.github.hasanismail.themachine.llm.ModelRouter
 import io.github.hasanismail.themachine.llm.PromptDialect
 import io.github.hasanismail.themachine.models.ModelArchive
 import io.github.hasanismail.themachine.models.ModelAsset
@@ -99,6 +100,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private val files = MachineFiles(context)
     private val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context))
     private val piper = PiperEngine()
+    private val router = ModelRouter(context)
     private val cache = CommandCache(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
     private val history = QueryLog(context)
 
@@ -317,15 +319,31 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             adminName = settings.adminNameNow(),
             userContext = files.contextForPrompt(),
         )
-        val completion = llama.generate(prompt, dialect.grammar(MachineTools.all))
+        // Stop the moment the tool turns out to be a question: what the small model would
+        // write next is exactly the part that gets replaced.
+        val completion = llama.generate(prompt, dialect.grammar(MachineTools.all), stopAt = dialect.answerMarker)
         Log.i(TAG, "model returned ${completion.text} in ${completion.millis} ms")
 
-        val call = dialect.parse(completion.text)
+        var call = dialect.parse(completion.text)
         if (call == null) {
             failCommand(transcript, "I could not work out what to do with that.")
             return
         }
-        carryOut(transcript, call, sttMillis, completion.millis, Resolution.MODEL)
+        var llmMillis = completion.millis
+
+        if (call.tool == MachineTools.ANSWER) {
+            val answer = router.answer(transcript, settings.adminNameNow(), files.contextForPrompt())
+            call = if (answer != null) {
+                llmMillis += answer.millis
+                ToolCall(MachineTools.ANSWER, mapOf("text" to answer.text))
+            } else {
+                ToolCall(
+                    MachineTools.UNSUPPORTED,
+                    mapOf("reason" to "Questions need the larger model. Download it under Models."),
+                )
+            }
+        }
+        carryOut(transcript, call, sttMillis, llmMillis, Resolution.MODEL)
     }
 
     /** Executes a resolved call, then records, remembers, shows and speaks the outcome. */
@@ -379,7 +397,10 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // Once per session is enough — the cached prefix is the same every time.
         if (!cacheWritten && llama.isLoaded) {
             cacheWritten = true
-            scope.launch { llama.saveState() }
+            scope.launch {
+                llama.saveState()
+                router.saveState()
+            }
         }
 
         // Said after the state is published, so the reply is on screen while it is being
@@ -442,6 +463,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     /** Frees both models. Called when the overlay goes away, not between utterances. */
     fun release() {
+        router.release()
         piper.release()
         whisper.unload()
         llama.unload()

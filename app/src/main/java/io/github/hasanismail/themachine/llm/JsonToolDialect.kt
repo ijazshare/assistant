@@ -35,5 +35,7 @@ object JsonToolDialect : PromptDialect {
 
     override fun grammar(tools: List<Tool>): String = ToolGrammar.build(tools)
 
+    override val answerMarker: String = """"tool":"answer\""""
+
     override fun parse(raw: String): ToolCall? = ToolCallParser.parse(raw)
 }

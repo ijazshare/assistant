@@ -40,11 +40,16 @@ object ToolCallParser {
         // An empty string needs no separate check: it has no brace either.
         val trimmed = raw.trim()
         val start = trimmed.indexOf('{')
+        if (start < 0) return null
+
+        // A call stopped the moment its tool name closed has no closing braces yet. It is
+        // completed here rather than refused: the grammar guarantees what came before was
+        // well-formed, and the caller asked for exactly this.
         val end = trimmed.lastIndexOf('}')
-        if (start < 0 || end <= start) return null
+        val objectText = if (end > start) trimmed.substring(start, end + 1) else trimmed.substring(start) + "}"
 
         val element = runCatching {
-            json.parseToJsonElement(trimmed.substring(start, end + 1)).jsonObject
+            json.parseToJsonElement(objectText).jsonObject
         }.getOrNull() ?: return null
 
         val tool = element["tool"]?.jsonPrimitive?.contentOrNullSafe() ?: return null

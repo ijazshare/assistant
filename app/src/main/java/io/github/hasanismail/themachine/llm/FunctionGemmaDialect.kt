@@ -110,6 +110,8 @@ object FunctionGemmaDialect : PromptDialect {
      * Arguments appear in alphabetical order because the template sorts them; emitting
      * them in declaration order would be a shape the model never saw.
      */
+    override val answerMarker: String = "call:answer{"
+
     override fun grammar(tools: List<Tool>): String = buildString {
         appendLine("root ::= " + tools.indices.joinToString(" | ") { "call$it" })
         appendLine()

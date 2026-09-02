@@ -31,5 +31,11 @@ internal object LlamaNative {
     external fun nativeGrammarAccepts(handle: Long, grammar: String, text: String): Boolean
 
     /** grammar may be empty for free-form output; when present it is GBNF. */
-    external fun nativeGenerate(handle: Long, prompt: String, grammar: String, maxTokens: Int): String
+    external fun nativeGenerate(
+        handle: Long,
+        prompt: String,
+        grammar: String,
+        maxTokens: Int,
+        stopAt: String,
+    ): String
 }
