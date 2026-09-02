@@ -93,6 +93,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         }
     }
 
+    /**
+     * Lint cannot see that [start] refuses to get here without RECORD_AUDIO, so the
+     * check it wants has already happened one frame up — see hasMicrophonePermission().
+     */
+    @android.annotation.SuppressLint("MissingPermission")
     private suspend fun listen() {
         _state.value = SessionState.Listening(level = 0f, heardSpeech = false)
         recorder.capture().collect { event ->
