@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Configured for control, not surveillance.
+
+  accessibilityEventTypes is typeViewClicked only, and packageNames is deliberately
+  absent so the service can act on any app the user names — but because the service
+  ignores events entirely (onAccessibilityEvent is empty), subscribing narrowly means
+  the system wakes us for almost nothing. The capabilities that matter here are
+  canPerformGestures and canRetrieveWindowContent, which are pull-based: they are used
+  when a command needs them and never on a timer.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewClicked"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_service_description"
+    android:notificationTimeout="100"
+    android:summary="@string/accessibility_service_summary" />

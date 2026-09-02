@@ -15,6 +15,13 @@ complexity:
   LongMethod:
     threshold: 80
     ignoreAnnotated: ['Composable']
+  CyclomaticComplexMethod:
+    # A composable's branches enumerate UI states rather than nest logic; the count
+    # climbs with the number of things that can be on screen, not with how hard the
+    # function is to follow. Real logic is still measured everywhere else.
+    ignoreAnnotated: ['Composable']
+  NestedBlockDepth:
+    ignoreAnnotated: ['Composable']
 
 naming:
   FunctionNaming:

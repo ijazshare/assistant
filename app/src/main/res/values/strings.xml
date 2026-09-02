@@ -2,4 +2,10 @@
 <resources>
     <string name="app_name">The Machine</string>
     <string name="app_tagline">Offline voice assistant</string>
+
+    <string name="accessibility_service_label">The Machine — device control</string>
+    <string name="accessibility_service_summary">Lets The Machine act on your phone for you.</string>
+    <string name="accessibility_service_description">Allows The Machine to carry out the actions you ask for: opening apps, tapping, scrolling and going back. It reads the screen only to find what to tap, when a command needs it. Nothing it sees is stored or sent anywhere — this app has no network access beyond downloading its models.</string>
+
+    <string name="notification_listener_label">The Machine — notifications</string>
 </resources>

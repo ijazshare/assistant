@@ -291,6 +291,14 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.documentfile)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
@@ -300,6 +308,9 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    // androidx.test.ext:junit supplies the AndroidJUnit4 runner that Robolectric needs;
+    // androidx.test:core alone only provides ApplicationProvider.
+    testImplementation(libs.androidx.test.junit)
 
     androidTestImplementation(libs.truth)
     androidTestImplementation(libs.androidx.test.junit)

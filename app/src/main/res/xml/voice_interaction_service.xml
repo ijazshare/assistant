@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What makes The Machine selectable as the default digital assistant.
+
+  android:recognitionService is REQUIRED and must name a real class; pointing it at
+  something that does not exist silently stops the app being offered in the picker.
+  The Machine does not actually transcribe through SpeechRecognizer — that path is
+  system-mediated and usually cloud-backed — so the class it names reports an error
+  rather than pretending to serve other apps.
+-->
+<voice-interaction-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:recognitionService="io.github.hasanismail.themachine.assistant.MachineRecognitionService"
+    android:sessionService="io.github.hasanismail.themachine.assistant.MachineVoiceInteractionSessionService"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="false"
+    android:supportsLocalInteraction="true" />

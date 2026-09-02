@@ -15,7 +15,17 @@ The Machine is a fully offline Android voice assistant that replaces Google Assi
 6. **Alarms & timers:** delegate to the native Clock app via `AlarmClock` intents. Never build a custom alarm engine.
 7. **Reminders/tasks:** one concept — a *task* with an optional due datetime. Tasks with a due time fire an exact-alarm notification (that's a "reminder"). Stored locally in Room.
 8. **Follow-ups:** basic slot-filling supported (max 2 clarification rounds per command).
-9. **Accessibility service + notification listener:** declared, permission-gated, and surfaced in settings — but **no-op stubs in v1**. They exist so future automation features have the permissions scaffold. Do not invent features on top of them.
+9. **Device control (revised 2026-09-01 by Hasan — supersedes the original stub-only rule).** The
+   assistant is meant to *act on the phone*, not only set alarms. The accessibility service is a real
+   device-control surface (gestures, global actions, launching apps, reading the screen), and the app
+   requests the full sensor and data permission set: microphone, camera, screen capture, location,
+   SMS/call log/contacts, notification access, and draw-over-other-apps. Permissions are declared and
+   requested through onboarding first; features land on them incrementally.
+   The original rule read: *"declared, permission-gated, and surfaced in settings — but no-op stubs in
+   v1 … do not invent features on top of them."* It was reversed deliberately, not drifted past.
+   Two constraints survive the change and are **not** negotiable: the privacy invariants below (no
+   telemetry, no network outside model downloads) still hold, and anything read from the device stays
+   on the device.
 10. **Model delivery:** APK ships without models. First-run downloads from Hugging Face with progress UI, SHA-256 verification, and resume. Manual GGUF import from storage as fallback.
 11. **Wake word:** v2. Do not add always-listening anything in v1.
 12. **CI/CD:** GitHub Actions — build/lint/test on PR, signed release APK attached to GitHub Release on `v*` tags.
@@ -98,7 +108,23 @@ LLM must emit exactly one JSON object matching this schema. Use llama.cpp's JSON
 ## Android integration
 
 - **Assistant role:** implement `VoiceInteractionService` (+ `VoiceInteractionSessionService`, `VoiceInteractionSession`) with the `android.voice_interaction` metadata/XML so The Machine appears under *Default digital assistant app*. Onboarding must deep-link there (`Settings.ACTION_VOICE_INPUT_SETTINGS` or manage-default-apps) and, for One UI, show a hint: *Settings → Advanced features → Side button → Press and hold → Wake digital assistant*.
-- **Permissions (exhaustive for v1):** `RECORD_AUDIO`, `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM` (+ graceful `USE_EXACT_ALARM` rationale for sideload), `RECEIVE_BOOT_COMPLETED`, `INTERNET` (downloads only), `com.android.alarm.permission.SET_ALARM`, `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_DATA_SYNC` + `FOREGROUND_SERVICE_MICROPHONE`, `VIBRATE`; service-bind permissions for the accessibility and notification-listener stubs.
+- **Permissions (revised 2026-09-01 — see Locked decision 9).** The original list was marked
+  "exhaustive for v1"; it no longer is. Three tiers, because they are granted in three different ways
+  and onboarding has to treat them differently:
+  - *Core:* `RECORD_AUDIO`, `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`,
+    `RECEIVE_BOOT_COMPLETED`, `INTERNET` (downloads only), `com.android.alarm.permission.SET_ALARM`,
+    `FOREGROUND_SERVICE` (+ `_DATA_SYNC`, `_MICROPHONE`, `_MEDIA_PROJECTION`, `_LOCATION`), `VIBRATE`.
+  - *Sensor and data, runtime-granted:* `CAMERA`, `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`,
+    `READ_CONTACTS`, and the SMS/call-log family (`READ_SMS`, `RECEIVE_SMS`, `READ_CALL_LOG`).
+    Note the last group is **hard-restricted** by the platform, which behaves differently for a
+    sideloaded install than for a Play install — onboarding must handle that rather than assume a
+    dialog will appear.
+  - *Special access, granted through a Settings screen and never a dialog:* accessibility service,
+    notification listener, `SYSTEM_ALERT_WINDOW` (draw over other apps), exact alarms, and
+    `MediaProjection` — which cannot be pre-granted at all and re-prompts every session by design.
+- **Restricted settings.** Android blocks a sideloaded app from enabling its accessibility service
+  until the user opens App info → ⋮ → *Allow restricted settings*. Onboarding must walk through this
+  explicitly; a plain deep link to accessibility settings lands on a disabled toggle and looks broken.
 - Onboarding checklist screen: mic → notifications → exact alarms → default assistant → (optional, off by default) accessibility + notification access with a plain-language "reserved for future automations" explanation.
 - **Privacy invariants:** no analytics, no crash reporting SDKs, no network calls outside `ModelDownloadManager`. State this in README.
 

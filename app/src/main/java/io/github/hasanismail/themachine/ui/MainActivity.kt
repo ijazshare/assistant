@@ -9,12 +9,13 @@
  */
 package io.github.hasanismail.themachine.ui
 
-import android.os.Build
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,21 +29,28 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.hasanismail.themachine.BuildConfig
 import io.github.hasanismail.themachine.R
+import io.github.hasanismail.themachine.models.ModelRegistry
+import io.github.hasanismail.themachine.models.ModelState
+import io.github.hasanismail.themachine.models.ModelStorage
+import io.github.hasanismail.themachine.permissions.MachinePermissions
+import io.github.hasanismail.themachine.permissions.PermissionInspector
 import io.github.hasanismail.themachine.ui.machine.BootLine
 import io.github.hasanismail.themachine.ui.machine.BootSequence
-import io.github.hasanismail.themachine.ui.machine.IndeterminateCells
 import io.github.hasanismail.themachine.ui.machine.MachineRule
+import io.github.hasanismail.themachine.ui.machine.MemoryReadout
 import io.github.hasanismail.themachine.ui.machine.ScanSweep
 import io.github.hasanismail.themachine.ui.machine.TrackingBox
 import io.github.hasanismail.themachine.ui.machine.rememberSnapProgress
@@ -71,9 +79,34 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Deliberately sparse: identity, a three-line readout, and two doors. Anything with a
+ * long list behind it — permissions, models — lives on its own page, so this one can be
+ * taken in at a glance instead of scrolled.
+ */
 @Composable
 internal fun HomeScreen(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     var booted by remember { mutableStateOf(false) }
+
+    var revision by remember { mutableIntStateOf(0) }
+    LifecycleResumeEffect(Unit) {
+        revision++
+        onPauseOrDispose { }
+    }
+
+    val access = remember(revision) {
+        val inspector = PermissionInspector(context)
+        MachinePermissions.all.count { inspector.state(it).isSettled } to
+            MachinePermissions.all.size
+    }
+    val models = remember(revision) {
+        val registry = ModelRegistry(context)
+        val storage = ModelStorage(context)
+        // Counts roles covered, not defaults present — choosing base.en over tiny.en
+        // still leaves speech recognition fully working.
+        registry.rolesSatisfied { storage.quickState(it) == ModelState.Ready }
+    }
 
     Box(
         modifier = modifier
@@ -87,42 +120,71 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 20.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Header()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("ADMIN", style = MachineLabel, color = MachineColors.Admin)
+                Text("v${BuildConfig.VERSION_NAME}", style = MachineLabel, color = MachineColors.Ghost)
+            }
             MachineRule(Modifier.fillMaxWidth().height(1.dp))
+
             Identity(locked = booted)
-            SystemReadout(onComplete = { booted = true })
-            Spacer(Modifier.weight(1f))
-            AwaitingCommand(active = booted)
+
+            BootSequence(
+                lines = remember {
+                    listOf(
+                        BootLine("INTERFACE", "ONLINE"),
+                        BootLine("NETWORK", "NOT REQUIRED", MachineColors.Admin),
+                        BootLine("TELEMETRY", "NONE", MachineColors.Admin),
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                onComplete = { booted = true },
+            )
+
+            MemoryReadout(context = context, modifier = Modifier.fillMaxWidth())
+
+            Spacer(Modifier.height(2.dp))
+
+            Door(
+                label = "SYSTEM ACCESS",
+                value = "${access.first} / ${access.second}",
+                complete = access.first == access.second,
+                onClick = { context.startActivity(Intent(context, PermissionsActivity::class.java)) },
+            )
+            Door(
+                label = "MODELS",
+                value = "${models.first} / ${models.second}",
+                complete = models.first == models.second,
+                onClick = { context.startActivity(Intent(context, ModelsActivity::class.java)) },
+            )
+
+            Spacer(Modifier.height(2.dp))
+
+            Text(
+                text = if (models.first == models.second) {
+                    "HOLD THE SIDE BUTTON TO SPEAK."
+                } else {
+                    "DOWNLOAD THE MODELS TO BEGIN."
+                },
+                style = MachineReadout,
+                color = MachineColors.Ghost,
+            )
         }
     }
 }
 
-@Composable
-private fun Header() {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("ADMIN", style = MachineLabel, color = MachineColors.Admin)
-        Text(
-            text = "v${BuildConfig.VERSION_NAME}",
-            style = MachineLabel,
-            color = MachineColors.Ghost,
-        )
-    }
-}
-
-/** The app's own name card, framed the way the system frames anything it is tracking. */
+/** The app's own name card, framed the way the system frames anything it tracks. */
 @Composable
 private fun Identity(locked: Boolean) {
-    val progress = rememberSnapProgress(locked, durationMillis = 260)
     TrackingBox(
         modifier = Modifier.fillMaxWidth(),
         color = MachineColors.Admin,
-        progress = progress,
+        progress = rememberSnapProgress(locked, durationMillis = 260),
         cornerLength = 20.dp,
     ) {
         Column(
@@ -143,52 +205,28 @@ private fun Identity(locked: Boolean) {
     }
 }
 
+/** A row that opens another page, carrying the one number that matters. */
 @Composable
-private fun SystemReadout(onComplete: () -> Unit) {
-    // Facts the system can state about itself without loading a model.
-    val lines = remember {
-        listOf(
-            BootLine("INTERFACE", "ONLINE"),
-            BootLine("PLATFORM", "ANDROID ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}"),
-            BootLine("HOST", Build.MODEL.uppercase()),
-            BootLine("ARCH", Build.SUPPORTED_ABIS.firstOrNull()?.uppercase() ?: "UNKNOWN"),
-            BootLine("NETWORK", "NOT REQUIRED", MachineColors.Admin),
-            BootLine("TELEMETRY", "NONE", MachineColors.Admin),
-        )
-    }
-    BootSequence(
-        lines = lines,
-        modifier = Modifier.fillMaxWidth(),
-        onComplete = onComplete,
-    )
-}
-
-@Composable
-private fun AwaitingCommand(active: Boolean) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+private fun Door(
+    label: String,
+    value: String,
+    complete: Boolean,
+    onClick: () -> Unit,
+) {
+    val tone = if (complete) MachineColors.Asset else MachineColors.Admin
+    TrackingBox(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        color = tone,
+        progress = rememberSnapProgress(locked = complete),
+        cornerLength = 12.dp,
     ) {
-        MachineRule(Modifier.fillMaxWidth().height(1.dp))
-        Text(
-            text = if (active) "AWAITING COMMAND" else "INITIALISING",
-            style = MachineLabel,
-            color = if (active) MachineColors.Asset else MachineColors.Dim,
-        )
-        IndeterminateCells(
-            modifier = Modifier.fillMaxWidth().height(6.dp),
-            color = if (active) MachineColors.Asset else MachineColors.Admin,
-        )
-        Text(
-            text = "HOLD THE SIDE BUTTON TO SPEAK. VOICE PIPELINE ARRIVES IN A LATER PHASE.",
-            style = MachineReadout,
-            color = MachineColors.Ghost,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, style = MachineLabel, color = MachineColors.Bone)
+            Text("$value   →", style = MachineLabel, color = tone)
+        }
     }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF05070A)
-@Composable
-private fun HomeScreenPreview() {
-    TheMachineTheme { HomeScreen() }
 }
