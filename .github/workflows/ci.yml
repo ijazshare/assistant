@@ -56,16 +56,32 @@ jobs:
             echo "ndk=$(read_key ndk)"
             echo "cmake=$(read_key cmake)"
           } | tee -a "$GITHUB_OUTPUT"
-          # ANDROID_HOME is a runner environment variable, so it is NOT visible in the
-          # ${{ env.* }} context that `with:` blocks are evaluated in. Republish it.
-          echo "ANDROID_SDK=$ANDROID_HOME" >> "$GITHUB_ENV"
 
-      - name: Cache the pinned NDK
-        id: ndk-cache
+      # Caching the NDK was measured and dropped: the runner image already ships the
+      # pinned revision, so the install step costs ~19s either way, while the cache
+      # burned 708 MiB of the repo's budget. The expensive part is compiling
+      # whisper/llama/ggml (~230s), so that is what gets cached instead — keyed on
+      # everything that can change the native output, so a stale hit is not possible.
+      - name: Fingerprint the native inputs
+        id: native
+        run: |
+          set -euo pipefail
+          fingerprint=$(
+            {
+              git submodule status
+              cat app/src/main/cpp/CMakeLists.txt app/src/main/cpp/*.cpp
+              grep -E '^(ndk|cmake|minSdk)[[:space:]]*=' gradle/libs.versions.toml
+            } | sha256sum | cut -c1-16
+          )
+          echo "fingerprint=$fingerprint" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Cache the native build
         uses: actions/cache@v6.1.0
         with:
-          path: ${{ env.ANDROID_SDK }}/ndk/${{ steps.sdk.outputs.ndk }}
-          key: ndk-${{ runner.os }}-${{ steps.sdk.outputs.ndk }}
+          path: |
+            app/.cxx
+            app/build/intermediates/cxx
+          key: cxx-${{ runner.os }}-${{ steps.native.outputs.fingerprint }}
 
       - name: Install SDK components
         run: |
@@ -97,16 +113,12 @@ jobs:
           fi
           echo "Using $platform"
 
-          packages=(
-            "platform-tools"
-            "$platform"
-            "build-tools;${{ steps.sdk.outputs.build_tools }}"
-            "cmake;${{ steps.sdk.outputs.cmake }}"
-          )
-          if [ "${{ steps.ndk-cache.outputs.cache-hit }}" != "true" ]; then
-            packages+=("ndk;${{ steps.sdk.outputs.ndk }}")
-          fi
-          "$sdkmanager" "${packages[@]}"
+          "$sdkmanager" \
+            "platform-tools" \
+            "$platform" \
+            "build-tools;${{ steps.sdk.outputs.build_tools }}" \
+            "cmake;${{ steps.sdk.outputs.cmake }}" \
+            "ndk;${{ steps.sdk.outputs.ndk }}"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6.3.0

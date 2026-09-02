@@ -14,36 +14,48 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.github.hasanismail.themachine.audio.MachineSounds
 import io.github.hasanismail.themachine.nativebridge.NativeBridge
 import io.github.hasanismail.themachine.nativebridge.NativeBuildInfo
+import io.github.hasanismail.themachine.ui.machine.IndeterminateCells
+import io.github.hasanismail.themachine.ui.machine.MachineRule
+import io.github.hasanismail.themachine.ui.machine.TrackingBox
+import io.github.hasanismail.themachine.ui.machine.rememberSnapProgress
+import io.github.hasanismail.themachine.ui.machine.scanlines
+import io.github.hasanismail.themachine.ui.theme.MachineColors
+import io.github.hasanismail.themachine.ui.theme.MachineDump
+import io.github.hasanismail.themachine.ui.theme.MachineLabel
+import io.github.hasanismail.themachine.ui.theme.MachineReadout
 import io.github.hasanismail.themachine.ui.theme.TheMachineTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * P1 acceptance surface: proves on a real device that both native engines linked,
- * loaded, and selected a CPU backend. Everything here is read-only diagnostics.
+ * loaded, and selected a CPU backend. Read-only diagnostics.
  */
 class DebugActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,7 +63,10 @@ class DebugActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             TheMachineTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    containerColor = MachineColors.Void,
+                ) { insets ->
                     DebugScreen(modifier = Modifier.padding(insets))
                 }
             }
@@ -62,103 +77,117 @@ class DebugActivity : ComponentActivity() {
 @Composable
 private fun DebugScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    // Loading the native library and dlopen-ing seven backend variants is not
-    // main-thread work, even though it is fast.
+    // Loading the native library and dlopen-ing the backend variants is not main-thread
+    // work, even though it is fast.
     val info by produceState<NativeBuildInfo?>(initialValue = null) {
         value = withContext(Dispatchers.Default) { NativeBridge.buildInfo(context) }
+    }
+
+    LaunchedEffect(info?.loadError, info != null) {
+        val snapshot = info ?: return@LaunchedEffect
+        MachineSounds.play(
+            if (snapshot.loadError == null) MachineSounds.Cue.CONFIRM else MachineSounds.Cue.REJECT,
+        )
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(MachineColors.Void)
+            .scanlines()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 16.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Native bridge", style = MaterialTheme.typography.headlineSmall)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("ANALOG INTERFACE", style = MachineLabel, color = MachineColors.Admin)
+            Text("DIAGNOSTIC", style = MachineLabel, color = MachineColors.Ghost)
+        }
+        MachineRule(Modifier.fillMaxWidth().height(1.dp))
 
         val snapshot = info
         if (snapshot == null) {
-            Text("Loading native libraries…", style = MaterialTheme.typography.bodyMedium)
+            Text("INTERROGATING NATIVE LAYER", style = MachineLabel, color = MachineColors.Dim)
+            IndeterminateCells(Modifier.fillMaxWidth().height(6.dp))
             return@Column
         }
 
         val error = snapshot.loadError
         if (error != null) {
-            Section("Load failed", error, isError = true)
+            Panel("LOAD FAILED", error, MachineColors.Relevant)
             return@Column
         }
 
-        Section(
-            title = "Device",
+        Panel(
+            title = "HOST",
             body = buildString {
-                appendLine("model:      ${Build.MANUFACTURER} ${Build.MODEL}")
-                appendLine("android:    ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-                appendLine("abis:       ${Build.SUPPORTED_ABIS.joinToString()}")
-                appendLine("page size:  ${snapshot.pageSizeBytes} bytes")
-                append("            ")
+                appendLine("MODEL      ${Build.MANUFACTURER.uppercase()} ${Build.MODEL}")
+                appendLine("ANDROID    ${Build.VERSION.RELEASE}  API ${Build.VERSION.SDK_INT}")
+                appendLine("ABI        ${Build.SUPPORTED_ABIS.joinToString()}")
+                append("PAGE       ${snapshot.pageSizeBytes} B  ")
                 append(
                     if (snapshot.is16KbPageDevice) {
-                        "16 KB device — libraries must be 16 KB aligned"
+                        "(16 KB DEVICE)"
                     } else {
-                        "4 KB device — will NOT catch a 16 KB alignment regression"
+                        "(4 KB — WILL NOT CATCH ALIGNMENT REGRESSIONS)"
                     },
                 )
             },
+            tone = MachineColors.Irrelevant,
         )
 
-        Section(
-            title = "Versions",
+        Panel(
+            title = "ENGINES",
             body = buildString {
-                appendLine("whisper.cpp:  ${snapshot.whisperVersion}")
-                appendLine("llama.cpp:    ${snapshot.llamaVersion}")
-                append("mmap:         ${if (snapshot.supportsMmap) "supported" else "UNSUPPORTED"}")
+                appendLine("WHISPER    ${snapshot.whisperVersion}")
+                appendLine("LLAMA      ${snapshot.llamaVersion}")
+                append("MMAP       ${if (snapshot.supportsMmap) "SUPPORTED" else "UNSUPPORTED"}")
             },
+            tone = MachineColors.Asset,
         )
 
-        Section(
-            title = "ggml backends (${snapshot.backendCount} registered)",
-            body = snapshot.backendReport.trimEnd(),
-            isError = snapshot.backendCount == 0,
+        Panel(
+            title = "GGML BACKENDS — ${snapshot.backendCount} REGISTERED",
+            body = snapshot.backendReport.trimEnd().uppercase(),
+            tone = if (snapshot.backendCount == 0) MachineColors.Relevant else MachineColors.Asset,
         )
 
-        Section("whisper system info", snapshot.whisperSystemInfo.trimEnd())
-        Section("llama system info", snapshot.llamaSystemInfo.trimEnd())
+        Panel("WHISPER CPU", snapshot.whisperSystemInfo.trimEnd(), MachineColors.Irrelevant)
+        Panel("LLAMA CPU", snapshot.llamaSystemInfo.trimEnd(), MachineColors.Irrelevant)
     }
 }
 
 @Composable
-private fun Section(
+private fun Panel(
     title: String,
     body: String,
-    isError: Boolean = false,
+    tone: Color,
 ) {
-    Card(
+    // Each panel locks on as it appears, the way the system frames anything it is
+    // reporting about.
+    val progress = rememberSnapProgress(locked = true, durationMillis = 220)
+    TrackingBox(
         modifier = Modifier.fillMaxWidth(),
-        colors = if (isError) {
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-            )
-        } else {
-            CardDefaults.cardColors()
-        },
+        color = tone,
+        progress = progress,
+        filled = true,
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            // Selectable so the values can be copied straight into a bug report.
+            Text(text = title, style = MachineLabel, color = tone)
+            Box(Modifier.fillMaxWidth().height(1.dp).background(MachineColors.Rule))
+            // Selectable so values can be copied straight into a bug report.
             SelectionContainer {
                 Text(
-                    text = body.ifBlank { "(empty)" },
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
+                    text = body.ifBlank { "(EMPTY)" },
+                    style = if (body.length > 120) MachineDump else MachineReadout,
+                    color = MachineColors.Bone,
                 )
             }
         }

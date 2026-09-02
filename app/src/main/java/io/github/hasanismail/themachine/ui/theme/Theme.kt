@@ -9,45 +9,43 @@
  */
 package io.github.hasanismail.themachine.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 
-private val DarkColors =
-    darkColorScheme(
-        primary = MachinePurple80,
-        secondary = MachinePurpleGrey80,
-        tertiary = MachineTeal80,
-    )
-
-private val LightColors =
-    lightColorScheme(
-        primary = MachinePurple40,
-        secondary = MachinePurpleGrey40,
-        tertiary = MachineTeal40,
-    )
+/**
+ * The Machine has one look, dark, and does not follow the system theme or dynamic
+ * colour. That is a deliberate departure from Material You: the palette encodes
+ * meaning — red is live capture, amber is the system talking about itself, green is
+ * a completed action — and letting the wallpaper recolour it would destroy that.
+ * A surveillance readout that changes colour with the user's wallpaper is also just
+ * the wrong idea.
+ */
+private val MachineScheme = darkColorScheme(
+    primary = MachineColors.Bone,
+    onPrimary = MachineColors.Void,
+    secondary = MachineColors.Irrelevant,
+    onSecondary = MachineColors.Void,
+    tertiary = MachineColors.Admin,
+    onTertiary = MachineColors.Void,
+    background = MachineColors.Void,
+    onBackground = MachineColors.Bone,
+    surface = MachineColors.Panel,
+    onSurface = MachineColors.Bone,
+    surfaceVariant = MachineColors.PanelActive,
+    onSurfaceVariant = MachineColors.Dim,
+    outline = MachineColors.Rule,
+    outlineVariant = MachineColors.Rule,
+    error = MachineColors.Relevant,
+    onError = MachineColors.Bone,
+    errorContainer = MachineColors.Panel,
+    onErrorContainer = MachineColors.Relevant,
+)
 
 @Composable
-fun TheMachineTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    val context = LocalContext.current
-    val colorScheme =
-        when {
-            dynamicColor && darkTheme -> dynamicDarkColorScheme(context)
-            dynamicColor -> dynamicLightColorScheme(context)
-            darkTheme -> DarkColors
-            else -> LightColors
-        }
+fun TheMachineTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = MachineScheme,
         typography = MachineTypography,
         content = content,
     )
