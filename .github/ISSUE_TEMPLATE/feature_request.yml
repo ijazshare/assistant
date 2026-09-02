@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest something for a future version.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, check the **v2 backlog** in `CLAUDE.md` — wake word, custom TTS voices, extra LLM families,
+        general chat, multilingual STT, automations, and GPU inference are already planned and out of scope for v1.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do that you can't today
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like instead
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Does this fit The Machine's constraints?
+      options:
+        - label: It works fully offline (no network calls outside model downloads).
+          required: true
+        - label: It collects no telemetry and adds no analytics or crash-reporting SDK.
+          required: true

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Microphone glyph, kept inside the 66dp adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Capsule body -->
+    <path
+        android:pathData="M54,32 L54,54"
+        android:strokeColor="#FFD0BCFF"
+        android:strokeWidth="20"
+        android:strokeLineCap="round" />
+    <!-- Pickup arc -->
+    <path
+        android:pathData="M34,54 A20,20 0 0,0 74,54"
+        android:strokeColor="#FF9CE8DA"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+    <!-- Stand -->
+    <path
+        android:pathData="M54,74 L54,81"
+        android:strokeColor="#FF9CE8DA"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+    <!-- Base -->
+    <path
+        android:pathData="M43,85 L65,85"
+        android:strokeColor="#FF9CE8DA"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+</vector>

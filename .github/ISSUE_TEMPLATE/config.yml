@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Model download or storage problems
+    url: https://github.com/hasan-ismail/themachine#models
+    about: Check the model table and troubleshooting notes in the README first.
+  - name: Security or privacy concern
+    url: https://github.com/hasan-ismail/themachine/security/advisories/new
+    about: Report privately rather than in a public issue.

@@ -1,0 +1,139 @@
+# Version catalog for The Machine.
+#
+# Every version here was resolved against live Maven metadata (maven.google.com /
+# repo1.maven.org) on 2026-09-01 rather than from memory - see PROGRESS.md for the
+# recorded evidence. Prefer bumping via Dependabot PRs so the change is reviewable.
+
+[versions]
+# ---- Build toolchain ----
+agp = "9.4.0"
+kotlin = "2.4.10"
+ksp = "2.3.11"
+
+# ---- Android platform ----
+# API 37 = Android 17. AGP 9.4.0 caps out at API 37, so this is the ceiling.
+# NOTE: there is no bare "platforms;android-37" SDK package - only android-37.0/.1/.2.
+# AGP resolves compileSdk = 37 to the highest installed 37.x platform.
+compileSdk = "37"
+targetSdk = "37"
+minSdk = "33"
+buildTools = "36.0.0"  # AGP 9.4.0 minimum AND default
+ndk = "29.0.14206865"  # r29. AGP 9.4.0 *defaults* to 28.2.13676358, but that is a
+# default rather than a ceiling, and the current cmdline-tools "android sdk install"
+# refuses to side-install an older NDK once r29 is present. r29 was verified locally to
+# build an arm64-v8a .so with Clang 21 and 16 KB page alignment. Revisit if P1 hits a
+# whisper.cpp/llama.cpp incompatibility.
+cmake = "3.31.6"
+
+# ---- Kotlin ecosystem ----
+coroutines = "1.11.0"
+serializationJson = "1.11.0"
+
+# ---- AndroidX / Jetpack ----
+composeBom = "2026.08.00"
+androidxCore = "1.19.0"
+androidxActivity = "1.13.0"
+androidxLifecycle = "2.11.0"
+androidxNavigation = "2.10.0"
+androidxRoom = "2.8.4"
+androidxDatastore = "1.2.1"
+androidxWork = "2.11.2"
+androidxSplashscreen = "1.2.0"
+androidxDocumentfile = "1.1.0"
+
+# ---- DI ----
+hilt = "2.60.1"
+androidxHilt = "1.4.0"
+
+# ---- Networking (model downloads only - see Privacy invariants in CLAUDE.md) ----
+okhttp = "5.5.0"
+
+# ---- Static analysis / formatting ----
+spotless = "8.10.1"
+ktlint = "1.8.0"
+detekt = "1.23.8"
+
+# ---- Test ----
+junit = "4.13.2"
+androidxTestJunit = "1.3.0"
+androidxTestRunner = "1.7.0"
+androidxTestRules = "1.7.0"
+androidxTestCore = "1.7.0"
+espresso = "3.7.0"
+robolectric = "4.16.1"
+mockk = "1.14.11"
+turbine = "1.2.1"
+truth = "1.4.5"
+
+[libraries]
+# ---- Kotlin ----
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
+
+# ---- Compose (concrete versions come from the BOM) ----
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+compose-ui = { group = "androidx.compose.ui", name = "ui" }
+compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+
+# ---- AndroidX ----
+androidx-core = { group = "androidx.core", name = "core", version.ref = "androidxCore" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivity" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidxLifecycle" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
+androidx-lifecycle-service = { group = "androidx.lifecycle", name = "lifecycle-service", version.ref = "androidxLifecycle" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "androidxNavigation" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "androidxRoom" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "androidxRoom" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "androidxRoom" }
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "androidxRoom" }
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "androidxDatastore" }
+androidx-work-runtime = { group = "androidx.work", name = "work-runtime", version.ref = "androidxWork" }
+androidx-work-testing = { group = "androidx.work", name = "work-testing", version.ref = "androidxWork" }
+androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidxSplashscreen" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "androidxDocumentfile" }
+
+# ---- DI ----
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
+hilt-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt" }
+androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "androidxHilt" }
+androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "androidxHilt" }
+androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "androidxHilt" }
+
+# ---- Networking ----
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver3-junit4", version.ref = "okhttp" }
+
+# ---- Test ----
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+mockk-android = { group = "io.mockk", name = "mockk-android", version.ref = "mockk" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
+androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
+androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidxTestRules" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
+espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
+
+# ---- Referenced from the detekt plugin configuration, not from app dependencies ----
+detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

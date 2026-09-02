@@ -1,0 +1,84 @@
+name: Bug report
+description: Something in The Machine misbehaves on device.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing. The Machine is fully offline — please **never paste audio, transcripts, or personal task content** you would not want public.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you say / do, and what did the assistant do instead?
+      placeholder: |
+        I held the side button and said "set an alarm for 7am".
+        The overlay showed the transcript correctly but no alarm was created.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: "Galaxy S26 Ultra, Android 17 (One UI 9)"
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Settings → About, or the release tag you installed.
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: models
+    attributes:
+      label: Which models were selected
+      multiple: true
+      options:
+        - "STT: tiny.en"
+        - "STT: base.en"
+        - "LLM: Gemma 3 1B"
+        - "LLM: Gemma 3 4B"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the pipeline
+      options:
+        - "Not sure"
+        - "Recording / endpointing"
+        - "Transcription (Whisper)"
+        - "Intent parsing (LLM)"
+        - "Speech output (Piper)"
+        - "Alarms / timers (Clock app)"
+        - "Tasks / reminders"
+        - "Model download"
+        - "Assistant / side button"
+        - "Settings / onboarding"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logcat (optional)
+      description: "`adb logcat -d -s TheMachine:V AndroidRuntime:E` — review before pasting."
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: I confirmed all required models finished downloading and verified.
+          required: true
+        - label: I removed anything personal from the text above.
+          required: true

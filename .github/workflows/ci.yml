@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch supersedes an in-flight run; main is never cancelled
+# so the history of what built on main stays complete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  # Gradle runs on 21 while the app still emits Java 17 bytecode (see app/build.gradle.kts).
+  # Robolectric needs a 21 JVM to emulate recent SDK levels.
+  JAVA_VERSION: "21"
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dkotlin.incremental=false
+
+jobs:
+  build:
+    name: Lint, test, assemble
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7.0.1
+        with:
+          # whisper.cpp and llama.cpp arrive as pinned submodules in P1.
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Read pinned SDK versions from the version catalog
+        id: sdk
+        run: |
+          set -euo pipefail
+          catalog=gradle/libs.versions.toml
+          read_key() {
+            # Values may carry a trailing comment; take only the quoted string.
+            grep -E "^$1[[:space:]]*=" "$catalog" | head -1 | sed -E 's/.*"([^"]+)".*/\1/'
+          }
+          {
+            echo "compile_sdk=$(read_key compileSdk)"
+            echo "build_tools=$(read_key buildTools)"
+            echo "ndk=$(read_key ndk)"
+            echo "cmake=$(read_key cmake)"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      - name: Cache the pinned NDK
+        id: ndk-cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ${{ env.ANDROID_HOME }}/ndk/${{ steps.sdk.outputs.ndk }}
+          key: ndk-${{ runner.os }}-${{ steps.sdk.outputs.ndk }}
+
+      - name: Install SDK components
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null
+
+          # There is deliberately no bare "platforms;android-37" package — the platform is
+          # published as minor releases (37.0, 37.1, 37.2, ...). Resolve the newest stable
+          # minor for the pinned major instead of composing the package name from the major.
+          major='${{ steps.sdk.outputs.compile_sdk }}'
+          # Drop preview lines FIRST: grep -o would truncate "android-37.2-beta3" down to
+          # "android-37.2" and let a preview masquerade as the stable minor.
+          platform=$("$sdkmanager" --list 2>/dev/null | tr -d '\r' \
+            | grep -E "platforms[;/]android-${major}" \
+            | grep -viE 'beta|preview|canary|[[:space:]]rc[0-9]' \
+            | grep -oE "platforms[;/]android-${major}(\.[0-9]+)?" \
+            | tr '/' ';' \
+            | sort -uV | tail -1)
+          if [ -z "$platform" ]; then
+            echo "::error::No stable platforms;android-${major}.x package is available."
+            exit 1
+          fi
+          echo "Using $platform"
+
+          packages=(
+            "platform-tools"
+            "$platform"
+            "build-tools;${{ steps.sdk.outputs.build_tools }}"
+            "cmake;${{ steps.sdk.outputs.cmake }}"
+          )
+          if [ "${{ steps.ndk-cache.outputs.cache-hit }}" != "true" ]; then
+            packages+=("ndk;${{ steps.sdk.outputs.ndk }}")
+          fi
+          "$sdkmanager" "${packages[@]}"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          validate-wrappers: true
+
+      - name: Formatting (spotless)
+        run: ./gradlew spotlessCheck
+
+      - name: Static analysis (detekt)
+        run: ./gradlew detekt
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+
+      - name: Android lint
+        run: ./gradlew lintDebug
+
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload reports
+        # Reports are most valuable exactly when something failed.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+          if-no-files-found: error
+
+  privacy-invariants:
+    name: Privacy invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7.0.1
+
+      - name: No analytics, crash reporting or telemetry dependencies
+        run: |
+          set -euo pipefail
+          # CLAUDE.md states this as a hard invariant, so it is enforced rather than trusted.
+          forbidden='firebase|crashlytics|google-analytics|com\.google\.android\.gms|sentry|bugsnag|appcenter|amplitude|mixpanel|datadog|newrelic'
+          if grep -rInE "$forbidden" gradle/libs.versions.toml app/build.gradle.kts build.gradle.kts; then
+            echo "::error::A telemetry or crash-reporting dependency was added. See 'Privacy invariants' in CLAUDE.md."
+            exit 1
+          fi
+          echo "No telemetry dependencies found."

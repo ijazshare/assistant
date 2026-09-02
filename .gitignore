@@ -1,0 +1,59 @@
+# ---- Gradle ----
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+local.properties
+gradle-app.setting
+.gradletasknamecache
+
+# ---- Android ----
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+captures/
+.externalNativeBuild/
+.cxx/
+output.json
+lint-results*.html
+lint-results*.xml
+
+# ---- Signing (NEVER commit) ----
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# ---- Models (downloaded at runtime, never vendored) ----
+models/
+*.gguf
+*.bin
+*.onnx
+*.tar.bz2
+
+# ---- IDE ----
+.idea/
+!.idea/icon.png
+*.iml
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ---- Native build artifacts ----
+app/.cxx/
+app/src/main/cpp/build/
+*.so.debug
+
+# ---- Reports ----
+app/build/reports/
+build/reports/
+
+# ---- Misc ----
+.kotlin/
+*.log

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Models live in getExternalFilesDir(null)/models and are large, re-downloadable
+  artifacts — never back them up. Task data and settings are worth keeping.
+-->
+<full-backup-content>
+    <exclude domain="external" path="models/" />
+    <exclude domain="file" path="prompt-cache/" />
+</full-backup-content>

@@ -1,0 +1,51 @@
+# Overrides layered on top of detekt's defaults (buildUponDefaultConfig = true).
+# Only rules where this project genuinely differs from the default are listed.
+
+build:
+  maxIssues: 0
+
+complexity:
+  LongParameterList:
+    # Composables legitimately take many parameters; constructor injection likewise.
+    ignoreAnnotated: ['Composable', 'Inject']
+  TooManyFunctions:
+    thresholdInFiles: 20
+    thresholdInClasses: 20
+    ignoreAnnotatedFunctions: ['Composable']
+  LongMethod:
+    threshold: 80
+    ignoreAnnotated: ['Composable']
+
+naming:
+  FunctionNaming:
+    # @Composable functions are PascalCase by Compose convention.
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][_A-Za-z0-9]*'
+
+style:
+  MagicNumber:
+    ignoreAnnotated: ['Composable', 'Preview']
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+  MaxLineLength:
+    maxLineLength: 120
+    excludes: ['**/test/**', '**/androidTest/**']
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Preview']
+  ReturnCount:
+    max: 4
+  ForbiddenComment:
+    # TODOs are tracked in PROGRESS.md and GitHub issues, not blocked at build time.
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    # JNI and file I/O boundaries genuinely need broad catches; they are audited by review.
+    excludes: ['**/stt/**', '**/llm/**', '**/tts/**', '**/models/**']
+  SwallowedException:
+    active: true
+
+performance:
+  SpreadOperator:
+    active: false

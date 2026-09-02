@@ -1,0 +1,32 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+max_line_length = 120
+# ktlint's own "ktlint_official" style rewrites `libs.versions.foo.get().toInt()` into a
+# four-line broken chain, which makes every version-catalog reference unreadable. The
+# intellij_idea style matches kotlin.code.style=official in gradle.properties.
+ktlint_code_style = intellij_idea
+ij_kotlin_allow_trailing_comma = true
+ij_kotlin_allow_trailing_comma_on_call_site = true
+# Composables are PascalCase by convention; ktlint's function-naming rule disagrees.
+ktlint_function_naming_ignore_when_annotated_with = Composable, Test, ParameterizedTest
+# Compose previews and @HiltViewModel classes routinely exceed the default.
+ktlint_standard_function-signature = disabled
+ktlint_standard_annotation = disabled
+
+[*.{xml,yml,yaml,json,toml}]
+indent_size = 2
+
+[*.{md,markdown}]
+trim_trailing_whitespace = false
+
+[gradlew.bat]
+end_of_line = crlf

@@ -1,0 +1,42 @@
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      androidx:
+        patterns:
+          - "androidx.*"
+      kotlin-and-ksp:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+      hilt:
+        patterns:
+          - "com.google.dagger*"
+          - "androidx.hilt*"
+      test:
+        patterns:
+          - "junit*"
+          - "org.robolectric*"
+          - "io.mockk*"
+          - "app.cash.turbine*"
+          - "com.google.truth*"
+    ignore:
+      # The Compose BOM pins a consistent library set; bump it deliberately, not per-artifact.
+      - dependency-name: "androidx.compose:*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"
+    open-pull-requests-limit: 3
