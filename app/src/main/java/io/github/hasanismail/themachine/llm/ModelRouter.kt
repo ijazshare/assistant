@@ -97,18 +97,22 @@ class ModelRouter(private val context: Context) {
         // The cache write is several megabytes and the answer is already in hand, so
         // both it and the unload happen after the caller has the reply.
         val reply = completion.copy(text = text)
+        // Freed as soon as it has answered. Holding three gigabytes of weights alongside
+        // the small model pushed the app into swap on an 11 GB phone — measured at 200 MB
+        // free and 1.2 GB swapped — and every command after the question decoded at under
+        // one token a second. A question costs a reload; a command must not.
+        //
+        // Under the same lock that guards loading: launched loose, this unload raced the
+        // next question's load and one answer in four came back empty.
         scope.launch {
-            if (!cacheWritten) {
-                cacheWritten = true
-                strong.saveState()
+            loading.withLock {
+                if (!cacheWritten) {
+                    cacheWritten = true
+                    strong.saveState()
+                }
+                strong.unload()
+                cacheWritten = false
             }
-            // Freed as soon as it has answered. Holding three gigabytes of weights
-            // alongside the small model pushed the app into swap on an 11 GB phone —
-            // measured at 200 MB free and 1.2 GB swapped — and every command after the
-            // question decoded at under one token a second. A question costs a reload;
-            // a command must not.
-            strong.unload()
-            cacheWritten = false
         }
         return reply
     }
