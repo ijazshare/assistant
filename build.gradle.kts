@@ -23,8 +23,16 @@ allprojects {
         // Targets are fileTrees rooted at src/ rather than "src/**" globs: a glob is
         // resolved against the whole project directory, so Gradle walks build/ too and
         // trips over the empty ABI folders AGP leaves in merged_native_libs.
+        // src/main/cpp holds the whisper.cpp and llama.cpp submodules — tens of thousands
+        // of upstream files, including Kotlin and XML in their Android examples. Formatting
+        // vendored code would be both wrong and enormous.
         kotlin {
-            target(fileTree("src") { include("**/*.kt") })
+            target(
+                fileTree("src") {
+                    include("**/*.kt")
+                    exclude("main/cpp/**")
+                },
+            )
             ktlint(rootProject.libs.versions.ktlint.get())
             trimTrailingWhitespace()
             endWithNewline()
@@ -34,7 +42,12 @@ allprojects {
             ktlint(rootProject.libs.versions.ktlint.get())
         }
         format("xml") {
-            target(fileTree("src") { include("**/*.xml") })
+            target(
+                fileTree("src") {
+                    include("**/*.xml")
+                    exclude("main/cpp/**")
+                },
+            )
             trimTrailingWhitespace()
             endWithNewline()
         }
@@ -63,6 +76,9 @@ allprojects {
 
     tasks.withType<Detekt>().configureEach {
         jvmTarget = JavaVersion.VERSION_17.toString()
+        // Same reason as the Spotless exclusion: the native submodules ship their own
+        // Kotlin sample apps, and analysing vendored upstream code is noise.
+        exclude("**/cpp/**")
         reports {
             html.required.set(true)
             xml.required.set(true)

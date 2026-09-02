@@ -10,7 +10,7 @@ was decided and why, and which facts were verified against a live source rather 
 | Phase | Scope | Status |
 |---|---|---|
 | P0 | Repo + toolchain | **Complete** — gate green locally and in CI; APK verified on device |
-| P1 | Native bridge (whisper.cpp + llama.cpp submodules, JNI) | Not started |
+| P1 | Native bridge (whisper.cpp + llama.cpp submodules, JNI) | **Complete** — both engines build, link and report on device |
 | P2 | Model manager (registry, resumable verified downloads) | Not started |
 | P3 | STT (AudioRecord, endpointing, Whisper) | Not started |
 | P4 | LLM parsing (GBNF grammar, TimeResolver, intent mapping) | Not started |
@@ -183,6 +183,74 @@ GitHub Actions — every tag confirmed against the GitHub Releases API, not assu
 ### Pending human action
 
 - Nothing blocking. Release signing secrets are only needed at P8 (README documents the setup).
+
+---
+
+## P1 — Native bridge
+
+### What exists
+
+- `whisper.cpp` pinned at **v1.9.3** (`371b5a75…`) and `llama.cpp` at **v0.3.0** (`c1d0e7a0…`)
+  as submodules under `app/src/main/cpp/`. Both commit hashes were confirmed against the
+  upstream tags rather than taken on trust.
+- `app/src/main/cpp/CMakeLists.txt` builds both engines with ARM runtime feature dispatch,
+  plus `libthemachine.so`, a thin JNI bridge.
+- `NativeBridge.kt` loads the library and registers ggml's backends once, process-wide.
+- A debug-only `DebugActivity` (in the `debug` source set, so it cannot ship in release)
+  printing versions, backend registry, CPU features and page size.
+
+### Verified on device
+
+`./gradlew deviceTest` → `instrumentation: OK (6 tests)` on the Flip8, and the debug screen
+reports:
+
+| | |
+|---|---|
+| whisper.cpp | 1.9.3 |
+| llama.cpp | 0.3.0 |
+| ggml backends | 1 registry, 1 device (CPU, 10.8 GiB) |
+| CPU features picked | `NEON`, `ARM_FMA`, `FP16_VA`, `MATMUL_INT8` (i8mm), `SVE`, `SVE_CNT=16`, `SME`, `DOTPROD`, `REPACK` |
+| mmap | supported |
+
+All **16** packaged `.so` files are 16 KB-page aligned (checked with `llvm-readelf -l`,
+minimum `LOAD` `p_align` = `0x4000`). The release build was also verified: R8 plus resource
+shrinking keep **all seven** `libggml-cpu-android_armv*.so` variants, so runtime dispatch
+survives minification. Release APK is 7.6 MB.
+
+### Decisions and findings
+
+1. **Dual ggml, resolved by ordering.** whisper.cpp v1.9.3 vendors ggml 0.20.2 and
+   llama.cpp v0.3.0 vendors 0.22.0. Both add ggml behind `if (NOT TARGET ggml)`, so whichever
+   is added first supplies it to the other. **llama.cpp is added first** so the newer ggml
+   wins. Verified safe rather than assumed: diffing the vendored trees, no public header is
+   added or removed and only `ggml.h` differs (24 lines). The one semantic change —
+   `ggml_clamp` losing its in-place behaviour to a new `ggml_clamp_inplace` — does not matter
+   because whisper.cpp never references `ggml_clamp`. Escape hatch if a future bump breaks
+   this: whisper's `WHISPER_USE_SYSTEM_GGML`.
+
+2. **`extractNativeLibs=true`, reversing the P0 default.** ggml's backend loader enumerates a
+   real directory with `std::filesystem::directory_iterator`, scoring each
+   `libggml-cpu-*.so`. With libraries left inside the APK there is nothing to enumerate:
+   on device it registered **zero backends and reported success**, which would have meant
+   inference silently having no backend to run on. llama.cpp's own Android example sets
+   `extractNativeLibs="true"` for exactly this reason. Costs ~15 MB of install size. 16 KB
+   support is unaffected — that is about ELF segment alignment, not zip alignment.
+
+3. **The `common` target is called `llama-common`.** It carries `json_schema_to_grammar`,
+   which P4 needs, so `LLAMA_BUILD_COMMON=ON` is required rather than optional.
+
+4. **`connectedDebugAndroidTest` is broken against this device.** AGP writes
+   `test-result-exit-code.txt = 1` and fails the task while its own HTML report says
+   "6 tests, 0 failures, 100% successful", and `am instrument` run by hand prints
+   `OK (6 tests)`. Reproduced with a single trivial test that touches nothing native, so it
+   is independent of test content — an AGP/One UI interaction. Rather than leave a
+   permanently red gate, `./gradlew deviceTest` runs the instrumentation over adb and
+   believes the runner's own verdict. Proven to bite: injecting a bad assertion produced
+   `FAILURES!!! | Tests run: 6, Failures: 1` and failed the build.
+
+5. **Spotless and detekt now exclude `**/cpp/**`.** The submodules bring tens of thousands of
+   upstream files including Kotlin sample apps; without the exclusion both tools tried to
+   analyse vendored code.
 
 ---
 
