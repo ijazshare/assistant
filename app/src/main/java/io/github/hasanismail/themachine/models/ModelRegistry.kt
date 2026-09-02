@@ -14,8 +14,18 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** Which part of the pipeline an asset belongs to. */
-enum class ModelRole { STT, LLM, TTS }
+/**
+ * Which part of the pipeline an asset belongs to. A role that is not [required] is a capability the assistant can
+ * do without, so a fresh install is not told to download it before it can begin.
+ */
+enum class ModelRole(val required: Boolean = true) {
+    STT,
+    LLM,
+    TTS,
+
+    /** Reading text out of pixels, for screens the accessibility tree cannot describe. */
+    OCR(required = false),
+}
 
 /** Assets that arrive compressed and have to be unpacked after verification. */
 enum class ArchiveFormat { NONE, TAR_BZ2 }
@@ -95,7 +105,7 @@ class ModelRegistry(registryJson: String) {
      * model is simply wrong. The pipeline needs one asset per role, not one specific one.
      */
     fun rolesSatisfied(isReady: (ModelAsset) -> Boolean): Pair<Int, Int> {
-        val roles = ModelRole.entries
+        val roles = ModelRole.entries.filter { it.required }
         return roles.count { role -> byRole(role).any(isReady) } to roles.size
     }
 

@@ -88,6 +88,20 @@
       "extractedByteSize": 85000000,
       "license": "See the voice's MODEL_CARD",
       "source": "sherpa-onnx tts-models tag. That tag is an asset host rather than a version, so the URL stays valid across sherpa-onnx releases."
+    },
+    {
+      "id": "ocr-tesseract-eng-fast",
+      "role": "OCR",
+      "displayName": "Tesseract English (fast)",
+      "detail": "Reads text out of pixels when a screen has none to give: photos, video, games.",
+      "fileName": "eng.traineddata",
+      "url": "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata",
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "byteSize": 4113088,
+      "minRamMb": 64,
+      "isDefault": true,
+      "license": "Apache-2.0",
+      "source": "tesseract-ocr/tessdata_fast on GitHub, main branch. Digest and size recorded from the downloaded file on 2026-09-02."
     }
   ]
 }

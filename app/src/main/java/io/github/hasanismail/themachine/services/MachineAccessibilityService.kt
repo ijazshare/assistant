@@ -10,13 +10,21 @@
 package io.github.hasanismail.themachine.services
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityService.ScreenshotResult
+import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
 import android.accessibilityservice.GestureDescription
+import android.graphics.Bitmap
 import android.graphics.Path
+import android.os.Build
 import android.util.Log
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 /**
  * The assistant's hands.
@@ -164,6 +172,50 @@ class MachineAccessibilityService : AccessibilityService() {
             match?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
         } finally {
             root.recycleCompat()
+        }
+    }
+
+    /**
+     * A screenshot of the app in front, or null if the system refuses one.
+     *
+     * Taken through the accessibility service rather than MediaProjection, which would
+     * put a consent dialog in the middle of every "what does this say". Where the system
+     * allows it the capture is of the foreground window alone, so the assistant's own
+     * overlay does not end up reading itself.
+     */
+    suspend fun screenshot(): Bitmap? = suspendCancellableCoroutine { continuation ->
+        val callback = object : TakeScreenshotCallback {
+            override fun onSuccess(result: ScreenshotResult) {
+                val buffer = result.hardwareBuffer
+                // Copied off the hardware buffer before it is closed: a hardware bitmap
+                // has no pixels this process can read, and OCR needs them.
+                val bitmap = runCatching {
+                    Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
+                        ?.copy(Bitmap.Config.ARGB_8888, false)
+                }.getOrNull()
+                buffer.close()
+                continuation.resume(bitmap)
+            }
+
+            override fun onFailure(errorCode: Int) {
+                Log.w(TAG, "screenshot refused: $errorCode")
+                continuation.resume(null)
+            }
+        }
+
+        val front = windows.firstOrNull {
+            it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive
+        } ?: windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && front != null) {
+                takeScreenshotOfWindow(front.id, mainExecutor, callback)
+            } else {
+                takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, callback)
+            }
+        }.onFailure {
+            Log.w(TAG, "screenshot threw", it)
+            continuation.resume(null)
         }
     }
 

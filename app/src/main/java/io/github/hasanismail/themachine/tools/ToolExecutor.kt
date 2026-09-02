@@ -14,6 +14,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
 import android.util.Log
+import io.github.hasanismail.themachine.ocr.ScreenReader
 import io.github.hasanismail.themachine.services.MachineAccessibilityService
 import io.github.hasanismail.themachine.services.MachineNotificationListener
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,11 @@ class ToolExecutor(
      * declaration in [MachineTools] instead of a new branch in a function that had
      * already grown past the point where anyone could see all of it at once.
      */
+    private val screenReader = ScreenReader(context)
+
+    /** Frees the OCR engine, if one was ever loaded. */
+    fun release() = screenReader.release()
+
     private val handlers: Map<String, suspend (ToolCall) -> ToolResult> = mapOf(
         MachineTools.SET_ALARM to { call -> setAlarm(call) },
         MachineTools.SET_TIMER to { call -> setTimer(call) },
@@ -158,12 +164,20 @@ class ToolExecutor(
 
     // ---- Screen ------------------------------------------------------------------
 
-    private fun readScreen(): ToolResult {
+    private suspend fun readScreen(): ToolResult {
         val service = MachineAccessibilityService.connected()
             ?: return accessibilityMissing()
-        val lines = service.readScreenText()
-        if (lines.isEmpty()) return ToolResult.failed("There is nothing readable on screen.")
-        return ToolResult.ok(lines.take(SPOKEN_LINES).joinToString(". "), lines.joinToString("\n"))
+        val screen = screenReader.read(service)
+            ?: return ToolResult.failed(
+                if (screenReader.ocrAvailable) {
+                    "There is nothing readable on screen."
+                } else {
+                    "I cannot reach any text on this screen."
+                },
+                if (screenReader.ocrAvailable) null else "Download the screen reading model under Models.",
+            )
+        val spoken = screen.lines.take(SPOKEN_LINES).joinToString(". ")
+        return ToolResult.ok(spoken, screen.lines.joinToString("\n"))
     }
 
     private suspend fun tapText(call: ToolCall): ToolResult {

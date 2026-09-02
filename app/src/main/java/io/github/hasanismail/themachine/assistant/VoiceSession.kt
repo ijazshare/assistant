@@ -463,6 +463,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     /** Frees both models. Called when the overlay goes away, not between utterances. */
     fun release() {
+        executor.release()
         router.release()
         piper.release()
         whisper.unload()
