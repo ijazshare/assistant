@@ -426,6 +426,24 @@ context files a second brain rather than a separate list the assistant keeps to 
 It persists correctly and is scheduled with exact alarms as specified. Worth confirming
 before it becomes expensive to change.
 
+### Learned phrases are shapes, not sentences
+
+What is remembered is the phrase with its numbers taken out. "Set a three minute timer"
+teaches the shape `# minutes timer`, and "set a 25 minute timer" then runs instantly with
+25 in it. One entry covers every length rather than one entry per length, and the numbers
+are checked against the same bounds the grammar enforces, so a shape learned from a timer
+cannot produce an hour of forty.
+
+Each number in the call records which spoken number it came from and what was added to it
+— only ever twelve, for an afternoon hour, so a shape learned from "6pm meaning 18" gives
+20 for "8pm" rather than 18 again.
+
+A shape learned wrongly can be forgotten on its own from the History screen. That matters:
+the assistant answered "what time is it" by reading out the notification shade, and then
+learned it, so it kept doing it. The clock is now answered before the model is consulted
+at all — the phone knows the time exactly and a language model only knows it because it
+was written into a prompt.
+
 ### One model in memory at a time
 
 Loading the 4B beside the 1B fits on paper — about 5 GB on an 11 GB phone — and does not

@@ -308,12 +308,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * condition.
      */
     private suspend fun act(transcript: String, sttMillis: Long) {
-        val known = withContext(Dispatchers.IO) { cache.lookup(transcript) }
-        known?.let {
-            Log.i(TAG, "cache hit [$transcript] -> ${it.tool} ${it.arguments}")
-            carryOut(transcript, it, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
-            return
-        }
+        if (answeredWithoutTheModel(transcript, sttMillis)) return
 
         if (!ensureLanguageModel()) {
             failCommand(
@@ -390,6 +385,30 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         if (corrected == null || corrected == stated) return call
         Log.i(TAG, "hour corrected from $stated to $corrected for [$transcript]")
         return call.copy(arguments = call.arguments + ("hour" to corrected.toString()))
+    }
+
+    /**
+     * The two ways a command is answered with no model at all.
+     *
+     * The clock first: the phone knows the time exactly, and the small model asked for it
+     * answered by reading out the notification shade — which was then learned, so it kept
+     * doing it. Then the remembered shapes, which is the whole point of remembering them.
+     */
+    private suspend fun answeredWithoutTheModel(transcript: String, sttMillis: Long): Boolean {
+        LocalAnswers.of(transcript)?.let { answer ->
+            carryOut(
+                transcript,
+                ToolCall(MachineTools.ANSWER, mapOf("text" to answer)),
+                sttMillis,
+                llmMillis = 0,
+                resolution = Resolution.CACHE,
+            )
+            return true
+        }
+        val known = withContext(Dispatchers.IO) { cache.lookup(transcript) } ?: return false
+        Log.i(TAG, "cache hit [$transcript] -> ${known.tool} ${known.arguments}")
+        carryOut(transcript, known, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
+        return true
     }
 
     /** Executes a resolved call, then records, remembers, shows and speaks the outcome. */

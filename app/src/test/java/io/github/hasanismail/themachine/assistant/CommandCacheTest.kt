@@ -209,18 +209,23 @@ class CommandCacheTest {
     @Test
     fun `the least recently used phrase is evicted first`() {
         val cache = cache()
+        // Distinct shapes, not distinct numbers: every "timer N minutes" is now a single
+        // entry, which is the point of the templating.
         for (i in 0 until CommandCache.MAX_ENTRIES) {
+            // Letters, not digits: a number would be templated out and every one of
+            // these would be the same shape.
+            val name = "app" + ('a' + i / 26) + ('a' + i % 26)
             cache.learn(
-                "timer $i minutes",
-                ToolCall(MachineTools.SET_TIMER, mapOf("minutes" to "$i")),
+                "open $name",
+                ToolCall(MachineTools.OPEN_APP, mapOf("app" to name)),
                 now = i.toLong(),
             )
         }
         assertThat(cache.size).isEqualTo(CommandCache.MAX_ENTRIES)
-        cache.learn("open spotify", ToolCall(MachineTools.OPEN_APP, mapOf("app" to "Spotify")), now = 1_000_000)
+        cache.learn("read this", ToolCall(MachineTools.READ_SCREEN, emptyMap()), now = 1_000_000)
         assertThat(cache.size).isEqualTo(CommandCache.MAX_ENTRIES)
-        assertThat(cache.lookup("timer 0 minutes")).isNull()
-        assertThat(cache.lookup("open spotify")).isNotNull()
+        assertThat(cache.lookup("open appaa")).isNull()
+        assertThat(cache.lookup("read this")).isNotNull()
     }
 
     @Test

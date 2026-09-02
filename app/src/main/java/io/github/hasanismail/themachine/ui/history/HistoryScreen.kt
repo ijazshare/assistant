@@ -12,12 +12,12 @@ package io.github.hasanismail.themachine.ui.history
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
@@ -47,8 +47,9 @@ import java.time.format.DateTimeFormatter
  * Every command the assistant has handled, newest first, and the phrases it has learned
  * to run without the model.
  *
- * Both are the user's own record and both can be wiped from here. Nothing on this
- * screen has ever left the phone.
+ * Both are the user's own record. A single learned phrase can be forgotten by tapping it,
+ * which matters because a phrase learned wrongly is answered wrongly and instantly for as
+ * long as it is remembered. Nothing on this screen has ever left the phone.
  */
 @Composable
 fun HistoryScreen(modifier: Modifier = Modifier) {
@@ -58,54 +59,98 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
         CommandCache.shared(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
     }
     var records by remember { mutableStateOf(log.recent()) }
-    var learned by remember { mutableStateOf(cache.size) }
+    var learned by remember { mutableStateOf(cache.all()) }
 
-    Column(modifier = modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        Spacer(Modifier.height(20.dp))
-        Text("HISTORY", style = MachineLabel, color = MachineColors.Admin)
-        Text(
-            text = "${records.size} COMMANDS · $learned LEARNED",
-            style = MachineReadout,
-            color = MachineColors.Dim,
-        )
-        Spacer(Modifier.height(8.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Text(
-                text = "CLEAR HISTORY",
-                style = MachineLabel,
-                color = MachineColors.Relevant,
-                modifier = Modifier.clickable {
-                    log.clear()
-                    records = emptyList()
-                },
-            )
-            Text(
-                text = "FORGET LEARNED",
-                style = MachineLabel,
-                color = MachineColors.Relevant,
-                modifier = Modifier.clickable {
-                    cache.clear()
-                    learned = 0
-                },
-            )
+    // One scrolling list, header included: as a Column above a LazyColumn the header sat
+    // outside the scroll and the first record was clipped under it.
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            Column {
+                Text("HISTORY", style = MachineLabel, color = MachineColors.Admin)
+                Text(
+                    text = "${records.size} COMMANDS, ${learned.size} LEARNED",
+                    style = MachineReadout,
+                    color = MachineColors.Dim,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Text(
+                        text = "CLEAR HISTORY",
+                        style = MachineLabel,
+                        color = MachineColors.Relevant,
+                        modifier = Modifier.clickable {
+                            log.clear()
+                            records = emptyList()
+                        },
+                    )
+                    Text(
+                        text = "FORGET ALL",
+                        style = MachineLabel,
+                        color = MachineColors.Relevant,
+                        modifier = Modifier.clickable {
+                            cache.clear()
+                            learned = cache.all()
+                        },
+                    )
+                }
+            }
         }
-        Spacer(Modifier.height(16.dp))
+
+        if (learned.isNotEmpty()) {
+            item { Text("LEARNED PHRASES", style = MachineLabel, color = MachineColors.Admin) }
+            items(learned, key = { "learned:" + it.key }) { entry ->
+                LearnedRow(entry) {
+                    cache.forgetKey(entry.key)
+                    learned = cache.all()
+                }
+            }
+            item { Text("COMMANDS", style = MachineLabel, color = MachineColors.Admin) }
+        }
 
         if (records.isEmpty()) {
-            Text("NOTHING YET. HOLD THE SIDE BUTTON.", style = MachineReadout, color = MachineColors.Dim)
+            item {
+                Text(
+                    "NOTHING YET. HOLD THE SIDE BUTTON.",
+                    style = MachineReadout,
+                    color = MachineColors.Dim,
+                )
+            }
         }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(records, key = { it.atEpochMillis }) { record -> RecordRow(record) }
+        items(records, key = { it.atEpochMillis }) { record -> RecordRow(record) }
+    }
+}
+
+/**
+ * One learned shape, its numbers shown as the placeholder they are stored as.
+ *
+ * Tapping it forgets that one phrase. Without this the only correction available was
+ * wiping every phrase the assistant knows.
+ */
+@Composable
+private fun LearnedRow(entry: CommandCache.Entry, onForget: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onForget),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(entry.tool.uppercase(), style = MachineReadout, color = MachineColors.Relevant)
+            Text("${entry.hits} USES", style = MachineReadout, color = MachineColors.Dim)
+            Text("TAP TO FORGET", style = MachineReadout, color = MachineColors.Ghost)
         }
+        Text(entry.key, style = MachineStatus, color = MachineColors.Bone)
     }
 }
 
 @Composable
 private fun RecordRow(record: QueryRecord) {
     Column(Modifier.fillMaxWidth()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 text = TIME.format(Instant.ofEpochMilli(record.atEpochMillis)),
                 style = MachineReadout,
@@ -127,22 +172,24 @@ private fun RecordRow(record: QueryRecord) {
             if (record.source == QuerySource.TYPED) {
                 Text("TYPED", style = MachineReadout, color = MachineColors.Dim)
             }
+            record.tool?.let {
+                Text(it.uppercase(), style = MachineReadout, color = MachineColors.Dim)
+            }
         }
-        Text(record.transcript, style = MachineStatus, color = MachineColors.Bone)
+
+        // The command in the reading size, not the heading size: some of these are a whole
+        // sentence, and at heading size a single one filled the screen.
+        Text(record.transcript, style = MachineReadout, color = MachineColors.Bone)
+
+        // What was actually done. For an answer the spoken line is the argument, so
+        // printing both said everything twice.
         Text(
-            text = buildString {
-                record.tool?.let { append(it.uppercase()) }
-                if (record.arguments.isNotEmpty()) {
-                    append("  ")
-                    append(record.arguments.entries.joinToString(" ") { "${it.key}=${it.value}" })
-                }
-            }.ifBlank { record.spoken },
-            style = MachineReadout,
+            text = record.spoken.ifBlank {
+                record.arguments.entries.joinToString(" ") { "${it.key}=${it.value}" }
+            },
+            style = MachineStatus,
             color = if (record.success) MachineColors.Dim else MachineColors.Relevant,
         )
-        if (record.tool != null) {
-            Text(record.spoken, style = MachineReadout, color = MachineColors.Dim)
-        }
     }
 }
 

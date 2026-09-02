@@ -112,7 +112,10 @@ class PiperEngine {
         // Playback is plain AudioTrack and needs no such protection.
         val audio = synchronized(engineLock) {
             val engine = tts
-            if (engine == null || closing) return@withContext false
+            if (engine == null || closing) {
+                Log.w(TAG, "piper: nothing to speak with (loaded=${engine != null}, closing=$closing)")
+                return@withContext false
+            }
             runCatching { engine.generate(text, SPEAKER, SPEED) }.getOrElse {
                 Log.e(TAG, "piper: synthesis failed", it)
                 return@withContext false
@@ -158,6 +161,7 @@ class PiperEngine {
         track = player
         player.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
         player.play()
+        Log.i(TAG, "piper: speaking ${samples.size * MILLIS_PER_SECOND / sampleRate} ms")
 
         // MODE_STATIC plays from a buffer already written, so waiting means watching the
         // playback head rather than waiting on the write to drain. A track released from
@@ -206,5 +210,6 @@ class PiperEngine {
         const val SPEED = 1.0f
         const val WALK_DEPTH = 3
         const val POLL_MILLIS = 20L
+        const val MILLIS_PER_SECOND = 1000
     }
 }

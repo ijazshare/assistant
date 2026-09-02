@@ -499,11 +499,23 @@ Java_io_github_hasanismail_themachine_llm_LlamaNative_nativeSaveState(
     if (session->cached.empty()) return JNI_FALSE;
     const std::string path = scoped_utf8(env, pathStr);
 
+    // Trimmed back to exactly the tokens being recorded. The cache also holds whatever
+    // was generated after the prompt, and the token list handed to llama has to describe
+    // the cells it is about to walk: with a longer cache than list, state_write_data read
+    // past the end of the buffer and took the process down with a SIGSEGV inside memmove.
+    llama_memory_seq_rm(llama_get_memory(session->ctx), 0,
+                        static_cast<llama_pos>(session->cached.size()), -1);
+
     // Written beside its destination and moved into place, so an interrupted write
     // cannot leave a truncated cache that would be loaded and believed.
     const std::string temp = path + ".part";
-    const size_t written = llama_state_seq_save_file(
-            session->ctx, temp.c_str(), 0, session->cached.data(), session->cached.size());
+    size_t written = 0;
+    try {
+        written = llama_state_seq_save_file(
+                session->ctx, temp.c_str(), 0, session->cached.data(), session->cached.size());
+    } catch (const std::exception &e) {
+        LOGE("llama: state save threw: %s", e.what());
+    }
     if (written == 0) {
         LOGE("llama: could not save state");
         remove(temp.c_str());
