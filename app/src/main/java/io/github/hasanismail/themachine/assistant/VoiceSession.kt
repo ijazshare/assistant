@@ -21,6 +21,7 @@ import io.github.hasanismail.themachine.audio.VoiceRecorder
 import io.github.hasanismail.themachine.context.MachineFiles
 import io.github.hasanismail.themachine.llm.LlamaEngine
 import io.github.hasanismail.themachine.llm.PromptDialect
+import io.github.hasanismail.themachine.models.ModelArchive
 import io.github.hasanismail.themachine.models.ModelAsset
 import io.github.hasanismail.themachine.models.ModelRegistry
 import io.github.hasanismail.themachine.models.ModelRole
@@ -33,13 +34,16 @@ import io.github.hasanismail.themachine.tools.MachineTools
 import io.github.hasanismail.themachine.tools.ReminderStore
 import io.github.hasanismail.themachine.tools.ToolExecutor
 import io.github.hasanismail.themachine.tools.ToolResult
+import io.github.hasanismail.themachine.tts.PiperEngine
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /** Where the session is in the listen, understand, act pipeline. */
 sealed interface SessionState {
@@ -81,6 +85,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private val settings = MachineSettings(context)
     private val files = MachineFiles(context)
     private val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context))
+    private val piper = PiperEngine()
 
     /**
      * Guards the transcriber, which is one engine and cannot run twice at once.
@@ -120,6 +125,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
                 fail("The speech model could not be loaded.")
                 return@launch
             }
+            // The voice is prepared in the background too. Unpacking it is a one-off
+            // that costs a few seconds, and doing it here means the first reply is
+            // spoken rather than silently skipped.
+            prepareVoice()
+
             // The language model loads in the background while the user is still
             // speaking, so its load time overlaps the utterance instead of following it.
             installed(ModelRole.LLM)?.let { asset ->
@@ -129,6 +139,21 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
                 }
             }
             listen()
+        }
+    }
+
+    /**
+     * Unpacks and loads the voice, if one is installed. Never fails the session: an
+     * assistant that cannot speak is diminished, not broken, and its reply is on screen.
+     */
+    private fun prepareVoice() {
+        val asset = installed(ModelRole.TTS) ?: return
+        if (piper.isLoaded) return
+        scope.launch {
+            val unpacked = withContext(Dispatchers.IO) {
+                ModelArchive.unpack(storage.target(asset), storage.extractedDir(asset))
+            }
+            if (unpacked) piper.load(storage.extractedDir(asset))
         }
     }
 
@@ -234,6 +259,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             result = result,
             timing = Timing(sttMillis, completion.millis),
         )
+        // Said after the state is published, so the reply is on screen while it is being
+        // spoken rather than after.
+        piper.speak(result.spoken)
     }
 
     private suspend fun loadLanguageModel(): Boolean {
@@ -253,6 +281,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private fun fail(message: String, actionable: String? = null) {
         _state.value = SessionState.Problem(message, actionable)
         MachineSounds.play(MachineSounds.Cue.REJECT)
+        // Spoken too: the overlay sits over whatever the user was doing, and a problem
+        // they have to read is one they may never notice.
+        scope.launch { piper.speak(message) }
     }
 
     /**
@@ -272,6 +303,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     /** Frees both models. Called when the overlay goes away, not between utterances. */
     fun release() {
+        piper.release()
         whisper.unload()
         llama.unload()
         _state.value = SessionState.Idle

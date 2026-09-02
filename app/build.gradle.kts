@@ -1,5 +1,7 @@
 import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
+import java.net.URI
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -275,6 +277,57 @@ tasks.register<AdbInstrumentationTest>("deviceTest") {
     report.set(layout.buildDirectory.file("reports/deviceTest/instrumentation.txt"))
 }
 
+// ---- sherpa-onnx --------------------------------------------------------------
+//
+// The speaking half of the assistant. k2-fsa ships the Android build as a GitHub
+// release asset and publishes nothing to Maven Central, so it is fetched here and
+// checked against a pinned digest — the same bargain the model downloads make, and
+// for the same reason: an offline assistant that quietly accepted whatever bytes a
+// URL returned would be worth very little.
+val sherpaOnnxVersion = "1.13.7"
+val sherpaOnnxSha256 = "c4ef49e309f24fcee5c106b8a279481aaecaabb078cd37b2cd6e9a62cc8a73c8"
+val sherpaOnnxAar = layout.projectDirectory.file("libs/sherpa-onnx-$sherpaOnnxVersion.aar").asFile
+
+val fetchSherpaOnnx = tasks.register("fetchSherpaOnnx") {
+    description = "Downloads the pinned sherpa-onnx Android AAR and verifies its digest."
+    // Captured as locals on purpose: with the configuration cache on, a task body that
+    // reaches back into the script at execution time has nothing to reach.
+    val target = sherpaOnnxAar
+    val expected = sherpaOnnxSha256
+    val version = sherpaOnnxVersion
+
+    outputs.file(target)
+    // Re-run if the pin changes, not merely if the file is absent.
+    inputs.property("version", version)
+    inputs.property("sha256", expected)
+
+    doLast {
+        fun digest(file: File): String = MessageDigest.getInstance("SHA-256")
+            .digest(file.readBytes())
+            .joinToString("") { "%02x".format(it) }
+
+        if (target.exists() && digest(target) == expected) return@doLast
+
+        target.parentFile.mkdirs()
+        val url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/" +
+            "v$version/sherpa-onnx-$version.aar"
+        logger.lifecycle("Fetching $url")
+        val partial = File(target.parentFile, target.name + ".part")
+        URI(url).toURL().openStream().use { input ->
+            partial.outputStream().use { output -> input.copyTo(output) }
+        }
+        val actual = digest(partial)
+        if (actual != expected) {
+            partial.delete()
+            error("sherpa-onnx $version digest mismatch: expected $expected, got $actual")
+        }
+        target.delete()
+        partial.renameTo(target)
+    }
+}
+
+tasks.named("preBuild") { dependsOn(fetchSherpaOnnx) }
+
 dependencies {
     implementation(platform(libs.compose.bom))
     androidTestImplementation(platform(libs.compose.bom))
@@ -299,6 +352,11 @@ dependencies {
     implementation(libs.androidx.documentfile)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+    implementation(libs.commons.compress)
+
+    // Downloaded by fetchSherpaOnnx below rather than resolved from a repository: the
+    // project publishes its Android build only as a release asset on GitHub.
+    implementation(files(sherpaOnnxAar))
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)

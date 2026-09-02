@@ -62,3 +62,6 @@ build/reports/
 # ---- Misc ----
 .kotlin/
 *.log
+
+# Fetched and digest-checked by the fetchSherpaOnnx task, not committed.
+app/libs/

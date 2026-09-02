@@ -47,6 +47,7 @@ androidxHilt = "1.4.0"
 
 # ---- Networking (model downloads only - see Privacy invariants in CLAUDE.md) ----
 okhttp = "5.5.0"
+commonsCompress = "1.28.0"
 
 # ---- Static analysis / formatting ----
 spotless = "8.10.1"
@@ -110,6 +111,7 @@ androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", vers
 
 # ---- Networking ----
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver3-junit4", version.ref = "okhttp" }
 
 # ---- Test ----
