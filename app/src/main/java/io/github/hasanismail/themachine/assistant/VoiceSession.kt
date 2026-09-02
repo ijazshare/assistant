@@ -19,6 +19,10 @@ import io.github.hasanismail.themachine.audio.MachineSounds
 import io.github.hasanismail.themachine.audio.StopReason
 import io.github.hasanismail.themachine.audio.VoiceRecorder
 import io.github.hasanismail.themachine.context.MachineFiles
+import io.github.hasanismail.themachine.history.QueryLog
+import io.github.hasanismail.themachine.history.QueryRecord
+import io.github.hasanismail.themachine.history.QuerySource
+import io.github.hasanismail.themachine.history.Resolution
 import io.github.hasanismail.themachine.llm.LlamaEngine
 import io.github.hasanismail.themachine.llm.PromptDialect
 import io.github.hasanismail.themachine.models.ModelArchive
@@ -32,11 +36,13 @@ import io.github.hasanismail.themachine.stt.WhisperEngine
 import io.github.hasanismail.themachine.tools.ContactLookup
 import io.github.hasanismail.themachine.tools.MachineTools
 import io.github.hasanismail.themachine.tools.ReminderStore
+import io.github.hasanismail.themachine.tools.ToolCall
 import io.github.hasanismail.themachine.tools.ToolExecutor
 import io.github.hasanismail.themachine.tools.ToolResult
 import io.github.hasanismail.themachine.tts.PiperEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +50,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /** Where the session is in the listen, understand, act pipeline. */
 sealed interface SessionState {
@@ -57,8 +64,14 @@ sealed interface SessionState {
     ) : SessionState
     data object Transcribing : SessionState
     data class Thinking(val transcript: String) : SessionState
-    data class Done(val transcript: String, val tool: String, val result: ToolResult, val timing: Timing) :
-        SessionState
+    data class Done(
+        val transcript: String,
+        val tool: String,
+        val result: ToolResult,
+        val timing: Timing,
+        /** True if the command ran from the learned-phrase cache, with no model involved. */
+        val fromCache: Boolean = false,
+    ) : SessionState
 
     data class Problem(val message: String, val actionable: String? = null) : SessionState
 }
@@ -86,6 +99,21 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private val files = MachineFiles(context)
     private val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context))
     private val piper = PiperEngine()
+    private val cache = CommandCache(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
+    private val history = QueryLog(context)
+
+    /** Where the current command came from, for the record. */
+    private var source = QuerySource.VOICE
+
+    /** The capture coroutine, kept so a typed command can stop the microphone. */
+    private var listening: Job? = null
+
+    /**
+     * Serialises loading the language model. It is started in the background as soon as
+     * the session opens and again, if still needed, when a command arrives; without
+     * this the two would race and load the model twice.
+     */
+    private val modelLoading = Mutex()
 
     /**
      * Guards the transcriber, which is one engine and cannot run twice at once.
@@ -109,7 +137,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * reported with something the user can actually do about it, not a silent no-op.
      */
     fun start() {
-        scope.launch {
+        source = QuerySource.VOICE
+        listening = scope.launch {
             if (!hasMicrophonePermission()) {
                 fail(
                     "The Machine cannot hear you without microphone access.",
@@ -135,13 +164,27 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
             // The language model loads in the background while the user is still
             // speaking, so its load time overlaps the utterance instead of following it.
-            installed(ModelRole.LLM)?.let { asset ->
-                if (!llama.isLoaded) {
-                    loadedModelName = asset.fileName
-                    scope.launch { llama.load(storage.target(asset)) }
-                }
-            }
+            scope.launch { ensureLanguageModel() }
             listen()
+        }
+    }
+
+    /**
+     * Runs a command the user typed rather than spoke.
+     *
+     * The microphone is stopped first: someone who has started typing has decided not to
+     * talk, and a stray sound should not become a second command. Everything after that
+     * is the same path speech takes, minus transcription.
+     */
+    fun submitText(text: String) {
+        val typed = text.trim()
+        if (typed.isEmpty()) return
+        source = QuerySource.TYPED
+        listening?.cancel()
+        listening = null
+        scope.launch {
+            _state.value = SessionState.Thinking(typed)
+            act(typed, sttMillis = 0)
         }
     }
 
@@ -226,12 +269,30 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     /**
      * Turns the transcript into a tool call and runs it.
      *
-     * The grammar guarantees a valid call, so there is no retry loop: a null parse
-     * would mean no grammar was applied, which is a programming error rather than a
-     * runtime condition.
+     * A phrase the assistant has resolved before is run at once, from the cache, before
+     * the model is even consulted — or loaded. Everything else goes through the model,
+     * and if the command it produces is one whose meaning is fixed, it is remembered for
+     * next time.
+     *
+     * The grammar guarantees a valid call, so there is no retry loop: a null parse would
+     * mean no grammar was applied, which is a programming error rather than a runtime
+     * condition.
      */
     private suspend fun act(transcript: String, sttMillis: Long) {
-        if (!llama.isLoaded && !loadLanguageModel()) return
+        cache.lookup(transcript)?.let { known ->
+            Log.i(TAG, "cache hit [$transcript] -> ${known.tool} ${known.arguments}")
+            carryOut(transcript, known, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
+            return
+        }
+
+        if (!ensureLanguageModel()) {
+            failCommand(
+                transcript,
+                "I heard you, but no language model is installed.",
+                "Download one under Models.",
+            )
+            return
+        }
 
         // The dialect owns the prompt, the grammar and the parser together, because a
         // fine-tuned model only behaves if all three match the form it was trained on.
@@ -247,11 +308,46 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
         val call = dialect.parse(completion.text)
         if (call == null) {
-            fail("I could not work out what to do with that.")
+            failCommand(transcript, "I could not work out what to do with that.")
             return
         }
+        carryOut(transcript, call, sttMillis, completion.millis, Resolution.MODEL)
+    }
 
+    /** Executes a resolved call, then records, remembers, shows and speaks the outcome. */
+    private suspend fun carryOut(
+        transcript: String,
+        call: ToolCall,
+        sttMillis: Long,
+        llmMillis: Long,
+        resolution: Resolution,
+    ) {
         val result = executor.execute(call)
+
+        // Only a call the model produced and that then succeeded is worth learning. A
+        // failure might be a misread; a cache hit is already known.
+        if (resolution == Resolution.MODEL && result.success) cache.learn(transcript, call)
+
+        history.append(
+            QueryRecord(
+                atEpochMillis = System.currentTimeMillis(),
+                transcript = transcript,
+                source = source,
+                resolution = resolution,
+                tool = call.tool,
+                arguments = call.arguments,
+                spoken = result.spoken,
+                success = result.success,
+                sttMillis = sttMillis,
+                llmMillis = llmMillis,
+            ),
+        )
+        Log.i(
+            TAG,
+            "session done: ${call.tool} -> ${result.spoken} " +
+                "(stt $sttMillis ms, llm $llmMillis ms, ${resolution.name.lowercase()})",
+        )
+
         MachineSounds.play(
             if (result.success) MachineSounds.Cue.CONFIRM else MachineSounds.Cue.REJECT,
             volume = 0.45f,
@@ -260,18 +356,14 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             transcript = transcript,
             tool = call.tool,
             result = result,
-            timing = Timing(sttMillis, completion.millis),
-        )
-        Log.i(
-            TAG,
-            "session done: ${call.tool} -> ${result.spoken} " +
-                "(stt $sttMillis ms, llm ${completion.millis} ms)",
+            timing = Timing(sttMillis, llmMillis),
+            fromCache = resolution == Resolution.CACHE,
         )
 
         // Written while the user is listening to the answer, not when the session ends:
         // by then the model is being freed, and a save racing an unload would lose to it.
         // Once per session is enough — the cached prefix is the same every time.
-        if (!cacheWritten) {
+        if (!cacheWritten && llama.isLoaded) {
             cacheWritten = true
             scope.launch { llama.saveState() }
         }
@@ -281,18 +373,30 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         piper.speak(result.spoken)
     }
 
-    private suspend fun loadLanguageModel(): Boolean {
-        val asset = installed(ModelRole.LLM)
-        if (asset == null) {
-            fail("I heard you, but no language model is installed.", "Download one under Models.")
-            return false
-        }
+    /**
+     * Loads the language model if it is not loaded, exactly once however many callers
+     * ask at the same time. False only if there is no model to load or it will not load.
+     */
+    private suspend fun ensureLanguageModel(): Boolean = modelLoading.withLock {
+        if (llama.isLoaded) return@withLock true
+        val asset = installed(ModelRole.LLM) ?: return@withLock false
         loadedModelName = asset.fileName
-        if (!llama.load(storage.target(asset))) {
-            fail("The language model could not be loaded.")
-            return false
-        }
-        return true
+        llama.load(storage.target(asset))
+    }
+
+    /** A failure that happened to a command, and so belongs in the history as well. */
+    private fun failCommand(transcript: String, message: String, actionable: String? = null) {
+        history.append(
+            QueryRecord(
+                atEpochMillis = System.currentTimeMillis(),
+                transcript = transcript,
+                source = source,
+                resolution = Resolution.FAILED,
+                spoken = message,
+                success = false,
+            ),
+        )
+        fail(message, actionable)
     }
 
     private fun fail(message: String, actionable: String? = null) {

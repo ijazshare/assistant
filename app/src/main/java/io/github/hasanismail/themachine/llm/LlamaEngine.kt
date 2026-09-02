@@ -63,12 +63,14 @@ class LlamaEngine(private val context: Context) {
     suspend fun saveState(): Boolean = withContext(Dispatchers.Default) {
         val current = handle
         val file = cacheFile
-        current != 0L && file != null && LlamaNative.nativeSaveState(current, file.absolutePath)
+        current != 0L && file != null && synchronized(this@LlamaEngine) {
+            handle != 0L && LlamaNative.nativeSaveState(handle, file.absolutePath)
+        }
     }
 
     /** Model name, parameter count and context size, for the diagnostics screen. */
     suspend fun describe(): String = withContext(Dispatchers.Default) {
-        if (handle == 0L) "" else LlamaNative.nativeDescribe(handle)
+        synchronized(this@LlamaEngine) { if (handle == 0L) "" else LlamaNative.nativeDescribe(handle) }
     }
 
     /**
@@ -85,14 +87,18 @@ class LlamaEngine(private val context: Context) {
         val current = handle
         if (current == 0L) return@withContext Completion("", 0)
         val startedAt = System.nanoTime()
-        val text = LlamaNative.nativeGenerate(current, prompt, grammar, maxTokens)
+        val text = synchronized(this@LlamaEngine) {
+            if (handle == 0L) "" else LlamaNative.nativeGenerate(handle, prompt, grammar, maxTokens)
+        }
         Completion(text.trim(), (System.nanoTime() - startedAt) / NANOS_PER_MILLI)
     }
 
     /** True if llama.cpp accepts this GBNF. */
     suspend fun validateGrammar(grammar: String): Boolean = withContext(Dispatchers.Default) {
         val current = handle
-        current != 0L && LlamaNative.nativeValidateGrammar(current, grammar)
+        current != 0L && synchronized(this@LlamaEngine) {
+            handle != 0L && LlamaNative.nativeValidateGrammar(handle, grammar)
+        }
     }
 
     /**
@@ -104,9 +110,16 @@ class LlamaEngine(private val context: Context) {
     suspend fun grammarAccepts(grammar: String, text: String): Boolean =
         withContext(Dispatchers.Default) {
             val current = handle
-            current != 0L && LlamaNative.nativeGrammarAccepts(current, grammar, text)
+            current != 0L && synchronized(this@LlamaEngine) {
+                handle != 0L && LlamaNative.nativeGrammarAccepts(handle, grammar, text)
+            }
         }
 
+    /**
+     * Every native call above runs under this object's monitor and re-reads the handle
+     * inside it, so unload waits for a call in flight instead of freeing the context
+     * under it. Dismissing the overlay mid-reply used to do exactly that.
+     */
     @Synchronized
     fun unload() {
         if (handle != 0L) {

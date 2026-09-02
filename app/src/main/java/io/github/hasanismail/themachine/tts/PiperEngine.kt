@@ -27,11 +27,23 @@ import java.io.File
  * Synthesis and playback are deliberately one call. A reply is a single short sentence
  * that has to finish before the overlay can go away, so there is nothing to gain from
  * handing the caller a buffer and a second thing to remember to do with it.
+ *
+ * Every use of the native synthesiser happens under [engineLock], and so does freeing
+ * it. Without that, dismissing the overlay while a reply was still being synthesised
+ * freed the engine under a thread that was reading from it — a SIGSEGV, found the first
+ * time a test tore a session down promptly.
  */
 class PiperEngine {
 
+    private val engineLock = Any()
+
     private var tts: OfflineTts? = null
+
+    @Volatile
     private var track: AudioTrack? = null
+
+    @Volatile
+    private var closing = false
 
     val isLoaded: Boolean get() = tts != null
 
@@ -59,7 +71,7 @@ class PiperEngine {
             return@withContext false
         }
 
-        runCatching {
+        val loaded = runCatching {
             OfflineTts(
                 assetManager = null,
                 config = OfflineTtsConfig(
@@ -74,11 +86,15 @@ class PiperEngine {
                     ),
                 ),
             )
-        }.onSuccess {
-            tts = it
-            Log.i(TAG, "piper: loaded ${model.name} at ${it.sampleRate()} Hz")
-        }.onFailure {
-            Log.e(TAG, "piper: could not load ${model.name}", it)
+        }.onFailure { Log.e(TAG, "piper: could not load ${model.name}", it) }.getOrNull()
+
+        synchronized(engineLock) {
+            if (closing || tts != null) {
+                loaded?.release()
+            } else {
+                tts = loaded
+                if (loaded != null) Log.i(TAG, "piper: loaded ${model.name} at ${loaded.sampleRate()} Hz")
+            }
         }
         tts != null
     }
@@ -90,18 +106,23 @@ class PiperEngine {
      * on screen, and a missing voice should degrade the experience rather than end it.
      */
     suspend fun speak(text: String): Boolean = withContext(Dispatchers.Default) {
-        val engine = tts ?: return@withContext false
         if (text.isBlank()) return@withContext false
 
-        val audio = runCatching { engine.generate(text, SPEAKER, SPEED) }.getOrElse {
-            Log.e(TAG, "piper: synthesis failed", it)
-            return@withContext false
+        // Synthesis under the lock, so release() cannot free the engine mid-sentence.
+        // Playback is plain AudioTrack and needs no such protection.
+        val audio = synchronized(engineLock) {
+            val engine = tts
+            if (engine == null || closing) return@withContext false
+            runCatching { engine.generate(text, SPEAKER, SPEED) }.getOrElse {
+                Log.e(TAG, "piper: synthesis failed", it)
+                return@withContext false
+            }
         }
         play(audio.samples, audio.sampleRate)
     }
 
     private fun play(samples: FloatArray, sampleRate: Int): Boolean {
-        if (samples.isEmpty()) return false
+        if (samples.isEmpty() || closing) return false
         stop()
 
         val minimum = AudioTrack.getMinBufferSize(
@@ -139,10 +160,13 @@ class PiperEngine {
         player.play()
 
         // MODE_STATIC plays from a buffer already written, so waiting means watching the
-        // playback head rather than waiting on the write to drain.
+        // playback head rather than waiting on the write to drain. A track released from
+        // another thread by stop() throws here, which simply means playback is over.
         val total = samples.size
-        while (player.playState == AudioTrack.PLAYSTATE_PLAYING &&
-            player.playbackHeadPosition < total
+        while (
+            runCatching {
+                player.playState == AudioTrack.PLAYSTATE_PLAYING && player.playbackHeadPosition < total
+            }.getOrDefault(false)
         ) {
             Thread.sleep(POLL_MILLIS)
         }
@@ -162,10 +186,17 @@ class PiperEngine {
         track = null
     }
 
+    /**
+     * Frees the voice. Waits for a synthesis in flight rather than pulling the engine out
+     * from under it; that wait is one short sentence at most.
+     */
     fun release() {
+        closing = true
         stop()
-        tts?.runCatching { release() }
-        tts = null
+        synchronized(engineLock) {
+            tts?.runCatching { release() }
+            tts = null
+        }
     }
 
     private companion object {

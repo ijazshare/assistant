@@ -168,6 +168,12 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
                 onClick = { context.startActivity(Intent(context, ContextActivity::class.java)) },
             )
             Door(
+                label = "HISTORY",
+                value = "LOG",
+                complete = true,
+                onClick = { context.startActivity(Intent(context, HistoryActivity::class.java)) },
+            )
+            Door(
                 label = "MODELS",
                 value = "${models.first} / ${models.second}",
                 complete = models.first == models.second,

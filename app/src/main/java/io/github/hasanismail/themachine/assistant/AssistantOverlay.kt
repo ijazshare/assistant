@@ -160,7 +160,11 @@ private fun SessionBody(state: SessionState) {
         }
 
         is SessionState.Done -> {
-            Text(text = state.transcript, style = MachineReadout, color = MachineColors.Dim)
+            Text(
+                text = if (state.fromCache) "${state.transcript}  ·  INSTANT" else state.transcript,
+                style = MachineReadout,
+                color = if (state.fromCache) MachineColors.Relevant else MachineColors.Dim,
+            )
             Text(
                 text = state.result.spoken,
                 style = MachineStatus,

@@ -158,6 +158,13 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.HistoryActivity"
+            android:exported="false"
+            android:label="History"
+            android:parentActivityName=".ui.MainActivity"
+            android:theme="@style/Theme.TheMachine" />
+
+        <activity
             android:name=".ui.ContextActivity"
             android:exported="false"
             android:label="Context"

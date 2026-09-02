@@ -68,11 +68,17 @@ class WhisperEngine(private val context: Context) {
         }
         val audioMillis = samples.size * MILLIS_PER_SECOND / SAMPLE_RATE
         val startedAt = System.nanoTime()
-        val text = WhisperNative.nativeTranscribe(current, samples, threadCount())
+        val text = synchronized(this@WhisperEngine) {
+            if (handle == 0L) "" else WhisperNative.nativeTranscribe(handle, samples, threadCount())
+        }
         val elapsed = (System.nanoTime() - startedAt) / NANOS_PER_MILLI
         Transcription(text.trim(), elapsed, audioMillis.toLong())
     }
 
+    /**
+     * Transcription runs under this monitor and re-reads the handle inside it, so unload
+     * waits for a pass in flight rather than freeing the context under it.
+     */
     @Synchronized
     fun unload() {
         if (handle != 0L) {
