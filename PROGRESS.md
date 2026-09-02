@@ -3,7 +3,7 @@
 Running record of the build. Written so a future session can resume cold: what is done, what
 was decided and why, and which facts were verified against a live source rather than assumed.
 
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-02
 
 ## Phase status
 
@@ -11,13 +11,24 @@ was decided and why, and which facts were verified against a live source rather 
 |---|---|---|
 | P0 | Repo + toolchain | **Complete** — gate green locally and in CI; APK verified on device |
 | P1 | Native bridge (whisper.cpp + llama.cpp submodules, JNI) | **Complete** — both engines build, link and report on device |
-| P2 | Model manager (registry, resumable verified downloads) | Not started |
-| P3 | STT (AudioRecord, endpointing, Whisper) | Not started |
-| P4 | LLM parsing (GBNF grammar, TimeResolver, intent mapping) | Not started |
-| P5 | TTS (sherpa-onnx + Piper) | Not started |
-| P6 | Executors + task store | Not started |
-| P7 | Assistant session + onboarding | Not started |
-| P8 | Settings + release | Not started |
+| P2 | Model manager (registry, resumable verified downloads) | **Complete** — three assets download, verify and load on device |
+| P3 | STT (AudioRecord, endpointing, Whisper) | **Complete** — plus live partial transcripts while speaking |
+| P4 | LLM parsing (GBNF grammar, TimeResolver, tool calls) | **Complete** — 14 tools, grammar-constrained, verified on device |
+| P5 | TTS (sherpa-onnx + Piper) | **Complete** — replies and problems are spoken |
+| P6 | Executors + task store | **Mostly done** — all 14 tools dispatch; Room task store still to come |
+| P7 | Assistant session + onboarding | **Mostly done** — side button opens a full session end to end |
+| P8 | Settings + release | Partly — settings screens exist; signed release flow untested |
+
+### Measured on the reference device (Galaxy Z Flip8, SM8850, thermally throttled)
+
+| | Before | Now |
+|---|---|---|
+| Reply, first command of a session | 14097 ms | **923 ms** |
+| Reply, later commands | ~13000 ms | **600–1900 ms** |
+| Prompt prefill | ~13000 ms | ~450 ms reused, ~0 from disk cache |
+
+27 instrumented tests pass, including three that run synthesised speech through the
+whole pipeline and one that says a sentence out loud.
 
 ---
 
@@ -349,3 +360,57 @@ Both under `https://github.com/k2-fsa/sherpa-onnx`. URLs re-verified HTTP 200 wi
   the package name from the major version. AGP maps `compileSdk = 37` onto the highest installed
   `37.x`.
 - No `compileSdkMinor` in the catalog. It was there and unread, which is worse than absent.
+
+
+---
+
+## P3–P5 — the working assistant (2026-09-02)
+
+### What exists
+
+- 14 tools in `tools/MachineTools.kt`, dispatched through a table in `ToolExecutor`.
+  Output is constrained by GBNF generated in `ToolGrammar`, so a reply is a valid call
+  by construction. Integer arguments carry ranges compiled into the grammar.
+- `TimeResolver` does every calculation the model is not asked to do. Heavily unit tested.
+- `PromptDialect` owns prompt, grammar and parser together, because a fine-tuned model
+  only behaves when all three match. Two implementations: JSON (Gemma) and FunctionGemma.
+- `tts/PiperEngine` speaks replies. `models/ModelArchive` unpacks the voice's tarball.
+- Live partial transcripts: the recorder emits a snapshot every 500 ms, the session
+  transcribes it if the transcriber is free and drops it otherwise.
+
+### Verified on device
+
+- Side button opens a session; whisper, llama and piper all load (0.6 s / 2.2 s / 2.9 s).
+- Partials converge: "Set a title." then "Set a timer for 10" then the full sentence.
+- Every user-visible failure is logged, so a session that ended badly is distinguishable
+  over adb from one that never ended.
+
+### Things that cost a day and should not cost another one
+
+- **`llama_batch_get_one` leaves `logits` null**, which llama reads as "logits for every
+  token". With Gemma's 262144-wide vocabulary that reserved ~420 MB and ran the output
+  projection once per prompt token. Mark only the last token.
+- **Prefix reuse needs `swa_full`.** Gemma 3's sliding-window layers otherwise keep only
+  the last 1024 tokens, and the reused prefix reads keys that are gone. The symptom is
+  not a crash: replies stay syntactically valid and their contents collapse to a constant.
+- **`n_batch` must cover the longest prompt.** llama asserts rather than splitting, and
+  `ggml_abort` inside `llama_context::decode` is not catchable.
+- **`n_ubatch` costs about a megabyte of compute buffer per step** at this vocabulary
+  size. 512 asked for 518 MiB and the process was killed reserving it.
+- **A ~620 token prompt makes Gemma 3 1B stop discriminating** and start reproducing the
+  first worked example whatever it was asked. Keep it under ~450; `MachineToolsTest`
+  guards this.
+- **Do not ask a 1B model to do arithmetic.** It answered "ten minute timer" with 180,
+  copied from the nearest example.
+- **GBNF rule names may not contain `_`**, and llama.cpp reports a bad grammar with no
+  rule and no offset. `GrammarBisectTest` bisects; `nativeGrammarAccepts` answers the
+  different and more useful question of whether a grammar *admits* a given string.
+- **Android's ICU regex rejects a bare `}`** that the JVM tolerates.
+- **Git Bash rewrites `/sdcard/...` into a Windows path.** `adb push` reports success and
+  the file lands nowhere useful. Set `MSYS_NO_PATHCONV=1` and give the source as `C:/...`.
+
+### Not done
+
+- Room task store (reminders currently live in `ReminderStore`).
+- Wake word "hey root" — deferred by Hasan.
+- Signed release build has never been exercised.

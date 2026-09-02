@@ -262,6 +262,12 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             result = result,
             timing = Timing(sttMillis, completion.millis),
         )
+        Log.i(
+            TAG,
+            "session done: ${call.tool} -> ${result.spoken} " +
+                "(stt $sttMillis ms, llm ${completion.millis} ms)",
+        )
+
         // Written while the user is listening to the answer, not when the session ends:
         // by then the model is being freed, and a save racing an unload would lose to it.
         // Once per session is enough — the cached prefix is the same every time.
@@ -290,6 +296,10 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     }
 
     private fun fail(message: String, actionable: String? = null) {
+        // Logged as well as shown. Every user-visible failure used to leave no trace at
+        // all, which made a session that ended badly indistinguishable from one that
+        // never ended, and both of them invisible to a test running over adb.
+        Log.i(TAG, "session problem: $message${actionable?.let { " ($it)" } ?: ""}")
         _state.value = SessionState.Problem(message, actionable)
         MachineSounds.play(MachineSounds.Cue.REJECT)
         // Spoken too: the overlay sits over whatever the user was doing, and a problem
