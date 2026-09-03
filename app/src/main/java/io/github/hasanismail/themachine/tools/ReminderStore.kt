@@ -14,10 +14,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
+import androidx.core.net.toUri
 import io.github.hasanismail.themachine.context.MachineFiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -161,7 +161,7 @@ class ReminderStore(private val context: Context) {
         id.hashCode(),
         Intent(context, ReminderReceiver::class.java).apply {
             action = ReminderReceiver.ACTION_FIRE
-            data = Uri.parse("themachine://task/$id")
+            data = "themachine://task/$id".toUri()
             putExtra(ReminderReceiver.EXTRA_ID, id)
             putExtra(ReminderReceiver.EXTRA_TASK, task)
         },

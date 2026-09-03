@@ -15,11 +15,11 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
+import androidx.core.net.toUri
 import io.github.hasanismail.themachine.R
 import io.github.hasanismail.themachine.context.MachineFiles
 import io.github.hasanismail.themachine.ui.MainActivity
@@ -113,7 +113,7 @@ class ReminderReceiver : BroadcastReceiver() {
             id.hashCode() * SALT_STRIDE + salt,
             Intent(context, ReminderReceiver::class.java).apply {
                 this.action = action
-                data = Uri.parse("themachine://task/$id/$salt")
+                data = "themachine://task/$id/$salt".toUri()
                 putExtra(EXTRA_ID, id)
                 putExtra(EXTRA_TASK, task)
             },

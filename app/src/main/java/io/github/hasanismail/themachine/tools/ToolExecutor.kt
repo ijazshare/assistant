@@ -14,6 +14,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
 import android.util.Log
+import androidx.core.net.toUri
 import io.github.hasanismail.themachine.ocr.ScreenReader
 import io.github.hasanismail.themachine.permissions.PermissionInspector
 import io.github.hasanismail.themachine.services.MachineAccessibilityService
@@ -139,7 +140,7 @@ class ToolExecutor(
 
         // Composes rather than sends. Silently sending a message a speech recogniser
         // produced is the one action here with no undo, so the user sees it first.
-        val intent = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:$number")).apply {
+        val intent = Intent(Intent.ACTION_SENDTO, "smsto:$number".toUri()).apply {
             putExtra("sms_body", body)
         }
         return launch(
@@ -153,7 +154,7 @@ class ToolExecutor(
         val recipient = call.string("recipient") ?: return ToolResult.failed("Who should I call?")
         val number = contacts.resolveNumber(recipient)
             ?: return ToolResult.failed("I could not find $recipient.")
-        val intent = Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$number"))
+        val intent = Intent(Intent.ACTION_DIAL, "tel:$number".toUri())
         return launch(intent, "Calling $recipient.", "No dialler is available.")
     }
 
