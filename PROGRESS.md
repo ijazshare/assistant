@@ -441,6 +441,29 @@ whitespace-separated in every field including the display name, so `@HEY ROOT` m
 parser look for a token called ROOT and refuse to start; and the phrase must be written as
 word-pieces (`▁HE Y ▁RO O T`) because the shipped library has no tokeniser in it.
 
+### The prompt cache was fine; the test suite was eating it
+
+Worth writing down because the investigation went the wrong way for an hour. The symptom
+was real: no `.prompt-cache` file beside the small model, and a log line reading
+`prompt is 501 tokens, 0 reused` with a four-second prefill. The conclusion drawn from it
+was wrong. The file was being deleted by the *engine* prompt-cache test, which writes a
+deliberately corrupt cache and removes it in a `finally` — so every full `deviceTest` run
+ended with no cache on disk, and the next command after a test run paid a cold prefill.
+
+The suspected cause was the write being launched on the overlay's own scope, which is
+cancelled when the panel closes. That scope really is cancelled, and the write really is
+launched on it, but the write survives anyway: it is a single native call, and cancelling
+the coroutine wrapped around it does not interrupt it once it has begun. Reinstating the
+supposed bug and measuring showed the cache landing exactly as before.
+
+Measured afterwards, on a cold process with a cache already on disk: 499 tokens restored,
+466 of 497 reused, prefill 353 ms, whole command 803 ms. The cross-process cache has been
+working the entire time.
+
+What did change is a `join` before the model is freed. The save walks the very cells
+`nativeFree` releases, and that race is real even though it is not the one being chased —
+state saving has already caused one use-after-free crash in this project.
+
 ### The give-up clock and the lead-in
 
 The endpointer ignores a lead-in while the overlay announces itself, because the greeting

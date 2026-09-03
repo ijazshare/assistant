@@ -129,6 +129,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      */
     private val teardown = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** The prompt-cache write, kept so the model is not freed out from under it. */
+    private var cacheWrite: Job? = null
+
     /**
      * Guards the transcriber, which is one engine and cannot run twice at once.
      *
@@ -468,12 +471,15 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             fromCache = resolution == Resolution.CACHE,
         )
 
-        // Written while the user is listening to the answer, not when the session ends:
-        // by then the model is being freed, and a save racing an unload would lose to it.
-        // Once per session is enough — the cached prefix is the same every time.
+        // Started while the user is listening to the answer, and on the scope that
+        // outlives the session rather than the overlay's own. The write itself survives
+        // either way — it is a native call, and cancelling the coroutine around it does
+        // not stop it once it has begun — but on the overlay's scope it is only ever one
+        // scheduling delay away from not starting at all.
+        // Once per session is enough: the cached prefix is the same every time.
         if (!cacheWritten && llama.isLoaded) {
             cacheWritten = true
-            scope.launch {
+            cacheWrite = teardown.launch {
                 llama.saveState()
                 router.saveState()
             }
@@ -545,6 +551,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         piper.release()
         router.release()
         teardown.launch {
+            // Waited for, not raced: freeing the weights mid-write leaves a half-written
+            // cache, which is the one outcome worse than none at all.
             executor.release()
             whisper.unload()
             llama.unload()
