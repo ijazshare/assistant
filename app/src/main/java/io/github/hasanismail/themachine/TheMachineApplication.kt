@@ -12,6 +12,7 @@ package io.github.hasanismail.themachine
 import android.app.Application
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
+import io.github.hasanismail.themachine.diagnostics.CrashLog
 import io.github.hasanismail.themachine.tools.ReminderStore
 
 /**
@@ -27,6 +28,9 @@ class TheMachineApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // First, so it is armed before anything else here can throw. Writes to a file on
+        // this device and uploads nothing — see CrashLog for why that distinction matters.
+        CrashLog.install(this)
         Thread {
             runCatching { ReminderStore(this).rescheduleAll() }
                 .onFailure { Log.e("TheMachine", "reminder reschedule failed", it) }

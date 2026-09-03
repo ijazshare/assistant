@@ -464,6 +464,38 @@ What did change is a `join` before the model is freed. The save walks the very c
 `nativeFree` releases, and that race is real even though it is not the one being chased —
 state saving has already caused one use-after-free crash in this project.
 
+### A build that cannot say why it died
+
+v0.1.0 was tagged, signed, published, and crash-looped on Hasan's S26 Ultra — the phone
+CLAUDE.md names as the primary target and the one phone that is not reachable over adb. The
+Z Flip everything is developed against ran the same signed APK fine.
+
+Three hypotheses were checked and all three were wrong, which is the useful part:
+
+- **16 KB memory pages.** New devices ship with them and unaligned native libraries fail to
+  load. All twenty-five `.so` files in the published APK are aligned to `0x4000`.
+- **WorkManager's foreground service type.** A fresh install downloads models immediately,
+  and `SystemForegroundService` is declared by WorkManager with no `foregroundServiceType`,
+  which throws when a worker asks for `dataSync`. There are crash records for exactly this
+  on the test phone — but they are historical, and `aapt2 dump xmltree` on the shipped APK
+  shows `foregroundServiceType=0x1` present. Already fixed, already shipped.
+- **The release variant itself.** R8, resource shrinking, no `.debug` suffix, no models. The
+  published APK was downloaded, installed, cleared to a fresh state and launched on the Flip.
+  It runs.
+
+So the cause is still unknown, and that is the point: there was no way to find out. logcat
+needs a cable and a laptop, and the app kept no record of its own death. A crash that only
+happens on the device you cannot attach to is undiagnosable, and no amount of reasoning
+about it is worth one stack trace.
+
+`CrashLog` now installs an uncaught-exception handler that writes the trace, device, Android
+version and ABI to `files/crash/`, keeps the last ten, and shows them at the top of the
+History screen as selectable text. Nothing is uploaded and there is no SDK — the privacy
+invariants are about telemetry leaving the device, not about the owner being able to read
+their own crash. Native SIGSEGVs still need a tombstone; this catches the Kotlin side.
+
+Verified by crashing the app on purpose with `am crash` and reading the file back.
+
 ### The wrong answers were structural, not the model being stupid
 
 Read from Hasan's own query log rather than reasoned about. Three faults, and none of them

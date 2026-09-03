@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.hasanismail.themachine.assistant.CommandCache
+import io.github.hasanismail.themachine.diagnostics.CrashLog
 import io.github.hasanismail.themachine.history.QueryLog
 import io.github.hasanismail.themachine.history.QueryRecord
 import io.github.hasanismail.themachine.history.QuerySource
@@ -60,6 +62,9 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
     }
     var records by remember { mutableStateOf(log.recent()) }
     var learned by remember { mutableStateOf(cache.all()) }
+    // Shown here rather than in a settings corner, because the moment you want a crash
+    // report is the moment you are already looking at what the assistant did last.
+    var crashes by remember { mutableStateOf(CrashLog.recent(context)) }
 
     // One scrolling list, header included: as a Column above a LazyColumn the header sat
     // outside the scroll and the first record was clipped under it.
@@ -96,7 +101,31 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
                             learned = cache.all()
                         },
                     )
+                    if (crashes.isNotEmpty()) {
+                        Text(
+                            text = "CLEAR CRASHES",
+                            style = MachineLabel,
+                            color = MachineColors.Relevant,
+                            modifier = Modifier.clickable {
+                                CrashLog.clear(context)
+                                crashes = emptyList()
+                            },
+                        )
+                    }
                 }
+            }
+        }
+
+        items(crashes) { report ->
+            // Selectable so it can be copied into a bug report. A crash the owner cannot
+            // read is a crash only the developer's own phone can ever explain.
+            SelectionContainer {
+                Text(
+                    text = report,
+                    style = MachineReadout,
+                    color = MachineColors.Admin,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 
