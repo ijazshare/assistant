@@ -9,6 +9,8 @@
  */
 package io.github.hasanismail.themachine.audio
 
+import kotlin.math.min
+
 /** What the endpointer concluded from one frame. */
 sealed interface FrameVerdict {
     /** Still calibrating or still listening. */
@@ -63,19 +65,34 @@ class Endpointer(
         // while the user is still being greeted.
         if (framesSeen <= leadInFrames) return FrameVerdict.Continue
 
-        // The opening frames establish what this room sounds like, before anyone speaks.
+        // The opening frames establish what this room sounds like, before anyone speaks —
+        // except that nothing stops the user speaking during them, and push-to-talk
+        // invites exactly that. Averaged, a voice in this window becomes "the room", the
+        // threshold lands three times above anything a person produces, and every frame
+        // afterwards is judged silence: five seconds later the assistant reports that it
+        // did not hear anything and throws away a perfectly good recording. The quietest
+        // frame is taken instead of the average, because the quietest frame of someone
+        // talking is still much closer to the room than their loudest.
         if (framesSeen <= leadInFrames + CALIBRATION_FRAMES) {
-            noiseFloor = if (framesSeen == leadInFrames + 1) {
-                rms
-            } else {
-                noiseFloor * (1 - CALIBRATION_ALPHA) + rms * CALIBRATION_ALPHA
-            }
+            noiseFloor = if (framesSeen == leadInFrames + 1) rms else min(noiseFloor, rms)
             return FrameVerdict.Continue
         }
 
         if (framesSeen >= maxFrames) return FrameVerdict.Stop(StopReason.MAX_DURATION)
 
-        val threshold = (noiseFloor * SPEECH_MULTIPLIER).coerceAtLeast(MIN_SPEECH_RMS)
+        // The room can still prove quieter than the calibration window suggested, because
+        // that window caught a cough, a door, or the first syllable of the command. The
+        // floor is allowed to fall but never to rise, so a poisoned calibration corrects
+        // itself at the first gap between words instead of lasting the whole session.
+        if (!speechStarted && rms < noiseFloor) noiseFloor = rms
+
+        // Capped as well as floored. A room that measures louder than MAX_NOISE_FLOOR is
+        // not a room, it is someone speaking directly into the microphone, and without a
+        // ceiling that reading makes every human voice undetectable for the rest of the
+        // session. Being slightly eager in a genuinely loud place is the better failure:
+        // it records and transcribes something, rather than insisting nothing was said.
+        val room = min(noiseFloor, MAX_NOISE_FLOOR)
+        val threshold = (room * SPEECH_MULTIPLIER).coerceAtLeast(MIN_SPEECH_RMS)
         val isSpeech = rms > threshold
 
         return when {
@@ -125,22 +142,33 @@ class Endpointer(
         const val DEFAULT_NO_SPEECH_MILLIS = 5_000L
 
         /**
-         * Long enough to cover the overlay's greeting, which is four words at 340 ms
-         * apiece after a lead-in of its own.
+         * Long enough to skip the microphone's own opening transient, and no longer.
          *
-         * Zero by default: a lead-in belongs to whoever is making noise, not to
-         * endpointing, and a test feeding frames directly should not have to know about
-         * the greeting.
+         * This was 1700 ms, sized to cover a greeting spoken out of the speaker. Nothing
+         * is spoken before listening — the greeting is drawn, not said, and its per-word
+         * ticks are already silenced while the microphone is open — so all that length
+         * bought was 1.7 seconds in which the user's speech could not be detected at all.
+         * A command shorter than the lead-in was inaudible by construction.
+         *
+         * Zero by default: settling belongs to whoever opens the microphone, not to
+         * endpointing, and a test feeding frames directly should not have to know about it.
          */
-        const val GREETING_LEAD_IN_MILLIS = 1_700L
+        const val MIC_SETTLE_MILLIS = 300L
 
         internal const val CALIBRATION_FRAMES = 10
-        private const val CALIBRATION_ALPHA = 0.3f
 
         /** Speech has to be meaningfully above the room, not merely above it. */
         private const val SPEECH_MULTIPLIER = 3.0f
 
         /** A floor for silent rooms, where noiseFloor * multiplier is still near zero. */
         private const val MIN_SPEECH_RMS = 0.012f
+
+        /**
+         * The loudest a measurement is allowed to be believed as room tone.
+         *
+         * Ordinary speech sits far above this; a calibration window that reads higher has
+         * measured a voice, not a room.
+         */
+        private const val MAX_NOISE_FLOOR = 0.02f
     }
 }

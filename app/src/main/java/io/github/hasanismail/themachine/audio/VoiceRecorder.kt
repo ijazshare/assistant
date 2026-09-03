@@ -106,6 +106,9 @@ class VoiceRecorder {
 
         try {
             record.startRecording()
+            // The one moment that decides whether the user is heard. Everything before it
+            // is a window in which their words do not exist.
+            Log.i(TAG, "microphone open")
             pump(record, endpointer)
         } catch (e: IllegalStateException) {
             Log.w(TAG, "capture failed", e)

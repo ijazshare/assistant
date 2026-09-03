@@ -36,6 +36,52 @@ class EndpointerTest {
         assertThat(endpointer.accept(0.4f)).isEqualTo(FrameVerdict.SpeechBegan)
     }
 
+    @Test
+    fun `hears someone who starts talking the instant the overlay opens`() {
+        // The reported bug, and the reason it looked like the assistant went deaf after
+        // working once. Push-to-talk invites you to speak immediately, so the frames that
+        // measure "the room" are full of the user's voice. Averaged, they set a noise
+        // floor at speaking volume, the threshold lands three times higher than any human
+        // gets, and every later frame is judged silence. Five seconds later it announces
+        // that it did not hear anything, having discarded a perfectly good recording.
+        val endpointer = Endpointer(leadInMillis = Endpointer.MIC_SETTLE_MILLIS)
+        val leadIn = (Endpointer.MIC_SETTLE_MILLIS / Endpointer.DEFAULT_FRAME_MILLIS).toInt()
+
+        // Talking from the very first frame, straight through the lead-in and the
+        // calibration window.
+        repeat(leadIn + Endpointer.CALIBRATION_FRAMES) { endpointer.accept(speech) }
+
+        // Still talking. This must register.
+        val verdict = feed(endpointer, speech, frames = 20)
+        assertThat(verdict).isNotEqualTo(FrameVerdict.Stop(StopReason.NO_SPEECH))
+        assertThat(endpointer.speechStarted).isTrue()
+    }
+
+    @Test
+    fun `does not give up on someone who talked through calibration`() {
+        // The same fault seen from the other end: the whole utterance is spoken, then the
+        // room goes quiet, and the endpointer should close on the trailing silence rather
+        // than report that nothing was ever said.
+        val endpointer = Endpointer(leadInMillis = Endpointer.MIC_SETTLE_MILLIS)
+        val leadIn = (Endpointer.MIC_SETTLE_MILLIS / Endpointer.DEFAULT_FRAME_MILLIS).toInt()
+        repeat(leadIn) { endpointer.accept(speech) }
+
+        feed(endpointer, speech, frames = 60)
+        val verdict = feed(endpointer, quiet, frames = 60)
+        assertThat(verdict).isEqualTo(FrameVerdict.Stop(StopReason.ENDPOINT))
+    }
+
+    @Test
+    fun `catches a command shorter than the settling window`() {
+        // "Timer ten minutes" is over in about a second. With a 1700 ms lead-in the whole
+        // utterance fell inside the window where speech cannot be detected, so it was
+        // recorded, never noticed, and thrown away as silence.
+        val endpointer = Endpointer(leadInMillis = Endpointer.MIC_SETTLE_MILLIS)
+        val spokenFrames = (1_000 / Endpointer.DEFAULT_FRAME_MILLIS).toInt()
+        feed(endpointer, speech, frames = spokenFrames)
+        assertThat(endpointer.speechStarted).isTrue()
+    }
+
     private val quiet = 0.002f
     private val speech = 0.20f
 

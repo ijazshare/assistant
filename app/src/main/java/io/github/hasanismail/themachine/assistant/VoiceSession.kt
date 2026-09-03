@@ -114,6 +114,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     /** The capture coroutine, kept so a typed command can stop the microphone. */
     private var listening: Job? = null
 
+    /** Everything after the microphone closes: transcribe, parse, act, speak. */
+    private var processing: Job? = null
+
     /**
      * Serialises loading the language model. It is started in the background as soon as
      * the session opens and again, if still needed, when a command arrives; without
@@ -161,6 +164,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             // to open a second recorder while the first still held the microphone, and
             // the device refuses the second one.
             previous?.cancelAndJoin()
+            // A new command replaces the old one, including a reply still being spoken.
+            processing?.cancel()
             _state.value = SessionState.Preparing
             if (!hasMicrophonePermission()) {
                 fail(
@@ -199,8 +204,12 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      */
     fun stopListening() {
         MachineSounds.capturing = false
+        // Cancelled but deliberately still referenced. Nulling it here threw away the only
+        // handle on a recorder that had not finished releasing the microphone, so the next
+        // summon opened a second one on top of it and the audio system made it queue —
+        // two and a half seconds during which the overlay is up, looks ready, and hears
+        // nothing at all. start() joins whatever is left here before opening its own.
         listening?.cancel()
-        listening = null
         val current = _state.value
         if (current is SessionState.Listening || current is SessionState.Preparing) {
             _state.value = SessionState.Idle
@@ -248,18 +257,29 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private suspend fun listen() {
         _state.value = SessionState.Listening(level = 0f, heardSpeech = false)
         MachineSounds.capturing = true
-        // The endpointer ignores the opening frames: the overlay is announcing itself
-        // out of the speaker, and this microphone can hear it.
-        val endpointer = Endpointer(leadInMillis = Endpointer.GREETING_LEAD_IN_MILLIS)
+        // The endpointer ignores the first few frames, which are the microphone opening
+        // rather than anything in the room.
+        val endpointer = Endpointer(leadInMillis = Endpointer.MIC_SETTLE_MILLIS)
+        var finished: CaptureEvent.Finished? = null
         recorder.capture(endpointer).collect { event ->
             when (event) {
                 is CaptureEvent.Level -> updateListening { it.copy(level = event.amplitude) }
                 CaptureEvent.SpeechStarted -> updateListening { it.copy(heardSpeech = true) }
                 is CaptureEvent.Snapshot -> transcribePartial(event.samples)
                 is CaptureEvent.Failed -> fail(event.reason)
-                is CaptureEvent.Finished -> handle(event)
+                is CaptureEvent.Finished -> finished = event
             }
         }
+
+        // Handled after the flow ends rather than inside it, and launched rather than
+        // awaited. Running the pipeline within the collector kept this job alive through
+        // transcription, the language model and the spoken reply, so the next summon —
+        // which has to join this job before it may open the microphone — waited for all
+        // of it. Nine seconds of an overlay that is up, looks ready, and is not
+        // listening. This job's one remaining duty is the microphone.
+        val done = finished ?: return
+        processing?.cancel()
+        processing = scope.launch { handle(done) }
     }
 
     /**
@@ -551,8 +571,10 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         piper.release()
         router.release()
         teardown.launch {
-            // Waited for, not raced: freeing the weights mid-write leaves a half-written
-            // cache, which is the one outcome worse than none at all.
+            // Waited for, not raced: the save walks the very cells nativeFree releases,
+            // and a use-after-free here is the same SIGSEGV that state saving already
+            // cost once.
+            cacheWrite?.join()
             executor.release()
             whisper.unload()
             llama.unload()

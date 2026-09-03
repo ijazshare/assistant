@@ -464,6 +464,43 @@ What did change is a `join` before the model is freed. The save walks the very c
 `nativeFree` releases, and that race is real even though it is not the one being chased —
 state saving has already caused one use-after-free crash in this project.
 
+### The deafness had three causes, and the battery was not one of them
+
+Tested first, because it was the proposed fix. Forced the phone into verified deep doze
+(`dumpsys deviceidle get deep` reports IDLE — note `get state` is not an option on this
+build and silently reports nothing, which made the first run of the experiment worthless),
+held it there two minutes, and summoned. With the exemption and without it the process
+survived and the deaf window was 77 ms versus 103 ms: the same number twice. Holding the
+assistant role already keeps this process bound, so the exemption had nothing left to buy.
+It was not added as a required permission.
+
+What was actually wrong, found by measuring the window between the overlay appearing and
+`AudioRecord.startRecording()` returning:
+
+1. **The noise floor was calibrated on the user's voice.** The ten frames after the lead-in
+   set "the room", and push-to-talk invites speaking immediately. Averaged, a voice in that
+   window becomes the floor, the threshold lands three times above anything a person
+   produces, and every later frame is silence. Five seconds on it announces that it did not
+   hear anything and discards a perfectly good recording. Now the quietest frame is taken
+   rather than the average, the floor may fall but never rise, and a hard ceiling means a
+   measurement above room tone can never be believed as room tone.
+2. **The settling window was 1700 ms.** Sized for a greeting spoken aloud, except nothing is
+   spoken before listening — the greeting is drawn, and its per-word ticks are already muted
+   while the microphone is open. All it bought was 1.7 seconds in which speech could not be
+   detected, which made any command shorter than the window inaudible by construction. Now
+   300 ms, which is the microphone's own opening transient and nothing more.
+3. **The microphone was opened on top of one still closing.** `stopListening()` cancelled the
+   capture job and then discarded the reference, so the next summon had nothing to wait for
+   and asked the audio system for a second recorder while the first was still releasing:
+   two and a half seconds of an overlay that is up, looks ready and hears nothing. Keeping
+   the reference exposed the deeper fault — the capture job also ran transcription, the
+   language model and the spoken reply inside the flow collector, so joining it waited for
+   the whole previous command. Nine seconds, once. Capture and processing are now separate
+   jobs; the capture job's only duty is the microphone.
+
+Measured across cold start, repeated summons, rapid succession and after screen-off idle:
+41-373 ms, median about 90. Before: anywhere from 45 ms to 9694 ms.
+
 ### The give-up clock and the lead-in
 
 The endpointer ignores a lead-in while the overlay announces itself, because the greeting
