@@ -46,6 +46,8 @@ class ToolExecutor(
     /** Frees the OCR engine, if one was ever loaded. */
     fun release() = screenReader.release()
 
+    private val screenshots = ScreenshotStore(context)
+
     private val handlers: Map<String, suspend (ToolCall) -> ToolResult> = mapOf(
         MachineTools.SET_ALARM to { call -> setAlarm(call) },
         MachineTools.SET_TIMER to { call -> setTimer(call) },
@@ -55,6 +57,9 @@ class ToolExecutor(
         MachineTools.CALL_CONTACT to { call -> callContact(call) },
         MachineTools.OPEN_APP to { call -> openApp(call) },
         MachineTools.READ_SCREEN to { _ -> readScreen() },
+        MachineTools.TAKE_SCREENSHOT to { _ ->
+            MachineAccessibilityService.connected()?.let { screenshots.save(it) } ?: accessibilityMissing()
+        },
         MachineTools.TAP_TEXT to { call -> tapText(call) },
         MachineTools.SCROLL to { call -> scroll(call) },
         MachineTools.NAVIGATE to { call -> navigate(call) },

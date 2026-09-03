@@ -114,6 +114,33 @@ class ToolCallOnDeviceTest {
     )
 
     @Test
+    fun savesAScreenshotRatherThanReadingTheScreen() {
+        // From the user's own query log: "Take a screenshot." resolved to read_screen and
+        // the assistant recited a Discord conversation at them. There was no screenshot
+        // tool to choose, so the grammar made the wrong answer the only reachable one.
+        val (tool, _) = parse("take a screenshot")
+        assertThat(tool).isEqualTo(MachineTools.TAKE_SCREENSHOT)
+    }
+
+    @Test
+    fun readsTheScreenWhenAskedToReadIt() {
+        // The other half of the pair. These two share the token "screen", so this is the
+        // check that the rest of the wording keeps them apart.
+        val (tool, _) = parse("what does this say")
+        assertThat(tool).isEqualTo(MachineTools.READ_SCREEN)
+    }
+
+    @Test
+    fun asksAboutTheScreenThroughTheRightTool() {
+        // Also from the log: "Read the screen and summarize it." spoke raw OCR. Only the
+        // tool is asserted here — whether the optional "question" argument gets filled is
+        // up to a 1B's mood, so the session decides that from the transcript instead
+        // (see ScreenQuestionTest). What the model must get right is the tool.
+        val (tool, _) = parse("read the screen and summarise it")
+        assertThat(tool).isEqualTo(MachineTools.READ_SCREEN)
+    }
+
+    @Test
     fun setsAnAlarmAtTheRightTime() {
         val utterance = "set an alarm for 7 am"
         val (tool, args) = parse(utterance)

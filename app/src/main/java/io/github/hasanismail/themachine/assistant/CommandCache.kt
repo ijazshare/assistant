@@ -63,7 +63,20 @@ class CommandCache internal constructor(private val file: File) {
     )
 
     @Serializable
-    private data class Stored(val entries: List<Entry> = emptyList())
+    private data class Stored(
+        val entries: List<Entry> = emptyList(),
+        /**
+         * Which tool vocabulary these entries were learned against.
+         *
+         * A learned phrase is only ever the best answer available at the time. "Take a
+         * screenshot" was resolved to read_screen because no screenshot tool existed, and
+         * once learned it would have gone on doing the wrong thing forever — the cache is
+         * consulted before the model is even loaded, so a new tool could never win the
+         * phrase back. When the tool list changes, everything learned under the old one
+         * is forgotten.
+         */
+        val vocabulary: Int = 0,
+    )
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -222,6 +235,10 @@ class CommandCache internal constructor(private val file: File) {
             // in shared storage, and an entry naming send_message would otherwise be run
             // instantly and silently on a phrase that never asked for it.
             .onSuccess { stored ->
+                if (stored.vocabulary != VOCABULARY) {
+                    Log.i(TAG, "cache: tool list changed, forgetting ${stored.entries.size} phrases")
+                    return@onSuccess
+                }
                 stored.entries.filter { it.tool in CACHEABLE }.forEach { entries[it.key] = it }
             }
             .onFailure { Log.w(TAG, "cache: unreadable, starting empty", it) }
@@ -231,7 +248,7 @@ class CommandCache internal constructor(private val file: File) {
         runCatching {
             file.parentFile?.mkdirs()
             val temp = File(file.parentFile, file.name + ".tmp")
-            temp.writeText(json.encodeToString(Stored(entries.values.toList())))
+            temp.writeText(json.encodeToString(Stored(entries.values.toList(), VOCABULARY)))
             if (!temp.renameTo(file)) {
                 file.delete()
                 temp.renameTo(file)
@@ -350,9 +367,21 @@ class CommandCache internal constructor(private val file: File) {
             MachineTools.CREATE_REMINDER,
             MachineTools.OPEN_APP,
             MachineTools.READ_SCREEN,
+            MachineTools.TAKE_SCREENSHOT,
             MachineTools.READ_NOTIFICATIONS,
             MachineTools.SCROLL,
             MachineTools.NAVIGATE,
         )
+
+        /**
+         * A fingerprint of the tools as the model sees them.
+         *
+         * Descriptions are included, not just names, because they are what a small model
+         * actually routes on — rewording one changes where a phrase should go just as
+         * surely as adding a tool does. Over-forgetting costs one model call the next
+         * time the phrase is used; under-forgetting leaves a wrong answer frozen in.
+         */
+        val VOCABULARY: Int =
+            MachineTools.all.joinToString("|") { "${it.name}:${it.description}" }.hashCode()
     }
 }

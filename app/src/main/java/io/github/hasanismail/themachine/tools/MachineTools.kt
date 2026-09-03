@@ -30,6 +30,7 @@ object MachineTools {
     const val CALL_CONTACT = "call_contact"
     const val OPEN_APP = "open_app"
     const val READ_SCREEN = "read_screen"
+    const val TAKE_SCREENSHOT = "take_screenshot"
     const val TAP_TEXT = "tap_text"
     const val SCROLL = "scroll"
     const val NAVIGATE = "navigate"
@@ -128,7 +129,32 @@ object MachineTools {
         ),
         Tool(
             name = READ_SCREEN,
-            description = "Read the screen aloud: what does this say, read this.",
+            // The two screen tools both contain the token "screen", so "screen" cannot be
+            // what tells them apart and the rest of the wording has to. What the user gets
+            // back is the distinction: speech now, or a file for later. The vocabularies
+            // are kept disjoint — speak/words/read/say appear only here, picture/gallery/
+            // screenshot/capture/save only in take_screenshot — so the word the user
+            // actually said lands in exactly one place. The closing negative follows
+            // navigate's "Never scrolling.", the other colliding pair in this list.
+            description = "Speak the words on screen, or answer a question about them: " +
+                "what does this say, read this to me, summarise this, what is this error. " +
+                "Never saves a picture.",
+            params = listOf(
+                ToolParam(
+                    "question",
+                    ParamType.STRING,
+                    "What was asked about the screen. Omit to read it out word for word.",
+                ),
+            ),
+            requires = ToolCapability.ACCESSIBILITY,
+        ),
+        Tool(
+            name = TAKE_SCREENSHOT,
+            description = "Save a picture of the screen in the gallery: " +
+                "take a screenshot, screenshot this, capture the screen.",
+            // Deliberately no parameters. A screenshot has no arguments, and every
+            // optional slot is one more place a small model can invent a value — which is
+            // exactly how a mumbled "50" became a three minute timer.
             requires = ToolCapability.ACCESSIBILITY,
         ),
         Tool(

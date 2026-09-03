@@ -98,7 +98,10 @@ class GrammarBisectTest {
             MachineTools.CREATE_REMINDER to
                 """{"tool":"create_reminder","arguments":{"task":"buy milk"}}""",
             MachineTools.OPEN_APP to """{"tool":"open_app","arguments":{"app":"Spotify"}}""",
-            MachineTools.READ_SCREEN to """{"tool":"read_screen"}""",
+            // Once a tool declares any parameter the grammar always emits ,"arguments":,
+            // so the bare form is deliberately no longer legal for read_screen.
+            MachineTools.READ_SCREEN to """{"tool":"read_screen","arguments":{}}""",
+            MachineTools.TAKE_SCREENSHOT to """{"tool":"take_screenshot"}""",
             MachineTools.SCROLL to """{"tool":"scroll","arguments":{"direction":"down"}}""",
             MachineTools.NAVIGATE to """{"tool":"navigate","arguments":{"target":"back"}}""",
             MachineTools.READ_NOTIFICATIONS to """{"tool":"read_notifications"}""",

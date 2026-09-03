@@ -464,6 +464,42 @@ What did change is a `join` before the model is freed. The save walks the very c
 `nativeFree` releases, and that race is real even though it is not the one being chased —
 state saving has already caused one use-after-free crash in this project.
 
+### The wrong answers were structural, not the model being stupid
+
+Read from Hasan's own query log rather than reasoned about. Three faults, and none of them
+was the model choosing badly from a fair set of options.
+
+"Take a screenshot" became `read_screen`, which recited a Discord conversation at him. There
+was no screenshot tool. The grammar emits one alternative per tool, so the sampler was
+physically incapable of producing anything else — the wrong answer was guaranteed before the
+model ran. There is now a `take_screenshot`, saving through MediaStore into DCIM/Screenshots
+so the file appears in the gallery; app-private external storage is not indexed and would
+have saved a picture nobody could find.
+
+"Read the screen and summarise it" spoke raw OCR because `read_screen` declared no
+parameters, so the model's entire legal output was `{"tool":"read_screen"}` and every word
+past "screen" was destroyed at the grammar boundary. It now carries an optional question and
+escalates to the 4B — but the *decision* to escalate is taken from the transcript, not from
+whether the 1B filled the argument, because on device it filled it about half the time. A 1B
+should decide the tool; it should not decide whether a feature works.
+
+The two tools collide on the token "screen", which is in both names, so "screen" cannot be
+what separates them. Their descriptions were written with disjoint vocabularies —
+speak/words/read only in one, picture/gallery/screenshot/save only in the other — and that
+alone separates them on device, with no worked example. Adding examples was tried first and
+made it worse: two extra lines pushed reminders into `set_alarm`, exactly the failure
+PromptBuilder already warns about.
+
+A learned phrase is only the best answer available at the time, and the cache is consulted
+before the model is even loaded — so "take a screenshot" would have gone on running
+read_screen forever, no matter what shipped. The cache now carries a fingerprint of the tool
+names *and* descriptions and forgets everything when they change.
+
+Not verified end to end: the saved screenshot. Reinstalling revokes the accessibility grant
+for a sideloaded app, and Android will not re-bind the service until "Allow restricted
+settings" is tapped on the phone, which adb cannot do. Tool routing is covered by tests on
+the device; the file write is not.
+
 ### The deafness had three causes, and the battery was not one of them
 
 Tested first, because it was the proposed fix. Forced the phone into verified deep doze

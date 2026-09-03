@@ -82,8 +82,56 @@ void initialise_backends(const char *lib_dir) {
     });
 }
 
+/**
+ * Length of the UTF-8 sequence starting at [first], or 0 if it does not start one.
+ */
+size_t utf8_sequence_length(unsigned char first) {
+    if (first < 0x80) return 1;
+    if ((first & 0xE0) == 0xC0) return 2;
+    if ((first & 0xF0) == 0xE0) return 3;
+    if ((first & 0xF8) == 0xF0) return 4;
+    return 0;
+}
+
+/**
+ * Copies [s], dropping any byte that is not part of a well-formed UTF-8 sequence.
+ *
+ * NewStringUTF does not validate, it aborts: handed a malformed sequence it kills the
+ * process with "JNI DETECTED ERROR IN APPLICATION". Whisper emits U+266A (a music note)
+ * for non-speech audio, and a transcription truncated mid-token hands over the first two
+ * bytes of it. That crashed the app during roughly one summon in ten, while the
+ * microphone was open — the overlay simply vanished mid-command.
+ */
+std::string valid_utf8(const std::string &s) {
+    std::string out;
+    out.reserve(s.size());
+    size_t i = 0;
+    while (i < s.size()) {
+        const auto first = static_cast<unsigned char>(s[i]);
+        const size_t width = utf8_sequence_length(first);
+        if (width == 0 || i + width > s.size()) {
+            i++;
+            continue;
+        }
+        bool wellFormed = true;
+        for (size_t k = 1; k < width; k++) {
+            if ((static_cast<unsigned char>(s[i + k]) & 0xC0) != 0x80) {
+                wellFormed = false;
+                break;
+            }
+        }
+        if (wellFormed) {
+            out.append(s, i, width);
+            i += width;
+        } else {
+            i++;
+        }
+    }
+    return out;
+}
+
 jstring to_jstring(JNIEnv *env, const std::string &s) {
-    return env->NewStringUTF(s.c_str());
+    return env->NewStringUTF(valid_utf8(s).c_str());
 }
 
 std::string scoped_utf8(JNIEnv *env, jstring s) {

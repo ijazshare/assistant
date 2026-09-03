@@ -55,6 +55,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /** Where the session is in the listen, understand, act pipeline. */
@@ -163,7 +164,17 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             // Joined, not merely cancelled: a second summon before the first gave up used
             // to open a second recorder while the first still held the microphone, and
             // the device refuses the second one.
-            previous?.cancelAndJoin()
+            //
+            // Bounded, though. An unbounded join is worse than the contention it avoids:
+            // if the previous capture is wedged in a native read that never returns, the
+            // wait never ends, and every summon after it opens an overlay that never
+            // listens and never says why. A stale recorder is the better failure, so
+            // after the grace period this proceeds regardless.
+            if (previous != null) {
+                Log.i(TAG, "summon: waiting for the previous capture")
+                val handedOver = withTimeoutOrNull(HANDOVER_MILLIS) { previous.cancelAndJoin() }
+                if (handedOver == null) Log.w(TAG, "summon: previous capture would not stop")
+            }
             // A new command replaces the old one, including a reply still being spoken.
             processing?.cancel()
             _state.value = SessionState.Preparing
@@ -311,18 +322,23 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     private suspend fun handle(event: CaptureEvent.Finished) {
         MachineSounds.capturing = false
-        if (event.reason == StopReason.NO_SPEECH || event.samples.isEmpty()) {
+        if (event.samples.isEmpty()) {
             fail("I did not hear anything.")
             return
         }
+        // A NO_SPEECH verdict is the energy gate's opinion, not a finding of fact, and it
+        // is wrong whenever the room was misjudged. Whisper is asked before the user is
+        // told they said nothing; if it also comes back empty, they really did.
+        val gaveUp = event.reason == StopReason.NO_SPEECH
         MachineSounds.play(MachineSounds.Cue.DISENGAGE, volume = 0.4f)
         _state.value = SessionState.Transcribing
 
         val heard = transcriber.withLock { whisper.transcribe(event.samples) }
         if (heard.text.isBlank()) {
-            fail("I heard something, but could not make out any words.")
+            fail(if (gaveUp) "I did not hear anything." else "I heard something, but could not make out any words.")
             return
         }
+        if (gaveUp) Log.i(TAG, "endpointer heard nothing, but whisper did")
         Log.i(TAG, "heard [${heard.text}] in ${heard.durationMillis} ms")
         _state.value = SessionState.Thinking(heard.text)
         act(heard.text, heard.durationMillis)
@@ -452,7 +468,28 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         llmMillis: Long,
         resolution: Resolution,
     ) {
-        val result = executor.execute(reconciled(transcript, call))
+        var result = executor.execute(reconciled(transcript, call))
+
+        // A question about the screen is answered, not recited. read_screen hands back the
+        // full text as `detail`, and without this step the assistant reads the raw
+        // accessibility dump out loud — which is exactly what "read the screen and
+        // summarise it" produced: a minute of somebody else's chat log, unsummarised.
+        // Done here rather than in act() so it covers the cached path too, and in the
+        // session rather than the executor, which runs on the main thread and must never
+        // be the thing that loads three gigabytes of weights.
+        val question = ScreenQuestion.of(transcript, call.arguments["question"])
+        if (call.tool == MachineTools.READ_SCREEN && question != null && result.success) {
+            val screen = result.detail.orEmpty().ifBlank { result.spoken }
+            llama.unload()
+            val answered = router.answerAbout(screen, question, settings.adminNameNow())
+            result = if (answered != null) {
+                result.copy(spoken = answered.text)
+            } else {
+                // The un-escalated result is still a real answer here, which is not true
+                // of any other escalation in the app, so it degrades rather than refuses.
+                result.copy(spoken = "I could not summarise that, so here is what it says. ${result.spoken}")
+            }
+        }
 
         // Learning and recording both touch the disk, and neither is worth a frame of
         // the reply. Only a call the model produced and that then succeeded is learned:
@@ -521,8 +558,14 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         llama.load(storage.target(asset))
     }
 
-    /** A failure that happened to a command, and so belongs in the history as well. */
-    private fun failCommand(transcript: String, message: String, actionable: String? = null) {
+    /** A failure that happened to a command, so the transcript is worth keeping. */
+    private fun failCommand(transcript: String, message: String, actionable: String? = null) =
+        fail(message, actionable, transcript)
+
+    private fun fail(message: String, actionable: String? = null, transcript: String = "") {
+        // Recorded, not just spoken. The history held eleven entries and zero failures
+        // over a period with more than a hundred failed summons, so the one log the user
+        // can actually see was the one place the trouble never showed up.
         history.append(
             QueryRecord(
                 atEpochMillis = System.currentTimeMillis(),
@@ -533,10 +576,6 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
                 success = false,
             ),
         )
-        fail(message, actionable)
-    }
-
-    private fun fail(message: String, actionable: String? = null) {
         // Logged as well as shown. Every user-visible failure used to leave no trace at
         // all, which made a session that ended badly indistinguishable from one that
         // never ended, and both of them invisible to a test running over adb.
@@ -584,5 +623,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     private companion object {
         const val TAG = "TheMachine"
+
+        /** How long a new summon waits for the previous recorder to let go. */
+        const val HANDOVER_MILLIS = 400L
     }
 }

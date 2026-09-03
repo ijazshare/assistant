@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlin.math.sqrt
 
 /** What the recorder is doing, for the overlay to draw. */
@@ -104,6 +105,16 @@ class VoiceRecorder {
             return@callbackFlow
         }
 
+        // Stopped from outside the loop, because inside it there is no opportunity.
+        // AudioRecord.read is an uninterruptible native call, so a cancelled collector
+        // does not end the pump — it waits for the current read, and if the stream has
+        // stalled it waits forever. The next summon then joins a job that can never
+        // finish: the overlay appears, the microphone never opens, and nothing is logged
+        // or spoken. Measured at twenty-five consecutive dead summons, cured only by
+        // force-stopping the app. stop() unblocks the pending read, which is the whole
+        // reason this handler exists.
+        currentCoroutineContext().job.invokeOnCompletion { runCatching { record.stop() } }
+
         try {
             record.startRecording()
             // The one moment that decides whether the user is heard. Everything before it
@@ -132,9 +143,20 @@ class VoiceRecorder {
         var speaking = false
         var framesSinceSnapshot = 0
 
+        var barrenReads = 0
         while (currentCoroutineContext().isActive) {
             val read = record.read(buffer, 0, buffer.size)
-            if (read <= 0) continue
+            if (read <= 0) {
+                // Spinning on a stream that has stopped producing burns a core and never
+                // ends. A handful in a row means the microphone is gone, not slow.
+                if (++barrenReads >= MAX_BARREN_READS) {
+                    Log.w(TAG, "capture: $barrenReads reads returned $read; giving up")
+                    trySend(CaptureEvent.Failed("The microphone stopped responding."))
+                    return
+                }
+                continue
+            }
+            barrenReads = 0
 
             val rms = appendAndMeasure(buffer, read, collected)
             trySend(CaptureEvent.Level(displayLevel(rms)))
@@ -156,12 +178,13 @@ class VoiceRecorder {
                 }
 
                 is FrameVerdict.Stop -> {
-                    val samples = if (verdict.reason == StopReason.NO_SPEECH) {
-                        FloatArray(0)
-                    } else {
-                        collected.toFloatArray()
-                    }
-                    trySend(CaptureEvent.Finished(samples, verdict.reason))
+                    // The recording is handed over whatever the reason, NO_SPEECH
+                    // included. Discarding it threw away real speech every time the
+                    // energy gate misjudged the room -- the user talked, was not
+                    // detected, and was told nothing had been heard while a perfectly
+                    // good recording of them was dropped. Transcribing costs about
+                    // 150 ms and settles the question properly.
+                    trySend(CaptureEvent.Finished(collected.toFloatArray(), verdict.reason))
                     return
                 }
             }
@@ -200,6 +223,9 @@ class VoiceRecorder {
 
     private companion object {
         const val TAG = "TheMachine"
+
+        /** Consecutive failed reads before the microphone is declared gone. */
+        const val MAX_BARREN_READS = 10
 
         /** 20 ms per frame — fine enough to endpoint quickly, coarse enough to be cheap. */
         val FRAME_SAMPLES = (WhisperEngine.SAMPLE_RATE * Endpointer.DEFAULT_FRAME_MILLIS / 1000).toInt()

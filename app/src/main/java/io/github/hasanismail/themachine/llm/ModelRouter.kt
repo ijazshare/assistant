@@ -69,6 +69,23 @@ class ModelRouter(private val context: Context) {
         private set
 
     /**
+     * Answers a question about text captured from the screen.
+     *
+     * Shares the loading gate, the unload discipline and the cache write with [answer] by
+     * delegating to it; only the prompt and the length differ, because a summary of a
+     * screen needs more room than a fact does and must be confined to the text given.
+     */
+    suspend fun answerAbout(screen: String, question: String, adminName: String): Completion? {
+        val trimmed = screen.takeLast(ScreenPrompt.SCREEN_BUDGET)
+        return generateWith(
+            ScreenPrompt.build(trimmed, question, adminName, clipped = trimmed.length < screen.length),
+            ScreenPrompt.MAX_TOKENS,
+            // A screen summary is allowed its second sentence; a fact is not.
+            oneSentence = false,
+        )
+    }
+
+    /**
      * Answers a question with the larger model, or returns null if it cannot: no such
      * model, not enough memory to hold it beside the small one, or a failed load.
      *
@@ -76,7 +93,14 @@ class ModelRouter(private val context: Context) {
      * a phone that is short of memory reclaims exactly those pages first — mid-reply,
      * which turns each token into a re-read from flash.
      */
-    suspend fun answer(question: String, adminName: String, userContext: String): Completion? {
+    suspend fun answer(question: String, adminName: String, userContext: String): Completion? =
+        generateWith(AnswerPrompt.build(question, adminName, userContext), AnswerPrompt.MAX_TOKENS)
+
+    private suspend fun generateWith(
+        prompt: String,
+        maxTokens: Int,
+        oneSentence: Boolean = true,
+    ): Completion? {
         lastRefusal = null
         val asset = strongModel
         if (asset == null) {
@@ -84,12 +108,9 @@ class ModelRouter(private val context: Context) {
             return null
         }
         if (!ensureLoaded(asset)) return null
-        val completion = strong.generate(
-            prompt = AnswerPrompt.build(question, adminName, userContext),
-            grammar = "",
-            maxTokens = AnswerPrompt.MAX_TOKENS,
-        )
-        val text = firstSentence(completion.text.substringBefore("<end_of_turn>").trim())
+        val completion = strong.generate(prompt = prompt, grammar = "", maxTokens = maxTokens)
+        val spoken = completion.text.substringBefore("<end_of_turn>").trim()
+        val text = if (oneSentence) firstSentence(spoken) else spoken
         Log.i(TAG, "strong answered in ${completion.millis} ms: $text")
 
         if (text.isBlank()) return null
