@@ -426,6 +426,29 @@ context files a second brain rather than a separate list the assistant keeps to 
 It persists correctly and is scheduled with exact alarms as specified. Worth confirming
 before it becomes expensive to change.
 
+### The wake word
+
+"Hey root" needed no new dependency: sherpa-onnx, already pinned for the voice, contains a
+KeywordSpotter. The phrase is open-vocabulary — it is supplied as the word-pieces it
+decomposes into, and each was checked against the model's own 500-token table before being
+hard-coded. The shipped library has no tokeniser in it, so those pieces cannot be produced
+at runtime.
+
+Two things cost time and are worth writing down:
+
+- The keywords file is whitespace-separated in every field, **including the display name**.
+  Writing `@HEY ROOT` made the parser look for a token called ROOT and refuse to start.
+  Pieces only; score and threshold belong on the config.
+- Always-on listening has to be a foreground service with its own audio loop. The
+  platform's low-power hotword APIs require `MANAGE_HOTWORD_DETECTION`, whose protection
+  level is `internal|preinstalled` — the app would have to be on the system image. Holding
+  the assistant role does not help. So the cost is a permanent notification and a
+  microphone indicator, and the service must be started from the foreground, which means
+  one tap after each reboot.
+
+Measured: 252 ms to spot the phrase in a recording of it, and it does not fire on other
+speech or on silence.
+
 ### Learned phrases are shapes, not sentences
 
 What is remembered is the phrase with its numbers taken out. "Set a three minute timer"

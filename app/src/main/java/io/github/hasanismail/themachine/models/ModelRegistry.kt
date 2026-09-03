@@ -25,6 +25,9 @@ enum class ModelRole(val required: Boolean = true) {
 
     /** Reading text out of pixels, for screens the accessibility tree cannot describe. */
     OCR(required = false),
+
+    /** Hearing the assistant's name while the phone is doing something else. */
+    WAKE(required = false),
 }
 
 /** Assets that arrive compressed and have to be unpacked after verification. */

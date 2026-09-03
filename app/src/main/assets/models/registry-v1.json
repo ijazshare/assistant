@@ -102,6 +102,22 @@
       "isDefault": true,
       "license": "Apache-2.0",
       "source": "tesseract-ocr/tessdata_fast on GitHub, main branch. Digest and size recorded from the downloaded file on 2026-09-02."
+    },
+    {
+      "id": "wake-kws-hey-root",
+      "role": "WAKE",
+      "displayName": "Wake word (hey root)",
+      "detail": "Listens for its name while the phone is doing something else. Off unless you turn it on.",
+      "fileName": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2",
+      "sha256": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+      "byteSize": 17626723,
+      "minRamMb": 128,
+      "isDefault": true,
+      "archive": "TAR_BZ2",
+      "extractedByteSize": 20000000,
+      "license": "Apache-2.0",
+      "source": "k2-fsa/sherpa-onnx kws-models release. Digest and size recorded from the downloaded file on 2026-09-02, and match the release's own checksum.txt."
     }
   ]
 }

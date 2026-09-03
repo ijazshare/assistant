@@ -9,6 +9,7 @@
  */
 package io.github.hasanismail.themachine.assistant
 
+import android.os.Bundle
 import android.service.voice.VoiceInteractionService
 import android.util.Log
 
@@ -27,6 +28,34 @@ class MachineVoiceInteractionService : VoiceInteractionService() {
 
     override fun onReady() {
         super.onReady()
-        Log.i("TheMachine", "voice interaction service ready")
+        instance = this
+        Log.i(TAG, "voice interaction service ready")
+    }
+
+    override fun onShutdown() {
+        instance = null
+        super.onShutdown()
+    }
+
+    companion object {
+        private const val TAG = "TheMachine"
+
+        /**
+         * The live service, or null when this app is not the current assistant.
+         *
+         * The platform keeps exactly one of these bound, and showSession on it is the
+         * same door the side button comes through — which is what the wake word needs,
+         * rather than a second way in that would drift from the first.
+         */
+        @Volatile
+        private var instance: MachineVoiceInteractionService? = null
+
+        /** Opens the assistant. False if this app is not the assistant right now. */
+        fun showSessionNow(): Boolean {
+            val service = instance ?: return false
+            return runCatching { service.showSession(Bundle(), 0) }
+                .onFailure { Log.w(TAG, "could not show the session", it) }
+                .isSuccess
+        }
     }
 }
