@@ -51,8 +51,14 @@ class MachineVoiceInteractionSession(context: Context) :
      */
     private val showCount = androidx.compose.runtime.mutableIntStateOf(0)
 
-    /** True between onHide and the next onShow, so the overlay can stop what it started. */
-    private val hidden = androidx.compose.runtime.mutableStateOf(false)
+    /**
+     * Bumped on every onHide, so the overlay can stop what it started.
+     *
+     * A counter rather than a flag for the same reason showCount is one: a hide followed
+     * by a show inside a single frame leaves a boolean back where it started, and the
+     * hide is never seen.
+     */
+    private val hideCount = androidx.compose.runtime.mutableIntStateOf(0)
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
@@ -83,7 +89,7 @@ class MachineVoiceInteractionSession(context: Context) :
             setContent {
                 AssistantOverlay(
                     showCount = showCount.intValue,
-                    hidden = hidden.value,
+                    hideCount = hideCount.intValue,
                     onDismiss = { hide() },
                 )
             }
@@ -95,7 +101,6 @@ class MachineVoiceInteractionSession(context: Context) :
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
-        hidden.value = false
         showCount.intValue += 1
         MachineSounds.play(MachineSounds.Cue.ENGAGE)
         Log.i("TheMachine", "assistant session shown")
@@ -105,7 +110,7 @@ class MachineVoiceInteractionSession(context: Context) :
         // With a stack, so that a session that vanished can be traced to whoever hid it:
         // the dismiss tap, the system, or something that stole focus.
         Log.i("TheMachine", "assistant session hidden")
-        hidden.value = true
+        hideCount.intValue += 1
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         super.onHide()
     }

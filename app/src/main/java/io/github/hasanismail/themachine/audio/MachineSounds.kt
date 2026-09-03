@@ -48,6 +48,13 @@ object MachineSounds {
     private const val MILLIS_PER_SECOND = 1000
 
     /** The cues the interface can emit. */
+    // True while a command is being recorded. The greeting ticks once per word, and a
+    // 2100 Hz click at any volume the phone can manage is audible to its own microphone:
+    // the endpointer heard them, decided someone had started speaking, and closed the
+    // recording when they stopped — before the user had said anything at all.
+    @Volatile
+    var capturing: Boolean = false
+
     enum class Cue {
         /** A single dry click. Focus moves, a value ticks. */
         TICK,
@@ -109,6 +116,11 @@ object MachineSounds {
      * short-lived static AudioTrack that releases itself when it finishes.
      */
     fun play(cue: Cue, volume: Float = 0.55f) {
+        // Nothing the assistant plays into its own microphone can be worth what it costs
+        // to hear it back. Only the tick is suppressed: the other cues bracket a
+        // recording rather than happening inside one.
+        if (capturing && cue == Cue.TICK) return
+
         val pcm = synchronized(trackLock) { cache.getOrPut(cue) { render(cue) } }
         val bytes = pcm.size * 2
         val track = AudioTrack.Builder()

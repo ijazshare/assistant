@@ -15,6 +15,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import io.github.hasanismail.themachine.audio.CaptureEvent
+import io.github.hasanismail.themachine.audio.Endpointer
 import io.github.hasanismail.themachine.audio.MachineSounds
 import io.github.hasanismail.themachine.audio.StopReason
 import io.github.hasanismail.themachine.audio.VoiceRecorder
@@ -46,6 +47,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -150,10 +152,13 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      */
     fun start() {
         source = QuerySource.VOICE
-        // A second summon before the first gave up used to stack a second recorder on
-        // the same microphone.
-        listening?.cancel()
+        val previous = listening
         listening = scope.launch {
+            // Joined, not merely cancelled: a second summon before the first gave up used
+            // to open a second recorder while the first still held the microphone, and
+            // the device refuses the second one.
+            previous?.cancelAndJoin()
+            _state.value = SessionState.Preparing
             if (!hasMicrophonePermission()) {
                 fail(
                     "The Machine cannot hear you without microphone access.",
@@ -167,7 +172,6 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
                 return@launch
             }
 
-            _state.value = SessionState.Preparing
             if (!whisper.isLoaded && !whisper.load(storage.target(sttModel))) {
                 fail("The speech model could not be loaded.")
                 return@launch
@@ -191,6 +195,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * voice still speaks the reply.
      */
     fun stopListening() {
+        MachineSounds.capturing = false
         listening?.cancel()
         listening = null
         val current = _state.value
@@ -239,7 +244,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     @android.annotation.SuppressLint("MissingPermission")
     private suspend fun listen() {
         _state.value = SessionState.Listening(level = 0f, heardSpeech = false)
-        recorder.capture().collect { event ->
+        MachineSounds.capturing = true
+        // The endpointer ignores the opening frames: the overlay is announcing itself
+        // out of the speaker, and this microphone can hear it.
+        val endpointer = Endpointer(leadInMillis = Endpointer.GREETING_LEAD_IN_MILLIS)
+        recorder.capture(endpointer).collect { event ->
             when (event) {
                 is CaptureEvent.Level -> updateListening { it.copy(level = event.amplitude) }
                 CaptureEvent.SpeechStarted -> updateListening { it.copy(heardSpeech = true) }
@@ -278,6 +287,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     }
 
     private suspend fun handle(event: CaptureEvent.Finished) {
+        MachineSounds.capturing = false
         if (event.reason == StopReason.NO_SPEECH || event.samples.isEmpty()) {
             fail("I did not hear anything.")
             return

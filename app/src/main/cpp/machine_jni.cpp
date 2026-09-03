@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <mutex>
 #include <stdexcept>
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -243,6 +244,14 @@ Java_io_github_hasanismail_themachine_stt_WhisperNative_nativeTranscribe(
     jfloat *pcm = env->GetFloatArrayElements(samples, nullptr);
     if (pcm == nullptr) return env->NewStringUTF("");
 
+    // Whisper's encoder context is 1500 frames covering 30 seconds of audio.
+    constexpr int WHISPER_CTX_FRAMES = 1500;
+    constexpr int WHISPER_CTX_SECONDS = 30;
+    constexpr int WHISPER_CTX_MIN = 512;
+    constexpr int WHISPER_CTX_MARGIN = 128;
+    constexpr int WHISPER_CTX_BLOCK = 64;
+    constexpr int WHISPER_MAX_TOKENS = 64;
+
     whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
     params.n_threads        = threads > 0 ? threads : 4;
     params.language         = "en";
@@ -258,7 +267,36 @@ Java_io_github_hasanismail_themachine_stt_WhisperNative_nativeTranscribe(
     params.suppress_nst     = true;
     params.temperature      = 0.0f;
 
+    // The encoder always runs over its full 30-second context unless told otherwise, so
+    // a one-second command costs exactly what a thirty-second one does — measured at
+    // 541 ms for 698 ms of audio and 549 ms for 3435 ms of it. Sizing the context to the
+    // audio that is actually there is the single largest saving in the voice path.
+    //
+    // The floor is not tuning taste: too small a context truncates the mel window the
+    // encoder attends over and the transcription degrades. The margin above the audio
+    // covers the padding whisper adds either way.
+    const int frames = static_cast<int>((count * WHISPER_CTX_FRAMES) /
+                                        (WHISPER_SAMPLE_RATE * WHISPER_CTX_SECONDS));
+    if (WHISPER_CTX_MIN > 0) {
+        const int wanted = std::max(WHISPER_CTX_MIN, frames + WHISPER_CTX_MARGIN);
+        // Rounded up to a whole block. The encoder convolves and downsamples in fixed
+        // steps, and a context that does not land on one is not obviously meaningful.
+        const int blocked = ((wanted + WHISPER_CTX_BLOCK - 1) / WHISPER_CTX_BLOCK) * WHISPER_CTX_BLOCK;
+        params.audio_ctx = std::min(WHISPER_CTX_FRAMES, blocked);
+    }
+
+    // A spoken command is a dozen tokens. Without a cap a decoder that starts repeating
+    // itself runs to the segment limit: one utterance produced its own transcript
+    // fourteen times over and took thirteen seconds to do it.
+    params.max_tokens = WHISPER_MAX_TOKENS;
+
+    const auto t_start = std::chrono::steady_clock::now();
     const int rc = whisper_full(ctx, params, pcm, count);
+    LOGI("whisper: %d samples (%lld ms audio) in %lld ms, audio_ctx %d, threads %d",
+         count, static_cast<long long>(count * 1000LL / WHISPER_SAMPLE_RATE),
+         static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                 std::chrono::steady_clock::now() - t_start).count()),
+         params.audio_ctx, params.n_threads);
     env->ReleaseFloatArrayElements(samples, pcm, JNI_ABORT);
 
     if (rc != 0) {

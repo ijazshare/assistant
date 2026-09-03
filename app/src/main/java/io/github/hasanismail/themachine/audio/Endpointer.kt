@@ -37,6 +37,7 @@ class Endpointer(
     trailingSilenceMillis: Long = DEFAULT_TRAILING_SILENCE_MILLIS,
     maxDurationMillis: Long = DEFAULT_MAX_DURATION_MILLIS,
     private val noSpeechGiveUpMillis: Long = DEFAULT_NO_SPEECH_MILLIS,
+    leadInMillis: Long = 0,
 ) {
     private val framesOfSilenceToStop = (trailingSilenceMillis / frameMillis).toInt().coerceAtLeast(1)
     private val maxFrames = (maxDurationMillis / frameMillis).toInt()
@@ -50,12 +51,21 @@ class Endpointer(
         private set
 
     /** Feed one frame's RMS. */
+    private val leadInFrames = (leadInMillis / frameMillis).toInt()
+
     fun accept(rms: Float): FrameVerdict {
         framesSeen++
 
+        // The assistant announces itself when it opens, and those words come out of the
+        // speaker into this microphone. Frames during the announcement are not evidence
+        // of anything: counted as speech they start an utterance that is over before the
+        // user opens their mouth, and counted as silence they run down the give-up clock
+        // while the user is still being greeted.
+        if (framesSeen <= leadInFrames) return FrameVerdict.Continue
+
         // The opening frames establish what this room sounds like, before anyone speaks.
-        if (framesSeen <= CALIBRATION_FRAMES) {
-            noiseFloor = if (framesSeen == 1) {
+        if (framesSeen <= leadInFrames + CALIBRATION_FRAMES) {
+            noiseFloor = if (framesSeen == leadInFrames + 1) {
                 rms
             } else {
                 noiseFloor * (1 - CALIBRATION_ALPHA) + rms * CALIBRATION_ALPHA
@@ -103,7 +113,17 @@ class Endpointer(
         const val DEFAULT_MAX_DURATION_MILLIS = 15_000L
         const val DEFAULT_NO_SPEECH_MILLIS = 3_000L
 
-        private const val CALIBRATION_FRAMES = 10
+        /**
+         * Long enough to cover the overlay's greeting, which is four words at 340 ms
+         * apiece after a lead-in of its own.
+         *
+         * Zero by default: a lead-in belongs to whoever is making noise, not to
+         * endpointing, and a test feeding frames directly should not have to know about
+         * the greeting.
+         */
+        const val GREETING_LEAD_IN_MILLIS = 1_700L
+
+        internal const val CALIBRATION_FRAMES = 10
         private const val CALIBRATION_ALPHA = 0.3f
 
         /** Speech has to be meaningfully above the room, not merely above it. */

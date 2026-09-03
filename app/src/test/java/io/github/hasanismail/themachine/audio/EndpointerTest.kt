@@ -20,6 +20,22 @@ import org.junit.Test
  */
 class EndpointerTest {
 
+    @Test
+    fun `frames during the lead-in are neither speech nor silence`() {
+        // The overlay greets the user out loud while this is running, and the microphone
+        // hears it. Those frames used to start an utterance that ended before the user
+        // had said anything.
+        val endpointer = Endpointer(leadInMillis = 200)
+        val leadInFrames = (200 / Endpointer.DEFAULT_FRAME_MILLIS).toInt()
+        repeat(leadInFrames) {
+            assertThat(endpointer.accept(0.4f)).isEqualTo(FrameVerdict.Continue)
+        }
+        // And the room is measured only after it, so the greeting does not become the
+        // noise floor either.
+        repeat(Endpointer.CALIBRATION_FRAMES) { endpointer.accept(0.005f) }
+        assertThat(endpointer.accept(0.4f)).isEqualTo(FrameVerdict.SpeechBegan)
+    }
+
     private val quiet = 0.002f
     private val speech = 0.20f
 
