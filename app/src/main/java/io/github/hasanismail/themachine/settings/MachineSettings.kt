@@ -10,7 +10,6 @@
 package io.github.hasanismail.themachine.settings
 
 import android.content.Context
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -40,16 +39,6 @@ class MachineSettings(private val context: Context) {
         }
     }
 
-    /** Whether the assistant should listen for its name. Off unless asked for. */
-    val wakeWordEnabled: Flow<Boolean> =
-        context.dataStore.data.map { prefs -> prefs[WAKE_WORD] == true }
-
-    suspend fun wakeWordEnabledNow(): Boolean = wakeWordEnabled.first()
-
-    suspend fun setWakeWordEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[WAKE_WORD] = enabled }
-    }
-
     companion object {
         /**
          * The Machine calls its operator "Admin" until told otherwise — which is both
@@ -58,6 +47,5 @@ class MachineSettings(private val context: Context) {
         const val DEFAULT_ADMIN_NAME = "Admin"
 
         private val ADMIN_NAME = stringPreferencesKey("admin_name")
-        private val WAKE_WORD = booleanPreferencesKey("wake_word_enabled")
     }
 }

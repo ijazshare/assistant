@@ -426,28 +426,29 @@ context files a second brain rather than a separate list the assistant keeps to 
 It persists correctly and is scheduled with exact alarms as specified. Worth confirming
 before it becomes expensive to change.
 
-### The wake word
+### The wake word was built and then removed
 
-"Hey root" needed no new dependency: sherpa-onnx, already pinned for the voice, contains a
-KeywordSpotter. The phrase is open-vocabulary — it is supplied as the word-pieces it
-decomposes into, and each was checked against the model's own 500-token table before being
-hard-coded. The shipped library has no tokeniser in it, so those pieces cannot be produced
-at runtime.
+"Hey root" worked — sherpa-onnx, already pinned for the voice, contains a keyword spotter,
+and the phrase spotted in 252 ms without firing on other speech. It was removed anyway, at
+Hasan's call, because always-on listening costs a permanent notification, a microphone
+indicator and real battery, and the platform gives a sideloaded app no cheaper option: the
+low-power hotword APIs need a permission whose protection level is `internal|preinstalled`,
+so the app would have to be part of the system image. Holding the assistant role does not
+help.
 
-Two things cost time and are worth writing down:
+If it is ever wanted back, the two things that cost time were: the keywords file is
+whitespace-separated in every field including the display name, so `@HEY ROOT` makes the
+parser look for a token called ROOT and refuse to start; and the phrase must be written as
+word-pieces (`▁HE Y ▁RO O T`) because the shipped library has no tokeniser in it.
 
-- The keywords file is whitespace-separated in every field, **including the display name**.
-  Writing `@HEY ROOT` made the parser look for a token called ROOT and refuse to start.
-  Pieces only; score and threshold belong on the config.
-- Always-on listening has to be a foreground service with its own audio loop. The
-  platform's low-power hotword APIs require `MANAGE_HOTWORD_DETECTION`, whose protection
-  level is `internal|preinstalled` — the app would have to be on the system image. Holding
-  the assistant role does not help. So the cost is a permanent notification and a
-  microphone indicator, and the service must be started from the foreground, which means
-  one tap after each reboot.
+### The give-up clock and the lead-in
 
-Measured: 252 ms to spot the phrase in a recording of it, and it does not fire on other
-speech or on silence.
+The endpointer ignores a lead-in while the overlay announces itself, because the greeting
+is audible to the microphone. The give-up clock has to start *after* that lead-in, not at
+the same moment: charging the announcement to the user left about a second to begin
+speaking, and every summon after the first came back "I did not hear anything" three
+seconds later without a word being transcribed. It reads as the assistant working once and
+then going deaf.
 
 ### Learned phrases are shapes, not sentences
 

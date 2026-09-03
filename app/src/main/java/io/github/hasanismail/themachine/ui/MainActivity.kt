@@ -32,7 +32,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +44,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import io.github.hasanismail.themachine.BuildConfig
 import io.github.hasanismail.themachine.R
 import io.github.hasanismail.themachine.models.ModelRegistry
-import io.github.hasanismail.themachine.models.ModelRole
 import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
 import io.github.hasanismail.themachine.permissions.MachinePermissions
@@ -64,8 +62,6 @@ import io.github.hasanismail.themachine.ui.theme.MachineLabel
 import io.github.hasanismail.themachine.ui.theme.MachineReadout
 import io.github.hasanismail.themachine.ui.theme.MachineStatus
 import io.github.hasanismail.themachine.ui.theme.TheMachineTheme
-import io.github.hasanismail.themachine.wake.WakeWordService
-import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -113,14 +109,6 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
     val adminName by settings.adminName.collectAsStateWithLifecycle(
         initialValue = MachineSettings.DEFAULT_ADMIN_NAME,
     )
-    val scope = rememberCoroutineScope()
-    val wakeOn by settings.wakeWordEnabled.collectAsStateWithLifecycle(initialValue = false)
-    val wakeReady = remember(revision) {
-        val storage = ModelStorage(context)
-        ModelRegistry(context).byRole(ModelRole.WAKE)
-            .any { storage.quickState(it) == ModelState.Ready }
-    }
-
     val models = remember(revision) {
         val registry = ModelRegistry(context)
         val storage = ModelStorage(context)
@@ -188,23 +176,6 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
                 value = "LOG",
                 complete = true,
                 onClick = { context.startActivity(Intent(context, HistoryActivity::class.java)) },
-            )
-            // Started from here on purpose. Android only lets a microphone service start
-            // from the foreground, and a switch the user just pressed is the clearest
-            // foreground there is — a receiver or a worker would be refused.
-            Door(
-                label = "WAKE WORD",
-                value = if (wakeReady) (if (wakeOn) "LISTENING" else "OFF") else "NO MODEL",
-                complete = wakeOn,
-                onClick = {
-                    if (!wakeReady) {
-                        context.startActivity(Intent(context, ModelsActivity::class.java))
-                    } else {
-                        val next = !wakeOn
-                        scope.launch { settings.setWakeWordEnabled(next) }
-                        if (next) WakeWordService.start(context) else WakeWordService.stop(context)
-                    }
-                },
             )
             Door(
                 label = "MODELS",

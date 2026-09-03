@@ -28,7 +28,6 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.hasanismail.themachine.audio.MachineSounds
-import io.github.hasanismail.themachine.wake.WakeWordService
 
 /**
  * The overlay that appears when the side button is held.
@@ -102,7 +101,6 @@ class MachineVoiceInteractionSession(context: Context) :
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
-        WakeWordService.assistantOpened()
         showCount.intValue += 1
         MachineSounds.play(MachineSounds.Cue.ENGAGE)
         Log.i("TheMachine", "assistant session shown")
@@ -112,7 +110,6 @@ class MachineVoiceInteractionSession(context: Context) :
         // With a stack, so that a session that vanished can be traced to whoever hid it:
         // the dismiss tap, the system, or something that stole focus.
         Log.i("TheMachine", "assistant session hidden")
-        WakeWordService.assistantClosed()
         hideCount.intValue += 1
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         super.onHide()

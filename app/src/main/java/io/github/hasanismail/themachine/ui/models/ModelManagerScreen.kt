@@ -189,7 +189,6 @@ private fun ModelRole.heading(): String = when (this) {
     ModelRole.LLM -> "LANGUAGE MODEL"
     ModelRole.TTS -> "VOICE"
     ModelRole.OCR -> "SCREEN READING"
-    ModelRole.WAKE -> "WAKE WORD"
 }
 
 @Composable

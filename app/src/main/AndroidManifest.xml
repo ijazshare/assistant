@@ -153,12 +153,6 @@
             tools:node="merge" />
 
         <!-- Fires reminders set through the create_reminder tool. -->
-        <!-- Its own audio loop, because the platform's low-power hotword APIs are
-             restricted to apps installed on the system image. -->
-        <service
-            android:name=".wake.WakeWordService"
-            android:exported="false"
-            android:foregroundServiceType="microphone" />
 
         <receiver
             android:name=".tools.ReminderReceiver"

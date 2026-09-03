@@ -101,7 +101,13 @@ class Endpointer(
 
             // Nothing yet, and long enough that there probably will not be. Better to
             // say so than to record fifteen seconds of room tone and transcribe it.
-            framesSeen > noSpeechFrames -> FrameVerdict.Stop(StopReason.NO_SPEECH)
+            // Counted from the end of the lead-in, not from the start of the recording.
+            // The lead-in exists because the assistant is talking over itself for the
+            // first moment; charging that time to the user left them about a second to
+            // begin, and every summon after the first came back "I did not hear
+            // anything" three seconds later without a word being transcribed.
+            framesSeen > leadInFrames + noSpeechFrames ->
+                FrameVerdict.Stop(StopReason.NO_SPEECH)
 
             else -> FrameVerdict.Continue
         }
@@ -110,8 +116,13 @@ class Endpointer(
     companion object {
         const val DEFAULT_FRAME_MILLIS = 20L
         const val DEFAULT_TRAILING_SILENCE_MILLIS = 800L
-        const val DEFAULT_MAX_DURATION_MILLIS = 15_000L
-        const val DEFAULT_NO_SPEECH_MILLIS = 3_000L
+        const val DEFAULT_MAX_DURATION_MILLIS = 20_000L
+
+        /**
+         * How long to wait for a first word, measured from when the assistant stops
+         * announcing itself. Long enough to notice the overlay and draw breath.
+         */
+        const val DEFAULT_NO_SPEECH_MILLIS = 5_000L
 
         /**
          * Long enough to cover the overlay's greeting, which is four words at 340 ms
