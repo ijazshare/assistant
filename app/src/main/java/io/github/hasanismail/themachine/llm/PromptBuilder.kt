@@ -119,26 +119,15 @@ object PromptBuilder {
         )
         appendLine()
 
-        if (userContext.isNotBlank()) {
-            // "About the user", not "About <name>", for the same reason: keep the name out
-            // of the routing prompt entirely.
-            appendLine("About the user:")
-            appendLine(userContext.take(CONTEXT_BUDGET))
-            appendLine()
-        }
-
+        // The user's context is deliberately NOT here. It personalises an *answer*, but for
+        // *tool choice* it is noise: injecting the tasks file ("## Tasks") flipped "text me
+        // …" to set_alarm and cut send_message from 6/8 to 4/8. Routing stays minimal —
+        // tools, examples, the request. The context still reaches AnswerPrompt.
         appendLine("Now: ${now.format(NOW_FORMAT)}")
         appendLine("Request: $transcript")
         appendLine(TURN_END)
         append(TURN_START).appendLine("model")
     }
-
-    /**
-     * The user's own notes are the one unbounded part of the prompt, and every token of
-     * them is prefill the user waits for. Capped so a long memories file cannot quietly
-     * make the assistant slow.
-     */
-    private const val CONTEXT_BUDGET = 600
 
     private val NOW_FORMAT: DateTimeFormatter =
         DateTimeFormatter.ofPattern("EEEE HH:mm, d MMMM yyyy")

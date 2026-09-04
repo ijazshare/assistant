@@ -141,14 +141,16 @@ class RoutingBenchmarkTest {
         val prompt = dialect.buildPrompt(
             transcript = utterance,
             tools = MachineTools.all,
-            // Regression guard: "Admin" is the default admin name, and putting a name that
-            // is also an ordinary word into the routing prompt used to drag "text me" to
-            // set_alarm (86% -> 57%). The name is out of the routing prompt now; keep
-            // "Admin" here so that can never silently come back.
+            // Regression guard reproducing the exact real-app inputs that used to collapse
+            // "text me ..." to set_alarm: the default admin name and the tasks context, both
+            // of which the routing prompt now ignores, plus the voice path's stop marker.
+            // Keep them here so neither can silently creep back into tool selection.
             adminName = "Admin",
-            userContext = "- Osman is my brother.",
+            userContext = "## Tasks\n# Tasks",
         )
-        val completion = runBlocking { engine.generate(prompt, dialect.grammar(MachineTools.all)) }
+        val completion = runBlocking {
+            engine.generate(prompt, dialect.grammar(MachineTools.all), stopAt = dialect.answerMarker)
+        }
         val call = dialect.parse(completion.text)
         return call?.tool ?: "PARSE_FAIL"
     }
