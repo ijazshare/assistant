@@ -22,6 +22,7 @@ import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
 import io.github.hasanismail.themachine.settings.MachineSettings
 import io.github.hasanismail.themachine.tools.ContactLookup
+import io.github.hasanismail.themachine.tools.ContactRecency
 import io.github.hasanismail.themachine.tools.ContactResolution
 import io.github.hasanismail.themachine.tools.MachineTools
 import io.github.hasanismail.themachine.tools.MessageBody
@@ -107,7 +108,10 @@ class PipelineProbeTest {
         for (one in names.split("|")) {
             val desc = when (val r = lookup.resolve(one)) {
                 is ContactResolution.One -> "One(${r.number})"
-                is ContactResolution.Many -> "Many[${r.options.joinToString { it.name }}]"
+
+                is ContactResolution.Many ->
+                    "Many[${ContactRecency(context).sortByRecency(r.options).joinToString { it.name }}]"
+
                 ContactResolution.None -> "None"
             }
             Log.i(PIPE, "resolve [$one] -> $desc")

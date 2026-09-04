@@ -38,6 +38,7 @@ import io.github.hasanismail.themachine.stt.ContactNames
 import io.github.hasanismail.themachine.stt.WhisperEngine
 import io.github.hasanismail.themachine.tools.Contact
 import io.github.hasanismail.themachine.tools.ContactLookup
+import io.github.hasanismail.themachine.tools.ContactRecency
 import io.github.hasanismail.themachine.tools.ContactResolution
 import io.github.hasanismail.themachine.tools.MachineTools
 import io.github.hasanismail.themachine.tools.MessageBody
@@ -104,6 +105,10 @@ data class Timing(val sttMillis: Long, val llmMillis: Long) {
  * the dominant cost, so paying it per utterance would spend the whole latency budget
  * before any audio arrived.
  */
+// The session is one cohesive state machine — capture, transcribe, route, disambiguate,
+// execute, speak — and its methods are small and sequential; splitting it by the function
+// count would scatter one flow across files rather than clarify it.
+@Suppress("TooManyFunctions")
 class VoiceSession(private val context: Context, private val scope: CoroutineScope) {
 
     private val recorder = VoiceRecorder()
@@ -120,6 +125,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      */
     private var ownNumber: String? = null
     private val contacts = ContactLookup(context) { ownNumber }
+    private val recency = ContactRecency(context)
     private val executor = ToolExecutor(context, ReminderStore(context), contacts)
 
     init {
@@ -530,6 +536,21 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         }
     }
 
+    /**
+     * The contacts to choose between, if a messaging or calling command's recipient matched
+     * several people — null for any other tool or an unambiguous name. Reads the contacts,
+     * SMS and call logs off the main thread, ordered so the person most recently texted or
+     * called is first (and so survives the cap).
+     */
+    private suspend fun contactChoices(call: ToolCall): List<Contact>? {
+        val messaging = call.tool == MachineTools.SEND_MESSAGE || call.tool == MachineTools.CALL_CONTACT
+        val recipient = call.arguments["recipient"]?.takeIf { it.isNotBlank() }
+        if (!messaging || recipient == null) return null
+        return withContext(Dispatchers.IO) {
+            (contacts.resolve(recipient) as? ContactResolution.Many)?.options?.let(recency::sortByRecency)
+        }
+    }
+
     /** Executes a resolved call, then records, remembers, shows and speaks the outcome. */
     private suspend fun carryOut(
         transcript: String,
@@ -543,16 +564,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // Never pick among several matching contacts silently — "Hassan" matched both a
         // contact and "Dr Hassan ER Chicago", and a blind choice texted the wrong one. Hold
         // the command and let the user say who it was for.
-        val messaging = ready.tool == MachineTools.SEND_MESSAGE || ready.tool == MachineTools.CALL_CONTACT
-        val recipient = ready.arguments["recipient"]?.takeIf { it.isNotBlank() }
-        val choices = if (messaging && recipient != null) {
-            (contacts.resolve(recipient) as? ContactResolution.Many)?.options
-        } else {
-            null
-        }
-        if (choices != null) {
+        contactChoices(ready)?.let { choices ->
             pendingChoice = PendingChoice(transcript, ready, sttMillis, llmMillis, resolution)
-            _state.value = SessionState.ChooseContact(recipient.orEmpty(), choices)
+            _state.value = SessionState.ChooseContact(ready.arguments["recipient"].orEmpty(), choices)
             return
         }
 
