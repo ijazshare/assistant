@@ -103,6 +103,15 @@ object PromptBuilder {
         // Without this the model reliably sent "scroll down" to navigate, which is the
         // one pair of tools whose descriptions alone did not separate them.
         appendLine("""scroll down -> {"tool":"scroll","arguments":{"direction":"down"}}""")
+        // A general question. Without it every "how many", "who", "how far" and "what
+        // time in <city>" landed on read_screen — the only question-shaped example — and
+        // the assistant recited whatever was on screen instead of answering. Just one:
+        // a 1B stops discriminating and starts copying the first example once the prompt
+        // grows too long, so the routing win has to be bought for as few tokens as it can.
+        appendLine(
+            """who painted the Mona Lisa -> """ +
+                """{"tool":"answer","arguments":{"text":"Leonardo da Vinci."}}""",
+        )
         appendLine()
 
         if (userContext.isNotBlank()) {

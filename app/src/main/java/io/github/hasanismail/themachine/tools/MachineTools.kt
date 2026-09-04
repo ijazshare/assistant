@@ -105,7 +105,7 @@ object MachineTools {
         ),
         Tool(
             name = SEND_MESSAGE,
-            description = "Send a text message to someone.",
+            description = "Text or message someone.",
             params = listOf(
                 ToolParam("recipient", ParamType.STRING, "Contact name or phone number.", required = true),
                 ToolParam("body", ParamType.STRING, "The message to send.", required = true),
@@ -114,7 +114,7 @@ object MachineTools {
         ),
         Tool(
             name = CALL_CONTACT,
-            description = "Place a phone call.",
+            description = "Call, phone or ring someone.",
             params = listOf(
                 ToolParam("recipient", ParamType.STRING, "Contact name or phone number.", required = true),
             ),
@@ -200,7 +200,8 @@ object MachineTools {
         ),
         Tool(
             name = ANSWER,
-            description = "Answer in words, when no action is needed.",
+            description = "Answer a general question: a fact, arithmetic, or the time elsewhere. " +
+                "Not the screen.",
             params = listOf(
                 ToolParam("text", ParamType.STRING, "The answer, one or two sentences.", required = true),
             ),
