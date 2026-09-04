@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
@@ -98,8 +99,7 @@ class VoiceRecorder {
         }
 
         val record = buildRecord(minBuffer)
-        if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
-            record?.release()
+        if (record == null) {
             trySend(CaptureEvent.Failed("Microphone unavailable — is another app using it?"))
             close()
             return@callbackFlow
@@ -204,25 +204,57 @@ class VoiceRecorder {
     }
 
     /**
-     * VOICE_RECOGNITION rather than MIC: it asks the platform for the processing chain
-     * tuned for speech — the same one system dictation uses — instead of a flat capture.
+     * An initialised recorder, or null only after genuinely exhausting the options.
+     *
+     * AudioRecord construction fails transiently whenever the audio HAL is mid-handoff —
+     * coming out of a call, a spoken reply switching the output route, the previous
+     * capture still releasing — and returns an object stuck in STATE_UNINITIALIZED. A
+     * short retry rides those out. VOICE_RECOGNITION is tried first for its speech-tuned
+     * processing chain, but a Samsung device's always-on hotword can hold that source
+     * specifically, so plain MIC is the fallback: a flat capture beats no capture.
      */
     @SuppressLint("MissingPermission")
-    private fun buildRecord(minBuffer: Int): AudioRecord? = runCatching {
-        AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            WhisperEngine.SAMPLE_RATE,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            maxOf(minBuffer, FRAME_SAMPLES * Short.SIZE_BYTES) * BUFFER_MULTIPLIER,
-        )
-    }.getOrNull()
+    private suspend fun buildRecord(minBuffer: Int): AudioRecord? {
+        val bufferBytes = maxOf(minBuffer, FRAME_SAMPLES * Short.SIZE_BYTES) * BUFFER_MULTIPLIER
+        for (source in SOURCES) {
+            repeat(INIT_ATTEMPTS) { attempt ->
+                val record = runCatching {
+                    AudioRecord(
+                        source,
+                        WhisperEngine.SAMPLE_RATE,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        bufferBytes,
+                    )
+                }.getOrNull()
+                if (record?.state == AudioRecord.STATE_INITIALIZED) {
+                    if (source != SOURCES.first() || attempt > 0) {
+                        Log.i(TAG, "microphone init recovered: source=$source attempt=${attempt + 1}")
+                    }
+                    return record
+                }
+                record?.release()
+                delay(INIT_RETRY_MILLIS)
+            }
+        }
+        return null
+    }
 
     /** RMS is tiny for speech; a square root spreads the useful range across the meter. */
     private fun displayLevel(rms: Float): Float = sqrt(rms.coerceIn(0f, 1f))
 
     private companion object {
         const val TAG = "TheMachine"
+
+        /**
+         * Capture sources in preference order: the speech-tuned recognition chain first,
+         * a flat microphone as the fallback when something else holds the recognition input.
+         */
+        val SOURCES = intArrayOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC)
+
+        /** Tries per source before moving on — enough to ride out a HAL handoff. */
+        const val INIT_ATTEMPTS = 3
+        const val INIT_RETRY_MILLIS = 80L
 
         /** Consecutive failed reads before the microphone is declared gone. */
         const val MAX_BARREN_READS = 10
