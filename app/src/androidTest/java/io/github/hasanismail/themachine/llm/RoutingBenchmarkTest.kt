@@ -57,6 +57,8 @@ class RoutingBenchmarkTest {
         Case("text Osman I'm running late", MachineTools.SEND_MESSAGE),
         Case("message mum that I will be home soon", MachineTools.SEND_MESSAGE),
         Case("send a text to Dad", MachineTools.SEND_MESSAGE),
+        Case("text me I am on my way", MachineTools.SEND_MESSAGE),
+        Case("text me the address", MachineTools.SEND_MESSAGE),
         Case("call Osman", MachineTools.CALL_CONTACT),
         Case("phone mum", MachineTools.CALL_CONTACT),
         Case("give Dad a call", MachineTools.CALL_CONTACT),
