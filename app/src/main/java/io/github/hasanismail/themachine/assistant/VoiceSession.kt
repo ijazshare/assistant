@@ -319,18 +319,26 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private suspend fun listen() {
         _state.value = SessionState.Listening(level = 0f, heardSpeech = false)
         MachineSounds.capturing = true
+        // The microphone needs a foreground state, which the service provides. Scoped to the
+        // capture and dropped in the finally the instant it ends — on an endpoint or a
+        // dismissal alike — so the "listening" notification never outlives the listening.
+        MicForegroundService.start(context)
         // The endpointer ignores the first few frames, which are the microphone opening
         // rather than anything in the room.
         val endpointer = Endpointer(leadInMillis = Endpointer.MIC_SETTLE_MILLIS)
         var finished: CaptureEvent.Finished? = null
-        recorder.capture(endpointer).collect { event ->
-            when (event) {
-                is CaptureEvent.Level -> updateListening { it.copy(level = event.amplitude) }
-                CaptureEvent.SpeechStarted -> updateListening { it.copy(heardSpeech = true) }
-                is CaptureEvent.Snapshot -> transcribePartial(event.samples)
-                is CaptureEvent.Failed -> fail(event.reason)
-                is CaptureEvent.Finished -> finished = event
+        try {
+            recorder.capture(endpointer).collect { event ->
+                when (event) {
+                    is CaptureEvent.Level -> updateListening { it.copy(level = event.amplitude) }
+                    CaptureEvent.SpeechStarted -> updateListening { it.copy(heardSpeech = true) }
+                    is CaptureEvent.Snapshot -> transcribePartial(event.samples)
+                    is CaptureEvent.Failed -> fail(event.reason)
+                    is CaptureEvent.Finished -> finished = event
+                }
             }
+        } finally {
+            MicForegroundService.stop(context)
         }
 
         // Handled after the flow ends rather than inside it, and launched rather than
@@ -706,6 +714,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     /** Frees both models. Called when the overlay goes away, not between utterances. */
     fun release() {
+        // The microphone is done the moment the overlay closes; drop the foreground state
+        // with it rather than leave a "listening" notification up after the session is gone.
+        MicForegroundService.stop(context)
         // Piper and the router stop themselves promptly; whisper and llama take the
         // monitor an in-flight decode holds, and this is the main thread closing an
         // overlay. Freeing them is handed to a scope that outlives the session.

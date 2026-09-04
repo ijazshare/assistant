@@ -152,6 +152,14 @@
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
 
+        <!-- Holds a foreground state while the assistant records. The microphone permission
+             is "while in use", so a recording from the background overlay is fed silence
+             without this. -->
+        <service
+            android:name=".assistant.MicForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <!-- Fires reminders set through the create_reminder tool. -->
 
         <receiver
