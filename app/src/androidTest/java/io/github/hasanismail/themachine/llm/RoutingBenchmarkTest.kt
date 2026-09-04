@@ -59,6 +59,8 @@ class RoutingBenchmarkTest {
         Case("send a text to Dad", MachineTools.SEND_MESSAGE),
         Case("text me I am on my way", MachineTools.SEND_MESSAGE),
         Case("text me the address", MachineTools.SEND_MESSAGE),
+        Case("text me", MachineTools.SEND_MESSAGE),
+        Case("send a message", MachineTools.SEND_MESSAGE),
         Case("call Osman", MachineTools.CALL_CONTACT),
         Case("phone mum", MachineTools.CALL_CONTACT),
         Case("give Dad a call", MachineTools.CALL_CONTACT),
@@ -121,7 +123,7 @@ class RoutingBenchmarkTest {
         }
 
         val pct = correct * 100 / cases.size
-        Log.i(BENCH, "==== ROUTING BENCHMARK: $correct/${cases.size} = $pct% ====")
+        Log.i(BENCH, "==== ROUTING BENCHMARK [$modelName]: $correct/${cases.size} = $pct% ====")
         for ((tool, total) in totalsByExpected) {
             val missed = missesByExpected[tool] ?: 0
             Log.i(BENCH, "  $tool: ${total - missed}/$total")
@@ -157,10 +159,15 @@ class RoutingBenchmarkTest {
         fun loadModel() {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             val storage = ModelStorage(context)
-            val asset = ModelRegistry(context).byRole(ModelRole.LLM)
+            val ready = ModelRegistry(context).byRole(ModelRole.LLM)
                 .filter { storage.quickState(it) == ModelState.Ready }
-                .let { ready -> ready.firstOrNull { it.isDefault } ?: ready.firstOrNull() }
-                ?: return
+            // Pass `-e model functiongemma` to benchmark a specific model; otherwise the
+            // default router model. Lets one harness compare 1B against the 270M.
+            val wanted = InstrumentationRegistry.getArguments().getString("model")
+            val asset = when {
+                wanted != null -> ready.firstOrNull { it.fileName.contains(wanted, ignoreCase = true) }
+                else -> ready.firstOrNull { it.isDefault } ?: ready.firstOrNull()
+            } ?: return
             modelName = asset.fileName
             engine = LlamaEngine(context)
             available = runBlocking { engine.load(storage.target(asset)) }
