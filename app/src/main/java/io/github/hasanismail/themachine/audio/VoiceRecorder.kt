@@ -233,10 +233,19 @@ class VoiceRecorder {
                     }
                     return record
                 }
+                // Every failed attempt is logged: the state (0 = uninitialised, null =
+                // construction threw) and which source, so a real failure leaves a full
+                // trace to read rather than a single unexplained "unavailable".
+                Log.w(
+                    TAG,
+                    "microphone init failed: source=$source attempt=${attempt + 1}/$INIT_ATTEMPTS " +
+                        "state=${record?.state ?: "null"}",
+                )
                 record?.release()
                 delay(INIT_RETRY_MILLIS)
             }
         }
+        Log.w(TAG, "microphone unavailable: every source and retry exhausted")
         return null
     }
 
