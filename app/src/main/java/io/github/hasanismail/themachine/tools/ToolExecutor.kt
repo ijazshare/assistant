@@ -12,7 +12,9 @@ package io.github.hasanismail.themachine.tools
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.provider.AlarmClock
+import android.telecom.TelecomManager
 import android.telephony.SmsManager
 import android.util.Log
 import androidx.core.net.toUri
@@ -171,9 +173,10 @@ class ToolExecutor(
         val number = contacts.resolveNumber(recipient)
             ?: return ToolResult.failed("I could not find $recipient.")
         return try {
-            context.startActivity(
-                Intent(Intent.ACTION_CALL, "tel:$number".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
+            // Straight through the system telecom service on the default phone line. A plain
+            // ACTION_CALL intent is offered to every app that handles tel: links, so the user
+            // was asked to choose between Phone, Voice and Zoom instead of hearing a ring.
+            context.getSystemService(TelecomManager::class.java).placeCall("tel:$number".toUri(), Bundle())
             ToolResult.ok("Calling $recipient.")
         } catch (e: SecurityException) {
             // No CALL_PHONE, or an emergency number the platform will not auto-dial: open
