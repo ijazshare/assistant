@@ -39,6 +39,24 @@ class MachineSettings(private val context: Context) {
         }
     }
 
+    /**
+     * The owner's own phone number, so "text me" has somewhere to go. Null until they
+     * enter it: the contacts Profile is usually empty, and guessing (a SIM's line number,
+     * a fuzzy contact) is how a message once went to a relative instead.
+     */
+    val ownNumber: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[OWN_NUMBER]?.takeIf { it.isNotBlank() }
+    }
+
+    suspend fun ownNumberNow(): String? = ownNumber.first()
+
+    suspend fun setOwnNumber(number: String) {
+        context.dataStore.edit { prefs ->
+            val trimmed = number.trim()
+            if (trimmed.isEmpty()) prefs.remove(OWN_NUMBER) else prefs[OWN_NUMBER] = trimmed
+        }
+    }
+
     companion object {
         /**
          * The Machine calls its operator "Admin" until told otherwise — which is both
@@ -47,5 +65,6 @@ class MachineSettings(private val context: Context) {
         const val DEFAULT_ADMIN_NAME = "Admin"
 
         private val ADMIN_NAME = stringPreferencesKey("admin_name")
+        private val OWN_NUMBER = stringPreferencesKey("own_number")
     }
 }

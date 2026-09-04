@@ -25,18 +25,33 @@ import androidx.core.content.ContextCompat
  * Aziz" for "me"), so a candidate is only accepted when its name genuinely matches. A
  * message sent to the wrong person is the worst outcome here; "not found" is far better.
  */
-class ContactLookup(private val context: Context) {
+class ContactLookup(
+    private val context: Context,
+    /** The owner's number as they saved it in settings; null until they have. */
+    private val ownNumber: () -> String? = { null },
+) {
 
     fun resolveNumber(spoken: String): String? {
         val trimmed = spoken.trim()
         return when {
             trimmed.isEmpty() -> null
-            looksLikeNumber(trimmed) -> trimmed.filter { it.isDigit() || it == '+' }
+
+            looksLikeNumber(trimmed) -> digitsOf(trimmed)
+
+            // "me" is the number the owner typed in; the contacts Profile is only a fallback.
+            ContactMatch.isSelf(trimmed) -> savedOwnNumber() ?: profileNumberIfAllowed()
+
             !hasContactsPermission() -> null
-            ContactMatch.isSelf(trimmed) -> ownNumber()
+
             else -> lookupByName(trimmed)
         }
     }
+
+    private fun digitsOf(number: String): String = number.filter { it.isDigit() || it == '+' }
+
+    private fun savedOwnNumber(): String? = ownNumber()?.let(::digitsOf)?.takeIf { it.length >= MIN_DIGITS }
+
+    private fun profileNumberIfAllowed(): String? = if (hasContactsPermission()) profileNumber() else null
 
     /**
      * The first candidate whose display name genuinely matches the spoken name.
@@ -78,8 +93,8 @@ class ContactLookup(private val context: Context) {
         }
     }
 
-    /** The device owner's own number, from the contacts Profile. Null if they never set one. */
-    private fun ownNumber(): String? {
+    /** The device owner's number from the contacts Profile — usually unset, hence the setting. */
+    private fun profileNumber(): String? {
         val uri = Uri.withAppendedPath(
             ContactsContract.Profile.CONTENT_URI,
             ContactsContract.Contacts.Data.CONTENT_DIRECTORY,

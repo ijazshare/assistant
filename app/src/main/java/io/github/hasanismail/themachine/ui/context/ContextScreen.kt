@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.github.hasanismail.themachine.context.MachineFile
 import io.github.hasanismail.themachine.context.MachineFiles
@@ -69,8 +70,10 @@ fun ContextScreen(modifier: Modifier = Modifier) {
     val settings = remember(context) { MachineSettings(context) }
 
     var adminName by remember { mutableStateOf("") }
+    var ownNumber by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         adminName = settings.adminNameNow()
+        ownNumber = settings.ownNumberNow().orEmpty()
     }
 
     val drafts = remember { mutableStateMapOf<String, String>() }
@@ -106,12 +109,24 @@ fun ContextScreen(modifier: Modifier = Modifier) {
             color = MachineColors.Ghost,
         )
 
-        NameField(
+        SettingField(
+            label = "ADMIN",
+            help = "What the assistant should call you.",
             value = adminName,
             onChange = { name ->
                 adminName = name
                 scope.launch { settings.setAdminName(name) }
             },
+        )
+        SettingField(
+            label = "YOUR NUMBER",
+            help = "Where \"text me\" goes. Nothing else ever resolves to you.",
+            value = ownNumber,
+            onChange = { number ->
+                ownNumber = number
+                scope.launch { settings.setOwnNumber(number) }
+            },
+            numeric = true,
         )
 
         for (spec in MachineFiles.ALL) {
@@ -133,12 +148,18 @@ fun ContextScreen(modifier: Modifier = Modifier) {
 }
 
 /**
- * The one setting that is not a file. It is asked for separately because the assistant
- * uses it as a form of address in every prompt, and burying it in a Markdown file would
- * make something the model depends on look optional.
+ * The two settings that are not files: the name the assistant addresses you by, and the
+ * number "text me" goes to. Asked for separately because the assistant depends on them,
+ * and burying either in a Markdown file would make it look optional.
  */
 @Composable
-private fun NameField(value: String, onChange: (String) -> Unit) {
+private fun SettingField(
+    label: String,
+    help: String,
+    value: String,
+    onChange: (String) -> Unit,
+    numeric: Boolean = false,
+) {
     TrackingBox(
         modifier = Modifier.fillMaxWidth(),
         color = MachineColors.Admin,
@@ -149,12 +170,8 @@ private fun NameField(value: String, onChange: (String) -> Unit) {
             modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text("ADMIN", style = MachineLabel, color = MachineColors.Admin)
-            Text(
-                "What the assistant should call you.",
-                style = MachineReadout,
-                color = MachineColors.Dim,
-            )
+            Text(label, style = MachineLabel, color = MachineColors.Admin)
+            Text(help, style = MachineReadout, color = MachineColors.Dim)
             BasicTextField(
                 value = value,
                 onValueChange = onChange,
@@ -164,7 +181,8 @@ private fun NameField(value: String, onChange: (String) -> Unit) {
                 ),
                 cursorBrush = SolidColor(MachineColors.Admin),
                 keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
+                    keyboardType = if (numeric) KeyboardType.Phone else KeyboardType.Text,
+                    capitalization = if (numeric) KeyboardCapitalization.None else KeyboardCapitalization.Words,
                     imeAction = ImeAction.Done,
                 ),
                 modifier = Modifier
@@ -173,8 +191,13 @@ private fun NameField(value: String, onChange: (String) -> Unit) {
                     .padding(8.dp),
             )
             if (value.isBlank()) {
+                // ponytail: the blank-state hint is derived here rather than a sixth parameter.
                 Text(
-                    "Defaults to \"${MachineSettings.DEFAULT_ADMIN_NAME}\".",
+                    text = if (numeric) {
+                        "Not set — \"text me\" will say it has nowhere to send."
+                    } else {
+                        "Defaults to \"${MachineSettings.DEFAULT_ADMIN_NAME}\"."
+                    },
                     style = MachineReadout,
                     color = MachineColors.Ghost,
                 )

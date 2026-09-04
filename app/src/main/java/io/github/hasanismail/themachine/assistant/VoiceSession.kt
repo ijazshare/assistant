@@ -104,7 +104,18 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private val registry = ModelRegistry(context)
     private val settings = MachineSettings(context)
     private val files = MachineFiles(context)
-    private val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context))
+
+    /**
+     * The owner's saved number, mirrored from settings so the lookup can read it without
+     * blocking: "text me" goes here, never to whichever contact fuzzily matched "me".
+     */
+    private var ownNumber: String? = null
+    private val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context) { ownNumber })
+
+    init {
+        scope.launch { settings.ownNumber.collect { ownNumber = it } }
+    }
+
     private val piper = PiperEngine()
     private val router = ModelRouter(context)
     private val cache = CommandCache.shared(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))

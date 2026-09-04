@@ -9,6 +9,8 @@
  */
 package io.github.hasanismail.themachine.pipeline
 
+import android.content.Context
+import android.os.Bundle
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -18,6 +20,7 @@ import io.github.hasanismail.themachine.models.ModelRegistry
 import io.github.hasanismail.themachine.models.ModelRole
 import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
+import io.github.hasanismail.themachine.settings.MachineSettings
 import io.github.hasanismail.themachine.tools.ContactLookup
 import io.github.hasanismail.themachine.tools.MachineTools
 import io.github.hasanismail.themachine.tools.MessageBody
@@ -46,15 +49,8 @@ class PipelineProbeTest {
     fun probe() {
         val args = InstrumentationRegistry.getArguments()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        if (dryLookup(args, context)) return
         val live = args.getString("live") == "true"
-
-        // `-e resolve "<name>"` just reports what a name resolves to — no model, no send.
-        args.getString("resolve")?.let { name ->
-            for (one in name.split("|")) {
-                Log.i(PIPE, "resolve [$one] -> ${ContactLookup(context).resolveNumber(one)}")
-            }
-            return
-        }
 
         assumeTrue("No language model installed", available)
         val smsto = args.getString("smsto")
@@ -88,6 +84,29 @@ class PipelineProbeTest {
         val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context))
         val result = runBlocking { executor.execute(call) }
         Log.i(PIPE, "EXECUTED success=${result.success} spoken=[${result.spoken}] detail=[${result.detail}]")
+    }
+
+    /**
+     * The contact-side probes, which need no model and never send anything:
+     *
+     *  - `-e setown <number>` saves the owner's number exactly as the Context screen would.
+     *  - `-e resolve "<name>|<name>"` reports what each name resolves to, reading that saved
+     *    number the way the session does, so "me" is checked end to end.
+     *
+     * Returns true if either ran, so the caller skips the model path entirely.
+     */
+    private fun dryLookup(args: Bundle, context: Context): Boolean {
+        args.getString("setown")?.let { number ->
+            runBlocking { MachineSettings(context).setOwnNumber(number) }
+            Log.i(PIPE, "own number saved (${number.count { it.isDigit() }} digits)")
+        }
+        val names = args.getString("resolve") ?: return args.containsKey("setown")
+        val own = runBlocking { MachineSettings(context).ownNumberNow() }
+        val lookup = ContactLookup(context) { own }
+        for (one in names.split("|")) {
+            Log.i(PIPE, "resolve [$one] -> ${lookup.resolveNumber(one)}")
+        }
+        return true
     }
 
     private fun parse(command: String): ToolCall? {
