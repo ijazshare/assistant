@@ -13,6 +13,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
+import android.telephony.SmsManager
 import android.util.Log
 import androidx.core.net.toUri
 import io.github.hasanismail.themachine.ocr.ScreenReader
@@ -134,28 +135,51 @@ class ToolExecutor(
 
     private fun sendMessage(call: ToolCall): ToolResult {
         val recipient = call.string("recipient") ?: return ToolResult.failed("Who should I message?")
-        val body = call.string("body") ?: return ToolResult.failed("What should I say?")
+        // A blank body reaches here when the session dropped an invented one: ask for the
+        // words rather than send something the user never said.
+        val body = call.string("body")?.takeIf { it.isNotBlank() }
+            ?: return ToolResult.failed("What should I say to $recipient?")
         val number = contacts.resolveNumber(recipient)
             ?: return ToolResult.failed("I could not find $recipient.")
 
-        // Composes rather than sends. Silently sending a message a speech recogniser
-        // produced is the one action here with no undo, so the user sees it first.
-        val intent = Intent(Intent.ACTION_SENDTO, "smsto:$number".toUri()).apply {
-            putExtra("sms_body", body)
+        return try {
+            val sms = context.getSystemService(SmsManager::class.java)
+                ?: return ToolResult.failed("This phone cannot send texts.")
+            val parts = sms.divideMessage(body)
+            if (parts.size > 1) {
+                sms.sendMultipartTextMessage(number, null, parts, null, null)
+            } else {
+                sms.sendTextMessage(number, null, body, null, null)
+            }
+            ToolResult.ok("Sent to $recipient.", body)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "no SMS permission", e)
+            ToolResult.failed("I do not have permission to send texts.", "Grant SMS under System access.")
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "bad SMS ($number)", e)
+            ToolResult.failed("I could not send that message.")
         }
-        return launch(
-            intent,
-            "I have written that to $recipient. Send it when you are ready.",
-            "No messaging app is available.",
-        )
     }
 
     private fun callContact(call: ToolCall): ToolResult {
         val recipient = call.string("recipient") ?: return ToolResult.failed("Who should I call?")
         val number = contacts.resolveNumber(recipient)
             ?: return ToolResult.failed("I could not find $recipient.")
-        val intent = Intent(Intent.ACTION_DIAL, "tel:$number".toUri())
-        return launch(intent, "Calling $recipient.", "No dialler is available.")
+        return try {
+            context.startActivity(
+                Intent(Intent.ACTION_CALL, "tel:$number".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            ToolResult.ok("Calling $recipient.")
+        } catch (e: SecurityException) {
+            // No CALL_PHONE, or an emergency number the platform will not auto-dial: open
+            // the dialler with the number ready, which needs the one confirming tap.
+            Log.w(TAG, "cannot place call directly", e)
+            launch(
+                Intent(Intent.ACTION_DIAL, "tel:$number".toUri()),
+                "Ready to call $recipient.",
+                "No dialler is available.",
+            )
+        }
     }
 
     // ---- Apps --------------------------------------------------------------------

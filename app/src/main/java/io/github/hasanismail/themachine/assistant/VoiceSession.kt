@@ -37,6 +37,7 @@ import io.github.hasanismail.themachine.settings.MachineSettings
 import io.github.hasanismail.themachine.stt.WhisperEngine
 import io.github.hasanismail.themachine.tools.ContactLookup
 import io.github.hasanismail.themachine.tools.MachineTools
+import io.github.hasanismail.themachine.tools.MessageBody
 import io.github.hasanismail.themachine.tools.ReminderStore
 import io.github.hasanismail.themachine.tools.TimeResolver
 import io.github.hasanismail.themachine.tools.ToolCall
@@ -428,6 +429,16 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * what this needs: the executor sees a call and never the sentence behind it.
      */
     private fun reconciled(transcript: String, call: ToolCall): ToolCall {
+        // A message body the user never said is invented, not dictated; drop it so the
+        // executor asks for the words rather than sending "hello how are you" to someone.
+        if (call.tool == MachineTools.SEND_MESSAGE) {
+            val body = call.arguments["body"].orEmpty()
+            if (body.isNotBlank() && !MessageBody.isTraceable(transcript, body)) {
+                Log.i(TAG, "dropping invented body \"$body\" for [$transcript]")
+                return call.copy(arguments = call.arguments - "body")
+            }
+        }
+
         val timed = call.tool == MachineTools.SET_ALARM || call.tool == MachineTools.CREATE_REMINDER
         val stated = call.arguments["hour"]?.toIntOrNull()
         val corrected = if (timed && stated != null) TimeResolver.reconcileHour(transcript, stated) else null
