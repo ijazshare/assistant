@@ -44,7 +44,10 @@ object AnswerPrompt {
                 "in ONE short plain sentence. But if a correct answer would need live or changing " +
                 "information you cannot have offline — weather, news, prices, scores, or how many " +
                 "of something there are — say you cannot know that offline instead of guessing. " +
-                "Never invent a number you are not sure of. Do not mention searching or browsing.",
+                "Never invent a number you are not sure of. Do not mention searching or browsing. " +
+                "You are only answering in words here: you cannot send a message, place a call, " +
+                "set an alarm or otherwise act on the phone from this reply, so if you are asked " +
+                "to do one of those, say you cannot do that here — never claim you did it.",
         )
         // The instruction alone does not stop a 4B inventing "25,000 buildings" or a game
         // score: it does not know that it does not know, so it fills the blank. Three

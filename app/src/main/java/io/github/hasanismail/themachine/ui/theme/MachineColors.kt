@@ -12,59 +12,60 @@ package io.github.hasanismail.themachine.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * A modern dark palette: deep slate ground, glass panels lifted a step above it, near-
- * white text, and a small set of soft accents. The names carry meaning — Relevant is
- * live/alert, Admin is the primary blue the app is accented with, Asset is a completed
- * action — so callers keep working while the values move to the glass aesthetic.
+ * A Halo-trilogy palette: deep UNSC navy grounds, Cortana-cyan holographic panels, and a
+ * small set of HUD accents — shield green for what worked, Covenant orange for a warning.
+ * Cool, faintly cyan whites, the way a MJOLNIR visor tints everything it reports.
+ *
+ * The names carry meaning so callers keep working: Admin is the primary cyan the app is
+ * lit with, Relevant is a live/alert state, Asset is a completed action.
  *
  * Written from scratch. No third-party assets are used anywhere in this project —
  * see "Licence and attribution" in the README.
  */
 object MachineColors {
 
-    /** Ground. Deep cool slate rather than pure black. */
-    val Void = Color(0xFF0C0F15)
+    /** Ground. Deep UNSC navy, nearly black with a blue cast. */
+    val Void = Color(0xFF050A12)
 
-    /** Panel fill, a step up from the ground. */
-    val Panel = Color(0xFF161B24)
+    /** Panel fill — a holographic pane lifted off the ground, cyan-tinted. */
+    val Panel = Color(0xFF0B1826)
 
     /** Panel fill for something the system is actively working on. */
-    val PanelActive = Color(0xFF1E2430)
+    val PanelActive = Color(0xFF11283C)
 
-    /** Hairlines, dividers, inactive rails. */
-    val Rule = Color(0xFF2A3140)
+    /** Hairlines, HUD rails, inactive edges — dim cyan. */
+    val Rule = Color(0xFF1F4A66)
 
-    /** Primary readout text. A touch off pure white so it does not glare at night. */
-    val Bone = Color(0xFFECEFF3)
+    /** Primary readout text. A cool, faintly cyan white rather than pure white. */
+    val Bone = Color(0xFFDCF2FF)
 
     /** Secondary readout: labels, units, timestamps. */
-    val Dim = Color(0xFFA0AAB8)
+    val Dim = Color(0xFF83AAC6)
 
     /** Tertiary: hint text, disabled. */
-    val Ghost = Color(0xFF6A7684)
+    val Ghost = Color(0xFF4C6D84)
 
-    // ---- Accents ----------------------------------------------------------------
-    // One colour, one meaning. Softened for the glass look but still legible.
+    // ---- HUD accents ------------------------------------------------------------
 
-    /** Live capture, alerts, destructive actions. */
-    val Relevant = Color(0xFFF2857F)
+    /** Live capture, alerts, destructive actions — Covenant orange. */
+    val Relevant = Color(0xFFFF7A45)
 
-    /** The primary accent: the system talking about itself, links, active state. */
-    val Admin = Color(0xFF8CB8FF)
+    /** The primary accent: Cortana cyan. Active state, links, the system speaking. */
+    val Admin = Color(0xFF54D2FF)
 
-    /** Understood input, completed work, confirmations. */
-    val Asset = Color(0xFF67D2A0)
+    /** Understood input, completed work — shield green. */
+    val Asset = Color(0xFF57E3A9)
 
-    /** Passive information. */
-    val Irrelevant = Color(0xFF6FD0E0)
+    /** Passive information — a lighter holographic cyan. */
+    val Irrelevant = Color(0xFF8FE1FF)
 
     // ---- Derived ----------------------------------------------------------------
 
-    /** Was the scanline wash; now transparent so the old grille disappears everywhere. */
-    val Scanline = Color(0x00000000)
+    /** The hologram scanline wash, laid faintly over panels. Kept well below text contrast. */
+    val Scanline = Color(0x0F63D4FF)
 
     /** Soft glows behind an active accent. */
-    val RelevantGlow = Color(0x33F2857F)
-    val AdminGlow = Color(0x338CB8FF)
-    val AssetGlow = Color(0x3367D2A0)
+    val RelevantGlow = Color(0x33FF7A45)
+    val AdminGlow = Color(0x3354D2FF)
+    val AssetGlow = Color(0x3357E3A9)
 }
