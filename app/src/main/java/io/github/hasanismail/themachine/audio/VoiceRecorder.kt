@@ -115,16 +115,25 @@ class VoiceRecorder {
         // reason this handler exists.
         currentCoroutineContext().job.invokeOnCompletion { runCatching { record.stop() } }
 
+        val stats = CaptureStats()
         try {
             record.startRecording()
             // The one moment that decides whether the user is heard. Everything before it
             // is a window in which their words do not exist.
             Log.i(TAG, "microphone open")
-            pump(record, endpointer)
+            pump(record, endpointer, stats)
         } catch (e: IllegalStateException) {
             Log.w(TAG, "capture failed", e)
             trySend(CaptureEvent.Failed(e.message ?: "Recording failed"))
         } finally {
+            // In the finally, not after the loop: a dismissal cancels the coroutine while
+            // the loop is blocked in read(), and the tail never runs. The finally always
+            // does, so the outcome of a summon the user gave up on is still recorded.
+            Log.i(
+                TAG,
+                "capture done: reason=${stats.reason} frames=${stats.frames} " +
+                    "peak=${"%.4f".format(stats.peak)} speechDetected=${stats.speaking}",
+            )
             runCatching { record.stop() }
             record.release()
         }
@@ -133,22 +142,27 @@ class VoiceRecorder {
         awaitClose { runCatching { record.release() } }
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * What a capture actually did, so the finally can report it. A peak of ~0 across many
+     * frames means the source opened but fed silence (a known VOICE_RECOGNITION state after
+     * an audio-route change); few frames with no speech means it was dismissed early.
+     */
+    private class CaptureStats {
+        var frames = 0
+        var peak = 0f
+        var speaking = false
+        var reason = StopReason.CANCELLED
+    }
+
     /** Reads frames until the endpointer stops it or the flow is cancelled. */
     private suspend fun ProducerScope<CaptureEvent>.pump(
         record: AudioRecord,
         endpointer: Endpointer,
+        stats: CaptureStats,
     ) {
         val collected = ArrayList<Float>(WhisperEngine.SAMPLE_RATE * INITIAL_SECONDS)
         val buffer = ShortArray(FRAME_SAMPLES)
-        var speaking = false
         var framesSinceSnapshot = 0
-
-        // Diagnostics for "the mic didn't work": how many frames actually arrived and how
-        // loud the loudest was. A peak of ~0 across many frames means the source opened but
-        // fed silence (a known VOICE_RECOGNITION state after a route change) rather than the
-        // room being quiet; few frames with no speech means it was dismissed before it heard.
-        var frames = 0
-        var peak = 0f
 
         var barrenReads = 0
         while (currentCoroutineContext().isActive) {
@@ -158,6 +172,7 @@ class VoiceRecorder {
                 // ends. A handful in a row means the microphone is gone, not slow.
                 if (++barrenReads >= MAX_BARREN_READS) {
                     Log.w(TAG, "capture: $barrenReads reads returned $read; giving up")
+                    stats.reason = StopReason.NO_SPEECH
                     trySend(CaptureEvent.Failed("The microphone stopped responding."))
                     return
                 }
@@ -166,14 +181,14 @@ class VoiceRecorder {
             barrenReads = 0
 
             val rms = appendAndMeasure(buffer, read, collected)
-            frames++
-            if (rms > peak) peak = rms
+            stats.frames++
+            if (rms > stats.peak) stats.peak = rms
             trySend(CaptureEvent.Level(displayLevel(rms)))
 
             // Offer the audio so far often enough to feel live, rarely enough that the
             // transcriber is not the reason the microphone stalls. The consumer is free
             // to ignore one it has no time for.
-            if (speaking && ++framesSinceSnapshot >= FRAMES_PER_SNAPSHOT) {
+            if (stats.speaking && ++framesSinceSnapshot >= FRAMES_PER_SNAPSHOT) {
                 framesSinceSnapshot = 0
                 trySend(CaptureEvent.Snapshot(collected.toFloatArray()))
             }
@@ -182,7 +197,7 @@ class VoiceRecorder {
                 FrameVerdict.Continue -> Unit
 
                 FrameVerdict.SpeechBegan -> {
-                    speaking = true
+                    stats.speaking = true
                     trySend(CaptureEvent.SpeechStarted)
                 }
 
@@ -193,21 +208,13 @@ class VoiceRecorder {
                     // detected, and was told nothing had been heard while a perfectly
                     // good recording of them was dropped. Transcribing costs about
                     // 150 ms and settles the question properly.
-                    logOutcome(verdict.reason, frames, peak, speaking)
+                    stats.reason = verdict.reason
                     trySend(CaptureEvent.Finished(collected.toFloatArray(), verdict.reason))
                     return
                 }
             }
         }
-        logOutcome(StopReason.CANCELLED, frames, peak, speaking)
         trySend(CaptureEvent.Finished(collected.toFloatArray(), StopReason.CANCELLED))
-    }
-
-    private fun logOutcome(reason: StopReason, frames: Int, peak: Float, speaking: Boolean) {
-        Log.i(
-            TAG,
-            "capture done: reason=$reason frames=$frames peak=${"%.4f".format(peak)} speechDetected=$speaking",
-        )
     }
 
     /** Converts one frame to float, accumulates it, and returns its RMS. */
