@@ -17,29 +17,37 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.hasanismail.themachine.ui.theme.MachineColors
 
+/** Glass panel fill and lit rim, shared by every card on every screen. */
+private val CardBrush = Brush.verticalGradient(
+    listOf(MachineColors.PanelActive, MachineColors.Panel),
+)
+private val RimBrush = Brush.verticalGradient(
+    listOf(Color(0x1FFFFFFF), Color(0x0AFFFFFF)),
+)
+
 /**
- * The tracking box: four corner brackets that snap inward onto whatever they are
- * framing, rather than a closed rectangle.
- *
- * [progress] drives the snap — 0 means the brackets sit spread out and faint,
- * 1 means locked on. Callers usually animate it via [rememberSnapProgress].
+ * A rounded glass card. This was the terminal "tracking box" of corner brackets; every
+ * screen framed its rows with it, so redrawing it here as a soft raised panel re-skins
+ * the whole app at once. The [color] and [progress] arguments are kept so existing
+ * callers compile unchanged; a card does not need them.
  */
 @Composable
 fun TrackingBox(
@@ -51,83 +59,19 @@ fun TrackingBox(
     filled: Boolean = false,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
+    val shape = RoundedCornerShape(20.dp)
     Box(
         modifier = modifier
-            .drawBehind {
-                if (filled) {
-                    drawRect(MachineColors.Panel)
-                }
-                drawTrackingCorners(
-                    color = color,
-                    progress = progress,
-                    cornerLengthPx = cornerLength.toPx(),
-                    strokePx = strokeWidth.toPx(),
-                )
-            }
-            .padding(strokeWidth + 4.dp),
+            .clip(shape)
+            .background(CardBrush)
+            .border(1.dp, RimBrush, shape),
         content = content,
     )
 }
 
-/** How far outside the box the brackets start, as a fraction of the shortest side. */
-private const val BRACKET_SPREAD_FRACTION = 0.22f
-
-/** Bracket opacity when fully spread, and how much it gains as it locks on. */
-private const val BRACKET_ALPHA_FLOOR = 0.25f
-private const val BRACKET_ALPHA_RANGE = 0.75f
-
-/** Arm length when fully spread, and how much it grows as it locks on. */
-private const val BRACKET_ARM_FLOOR = 0.6f
-private const val BRACKET_ARM_RANGE = 0.4f
-
 /**
- * Corners are drawn as six line segments each — two arms and a short tick — offset
- * outward by an amount that shrinks to zero as [progress] reaches 1. The overshoot is
- * what makes it read as *snapping* rather than fading in.
- */
-private fun DrawScope.drawTrackingCorners(
-    color: Color,
-    progress: Float,
-    cornerLengthPx: Float,
-    strokePx: Float,
-) {
-    val p = progress.coerceIn(0f, 1f)
-    // Spread starts at a quarter of the shortest side and closes to nothing.
-    val spread = (1f - p) * (minOf(size.width, size.height) * BRACKET_SPREAD_FRACTION)
-    val alpha = BRACKET_ALPHA_FLOOR + BRACKET_ALPHA_RANGE * p
-    val arm = cornerLengthPx * (BRACKET_ARM_FLOOR + BRACKET_ARM_RANGE * p)
-
-    val left = -spread
-    val top = -spread
-    val right = size.width + spread
-    val bottom = size.height + spread
-
-    fun seg(x1: Float, y1: Float, x2: Float, y2: Float) {
-        drawLine(
-            color = color.copy(alpha = color.alpha * alpha),
-            start = Offset(x1, y1),
-            end = Offset(x2, y2),
-            strokeWidth = strokePx,
-        )
-    }
-
-    // Top-left
-    seg(left, top, left + arm, top)
-    seg(left, top, left, top + arm)
-    // Top-right
-    seg(right, top, right - arm, top)
-    seg(right, top, right, top + arm)
-    // Bottom-left
-    seg(left, bottom, left + arm, bottom)
-    seg(left, bottom, left, bottom - arm)
-    // Bottom-right
-    seg(right, bottom, right - arm, bottom)
-    seg(right, bottom, right, bottom - arm)
-}
-
-/**
- * Animates a lock-on. Snappy and linear on purpose — the Machine is mechanical, so
- * no spring overshoot or decelerate easing.
+ * Kept so callers that animate a lock-on still compile. The card no longer draws the
+ * snap, so this is just a settled value; harmless and cheap.
  */
 @Composable
 fun rememberSnapProgress(locked: Boolean, durationMillis: Int = 180): Float {
@@ -139,68 +83,17 @@ fun rememberSnapProgress(locked: Boolean, durationMillis: Int = 180): Float {
     return progress
 }
 
-/**
- * The static scanline grille laid over a frame.
- *
- * A modifier rather than a stacked composable so it costs no extra layout node, and
- * kept far below text contrast so it never hurts legibility. The travelling bar is
- * [ScanSweep], which needs an infinite transition and so has to be a composable.
- */
-fun Modifier.scanlines(spacingDp: Float = 3f): Modifier = this then Modifier.drawWithContent {
-    drawContent()
-    val spacing = spacingDp * density
-    var y = 0f
-    while (y < size.height) {
-        drawRect(
-            color = MachineColors.Scanline,
-            topLeft = Offset(0f, y),
-            size = Size(size.width, 1f),
-        )
-        y += spacing
-    }
-}
+/** The old scanline grille, now off. Kept as a no-op so callers need no changes. */
+fun Modifier.scanlines(spacingDp: Float = 3f): Modifier = this
 
-/**
- * The travelling scan bar. Separated from [scanlines] because it needs an infinite
- * transition and therefore has to be a composable, not a plain modifier.
- */
+/** The old travelling scan bar, now off. Kept as a no-op composable. */
 @Composable
 fun ScanSweep(
     modifier: Modifier = Modifier,
     color: Color = MachineColors.Irrelevant,
     periodMillis: Int = 2600,
 ) {
-    val transition = rememberInfiniteTransition(label = "sweep")
-    val position by transition.animateFloat(
-        initialValue = -0.1f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(periodMillis, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "sweepPos",
-    )
-    Box(
-        modifier = modifier.drawBehind {
-            val y = size.height * position
-            val bandHeight = 56f
-            // A soft leading edge and a hard trailing line, so it reads directionally.
-            for (i in 0 until 8) {
-                val t = i / 8f
-                drawRect(
-                    color = color.copy(alpha = 0.05f * (1f - t)),
-                    topLeft = Offset(0f, y - bandHeight * t),
-                    size = Size(size.width, bandHeight / 8f),
-                )
-            }
-            drawLine(
-                color = color.copy(alpha = 0.35f),
-                start = Offset(0f, y),
-                end = Offset(size.width, y),
-                strokeWidth = 1f,
-            )
-        },
-    )
+    Box(modifier)
 }
 
 /** Thin rule used to separate readout blocks. */
@@ -236,27 +129,28 @@ fun IndeterminateCells(
     )
     Box(
         modifier = modifier.drawBehind {
-            val gap = 2f * density
+            val gap = 3f * density
             val cellWidth = (size.width - gap * (cells - 1)) / cells
             for (i in 0 until cells) {
                 // Distance behind the head, wrapped, so the lit window is contiguous.
                 val distance = (head.toInt() - i + cells) % cells
                 val intensity = if (distance < lit) 1f - distance / lit.toFloat() else 0f
-                drawRect(
+                drawRoundRect(
                     color = if (intensity > 0f) {
-                        color.copy(alpha = 0.15f + 0.85f * intensity)
+                        color.copy(alpha = 0.2f + 0.8f * intensity)
                     } else {
                         MachineColors.Rule
                     },
                     topLeft = Offset(i * (cellWidth + gap), 0f),
                     size = Size(cellWidth, size.height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
                 )
             }
         },
     )
 }
 
-/** Boxed caption stamped on a frame, e.g. "ADMIN" or "LISTENING". */
+/** A subtle outlined chip, e.g. a caption stamped on a card. */
 @Composable
 fun StampBorder(
     modifier: Modifier = Modifier,
@@ -277,8 +171,7 @@ fun StampBorder(
  * A live input level, drawn as a mirrored bar of cells.
  *
  * A bar rather than a scrolling waveform: the useful question while speaking is "is it
- * hearing me", which a level answers instantly, and a waveform of 20 ms frames on a
- * phone-width strip is mostly noise.
+ * hearing me", which a level answers instantly.
  */
 @Composable
 fun LevelMeter(
@@ -287,8 +180,6 @@ fun LevelMeter(
     color: Color = MachineColors.Relevant,
     cells: Int = 32,
 ) {
-    // Eases the bar without hiding a real drop to silence, which is what the
-    // endpointer is about to act on.
     val smoothed by animateFloatAsState(
         targetValue = level.coerceIn(0f, 1f),
         animationSpec = tween(90, easing = LinearEasing),
@@ -296,7 +187,7 @@ fun LevelMeter(
     )
     Box(
         modifier = modifier.drawBehind {
-            val gap = 2f * density
+            val gap = 3f * density
             val cellWidth = (size.width - gap * (cells - 1)) / cells
             val lit = (smoothed * cells).toInt()
             for (i in 0 until cells) {
@@ -308,10 +199,11 @@ fun LevelMeter(
                 } else {
                     size.height * 0.12f
                 }
-                drawRect(
+                drawRoundRect(
                     color = if (on) color else MachineColors.Rule,
                     topLeft = Offset(i * (cellWidth + gap), (size.height - height) / 2f),
                     size = Size(cellWidth, height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(cellWidth / 2f),
                 )
             }
         },

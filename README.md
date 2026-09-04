@@ -1,4 +1,8 @@
-# The Machine
+# Assistant
+
+> **Fork.** This is a personal fork of [hasan-ismail/themachine](https://github.com/hasan-ismail/themachine),
+> renamed and redesigned. Licensed under AGPL-3.0, same as upstream — see [LICENSE](LICENSE).
+> Changes here include a modern UI redesign and expanded on-device actions.
 
 A fully offline voice assistant for Android. It replaces Google Assistant for the things
 people actually use an assistant for — alarms, timers, reminders and tasks — and does the

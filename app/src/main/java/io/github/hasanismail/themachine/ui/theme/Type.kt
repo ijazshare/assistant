@@ -13,64 +13,60 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextGeometricTransform
 import androidx.compose.ui.unit.sp
 
 /**
- * Everything is monospace. The system reads as machine output rather than prose, and
- * fixed advance widths mean a changing readout does not reflow the layout around it —
- * which matters when timings tick during a live session.
- *
- * The device's own monospace family is used rather than a bundled font: it keeps the
- * APK smaller and avoids a font licence to account for in the attribution table.
+ * The device's own sans-serif family. Clean and modern, and using the system font
+ * keeps the APK small and avoids a font licence to account for in the attribution
+ * table. The old monospace terminal look is gone; a couple of numeric readouts still
+ * ask for tabular figures where columns must line up.
  */
-private val Mono = FontFamily.Monospace
+private val Sans = FontFamily.Default
 
-/** Wide-tracked all-caps, for labels the system stamps on things. */
+/** Small tracked labels: section headers, units, captions. */
 val MachineLabel = TextStyle(
-    fontFamily = Mono,
+    fontFamily = Sans,
     fontWeight = FontWeight.Medium,
-    fontSize = 11.sp,
-    lineHeight = 16.sp,
-    letterSpacing = 2.4.sp,
-)
-
-/** Status lines: LISTENING, PROCESSING, ALARM SET. */
-val MachineStatus = TextStyle(
-    fontFamily = Mono,
-    fontWeight = FontWeight.Bold,
-    fontSize = 20.sp,
-    lineHeight = 26.sp,
-    letterSpacing = 3.sp,
-)
-
-/** Dense numeric readouts — timings, sizes, percentages. */
-val MachineReadout = TextStyle(
-    fontFamily = Mono,
-    fontWeight = FontWeight.Normal,
     fontSize = 12.sp,
-    lineHeight = 17.sp,
-    letterSpacing = 0.5.sp,
+    lineHeight = 16.sp,
+    letterSpacing = 0.4.sp,
 )
 
-/** Slightly condensed, for long diagnostic dumps that must not wrap awkwardly. */
-val MachineDump = TextStyle(
-    fontFamily = Mono,
-    fontWeight = FontWeight.Normal,
-    fontSize = 11.sp,
-    lineHeight = 15.sp,
+/** Status lines and titles: Listening, Alarm set, the app name. */
+val MachineStatus = TextStyle(
+    fontFamily = Sans,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 22.sp,
+    lineHeight = 28.sp,
     letterSpacing = 0.sp,
-    textGeometricTransform = TextGeometricTransform(scaleX = 0.94f),
+)
+
+/** Body / numeric readouts — timings, sizes, percentages. */
+val MachineReadout = TextStyle(
+    fontFamily = Sans,
+    fontWeight = FontWeight.Normal,
+    fontSize = 14.sp,
+    lineHeight = 19.sp,
+    letterSpacing = 0.1.sp,
+)
+
+/** Denser body, for longer diagnostic text. */
+val MachineDump = TextStyle(
+    fontFamily = Sans,
+    fontWeight = FontWeight.Normal,
+    fontSize = 13.sp,
+    lineHeight = 18.sp,
+    letterSpacing = 0.sp,
 )
 
 val MachineTypography = Typography(
-    displayLarge = MachineStatus.copy(fontSize = 34.sp, letterSpacing = 4.sp),
-    headlineMedium = MachineStatus.copy(fontSize = 24.sp),
+    displayLarge = MachineStatus.copy(fontSize = 34.sp),
+    headlineMedium = MachineStatus.copy(fontSize = 26.sp),
     headlineSmall = MachineStatus,
-    titleMedium = MachineLabel.copy(fontSize = 13.sp, letterSpacing = 1.8.sp),
-    titleSmall = MachineLabel,
-    bodyMedium = MachineReadout.copy(fontSize = 13.sp),
+    titleMedium = MachineLabel.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+    titleSmall = MachineLabel.copy(fontSize = 13.sp),
+    bodyMedium = MachineReadout.copy(fontSize = 15.sp),
     bodySmall = MachineDump,
-    labelSmall = MachineLabel.copy(fontSize = 10.sp),
+    labelSmall = MachineLabel.copy(fontSize = 11.sp),
     labelMedium = MachineLabel,
 )

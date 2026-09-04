@@ -12,58 +12,59 @@ package io.github.hasanismail.themachine.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * A surveillance-terminal palette: near-black ground, bone-white text, and a small
- * set of saturated classification colours used sparingly enough that each one still
- * means something when it appears.
+ * A modern dark palette: deep slate ground, glass panels lifted a step above it, near-
+ * white text, and a small set of soft accents. The names carry meaning — Relevant is
+ * live/alert, Admin is the primary blue the app is accented with, Asset is a completed
+ * action — so callers keep working while the values move to the glass aesthetic.
  *
  * Written from scratch. No third-party assets are used anywhere in this project —
  * see "Licence and attribution" in the README.
  */
 object MachineColors {
 
-    /** Ground. Very slightly blue rather than pure black, so OLED edges read as deliberate. */
-    val Void = Color(0xFF05070A)
+    /** Ground. Deep cool slate rather than pure black. */
+    val Void = Color(0xFF0C0F15)
 
-    /** Panel fill, one step up from the ground. */
-    val Panel = Color(0xFF0B1016)
+    /** Panel fill, a step up from the ground. */
+    val Panel = Color(0xFF161B24)
 
     /** Panel fill for something the system is actively working on. */
-    val PanelActive = Color(0xFF121A24)
+    val PanelActive = Color(0xFF1E2430)
 
-    /** Hairlines, inactive brackets, grid. */
-    val Rule = Color(0xFF1E2A38)
+    /** Hairlines, dividers, inactive rails. */
+    val Rule = Color(0xFF2A3140)
 
-    /** Primary readout text. Bone rather than pure white — pure white glares at night. */
-    val Bone = Color(0xFFE6ECF2)
+    /** Primary readout text. A touch off pure white so it does not glare at night. */
+    val Bone = Color(0xFFECEFF3)
 
     /** Secondary readout: labels, units, timestamps. */
-    val Dim = Color(0xFF7C8B9C)
+    val Dim = Color(0xFFA0AAB8)
 
     /** Tertiary: hint text, disabled. */
-    val Ghost = Color(0xFF44525F)
+    val Ghost = Color(0xFF6A7684)
 
-    // ---- Classification accents -------------------------------------------------
-    // One colour, one meaning. Used on brackets, status text and state glyphs.
+    // ---- Accents ----------------------------------------------------------------
+    // One colour, one meaning. Softened for the glass look but still legible.
 
-    /** Live capture, threats, destructive actions. */
-    val Relevant = Color(0xFFE01B24)
+    /** Live capture, alerts, destructive actions. */
+    val Relevant = Color(0xFFF2857F)
 
-    /** The system talking about itself: admin state, boot, model management. */
-    val Admin = Color(0xFFFFB000)
+    /** The primary accent: the system talking about itself, links, active state. */
+    val Admin = Color(0xFF8CB8FF)
 
     /** Understood input, completed work, confirmations. */
-    val Asset = Color(0xFF3DDC97)
+    val Asset = Color(0xFF67D2A0)
 
-    /** Passive tracking, informational overlays. */
-    val Irrelevant = Color(0xFF4FA3D1)
+    /** Passive information. */
+    val Irrelevant = Color(0xFF6FD0E0)
 
     // ---- Derived ----------------------------------------------------------------
 
-    /** Scanline wash laid over the whole frame. Kept far below the text contrast. */
-    val Scanline = Color(0x0DFFFFFF)
+    /** Was the scanline wash; now transparent so the old grille disappears everywhere. */
+    val Scanline = Color(0x00000000)
 
-    /** Glow behind an active bracket. */
-    val RelevantGlow = Color(0x33E01B24)
-    val AdminGlow = Color(0x33FFB000)
-    val AssetGlow = Color(0x333DDC97)
+    /** Soft glows behind an active accent. */
+    val RelevantGlow = Color(0x33F2857F)
+    val AdminGlow = Color(0x338CB8FF)
+    val AssetGlow = Color(0x3367D2A0)
 }
