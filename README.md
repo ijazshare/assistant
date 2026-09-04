@@ -15,6 +15,28 @@ airplane mode changes nothing.
 > **Status: in development.** Phase P0 (repo and toolchain) is complete. The voice pipeline
 > lands over phases P1–P8; see [PROGRESS.md](PROGRESS.md) for what works today.
 
+## What this fork changes
+
+- **Named "Assistant"** and restyled after the original Halo trilogy: chamfered panels, cyan
+  rims and scanlines. The app itself is opaque; only the assistant overlay is translucent, so
+  it shows the app underneath.
+- **Acts on the phone.** Silent SMS through `SmsManager`, direct calls, opening apps, reading
+  the screen and notifications, tapping and scrolling through the accessibility service.
+- **Contacts are matched, not guessed.** A spoken name must match whole words of a contact's
+  display name; "me" goes only to the number you save on the Context screen (YOUR NUMBER),
+  never to whichever contact the provider fuzzily returned. Not found beats wrong person.
+- **Answers only what it can know.** General knowledge, definitions and arithmetic in one
+  sentence; live data (weather, prices, scores, counts) gets a plain "I can't know that
+  offline". An answer never claims to have sent, called or set anything.
+- **Everything is testable over adb without speaking.** Instrumented probes drive the real
+  models and log to logcat: `RoutingBenchmarkTest` (tag `BENCH`, 54 typed commands),
+  `AnswerHonestyTest` (`HONEST`), and `PipelineProbeTest` (`PIPE`) with `-e runcmd "<text>"`,
+  `-e resolve "<name>|<name>"`, `-e setown <number>`, and `-e live true` to actually execute.
+  Without `-e live true` nothing is sent.
+
+The privacy invariants are unchanged: no telemetry, no network outside model downloads, and
+nothing read from the device leaves it.
+
 ## Why
 
 Every mainstream phone assistant streams your voice to a server. For "set a timer for ten
