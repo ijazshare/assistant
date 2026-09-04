@@ -36,7 +36,9 @@ import io.github.hasanismail.themachine.models.ModelStorage
 import io.github.hasanismail.themachine.settings.MachineSettings
 import io.github.hasanismail.themachine.stt.ContactNames
 import io.github.hasanismail.themachine.stt.WhisperEngine
+import io.github.hasanismail.themachine.tools.Contact
 import io.github.hasanismail.themachine.tools.ContactLookup
+import io.github.hasanismail.themachine.tools.ContactResolution
 import io.github.hasanismail.themachine.tools.MachineTools
 import io.github.hasanismail.themachine.tools.MessageBody
 import io.github.hasanismail.themachine.tools.ReminderStore
@@ -82,6 +84,12 @@ sealed interface SessionState {
     ) : SessionState
 
     data class Problem(val message: String, val actionable: String? = null) : SessionState
+
+    /**
+     * A spoken name matched several contacts. The command is held and the user picks who it
+     * was meant for, rather than the assistant guessing and texting the wrong person.
+     */
+    data class ChooseContact(val spokenName: String, val options: List<Contact>) : SessionState
 }
 
 /** Where the time went, so a regression against the latency budget is visible. */
@@ -111,7 +119,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * blocking: "text me" goes here, never to whichever contact fuzzily matched "me".
      */
     private var ownNumber: String? = null
-    private val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context) { ownNumber })
+    private val contacts = ContactLookup(context) { ownNumber }
+    private val executor = ToolExecutor(context, ReminderStore(context), contacts)
 
     init {
         scope.launch { settings.ownNumber.collect { ownNumber = it } }
@@ -165,6 +174,17 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     /** The caller's contact names for transcriber biasing, read once and reused. */
     private var contactBias: String? = null
+
+    /** A messaging/calling command held while the user chooses among several contacts. */
+    private var pendingChoice: PendingChoice? = null
+
+    private data class PendingChoice(
+        val transcript: String,
+        val call: ToolCall,
+        val sttMillis: Long,
+        val llmMillis: Long,
+        val resolution: Resolution,
+    )
 
     private val _state = MutableStateFlow<SessionState>(SessionState.Idle)
     val state: StateFlow<SessionState> = _state.asStateFlow()
@@ -243,6 +263,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // two and a half seconds during which the overlay is up, looks ready, and hears
         // nothing at all. start() joins whatever is left here before opening its own.
         listening?.cancel()
+        // A dismissal abandons a pending contact choice too: the held command is gone, so
+        // a later tap on a stale selector must not send anything.
+        pendingChoice = null
         val current = _state.value
         if (current is SessionState.Listening || current is SessionState.Preparing) {
             _state.value = SessionState.Idle
@@ -492,6 +515,21 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         return true
     }
 
+    /**
+     * The user picked one of several matching contacts. Carry the held command out to them,
+     * with the number to send to and the name to say back.
+     */
+    fun chooseContact(contact: Contact) {
+        val pending = pendingChoice ?: return
+        pendingChoice = null
+        val chosen = pending.call.copy(
+            arguments = pending.call.arguments + mapOf("recipient" to contact.number, "display" to contact.name),
+        )
+        processing = scope.launch {
+            carryOut(pending.transcript, chosen, pending.sttMillis, pending.llmMillis, pending.resolution)
+        }
+    }
+
     /** Executes a resolved call, then records, remembers, shows and speaks the outcome. */
     private suspend fun carryOut(
         transcript: String,
@@ -500,7 +538,25 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         llmMillis: Long,
         resolution: Resolution,
     ) {
-        var result = executor.execute(reconciled(transcript, call))
+        val ready = reconciled(transcript, call)
+
+        // Never pick among several matching contacts silently — "Hassan" matched both a
+        // contact and "Dr Hassan ER Chicago", and a blind choice texted the wrong one. Hold
+        // the command and let the user say who it was for.
+        val messaging = ready.tool == MachineTools.SEND_MESSAGE || ready.tool == MachineTools.CALL_CONTACT
+        val recipient = ready.arguments["recipient"]?.takeIf { it.isNotBlank() }
+        val choices = if (messaging && recipient != null) {
+            (contacts.resolve(recipient) as? ContactResolution.Many)?.options
+        } else {
+            null
+        }
+        if (choices != null) {
+            pendingChoice = PendingChoice(transcript, ready, sttMillis, llmMillis, resolution)
+            _state.value = SessionState.ChooseContact(recipient.orEmpty(), choices)
+            return
+        }
+
+        var result = executor.execute(ready)
 
         // A question about the screen is answered, not recited. read_screen hands back the
         // full text as `detail`, and without this step the assistant reads the raw

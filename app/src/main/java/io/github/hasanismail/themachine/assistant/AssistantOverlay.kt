@@ -58,6 +58,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.hasanismail.themachine.tools.Contact
 import io.github.hasanismail.themachine.ui.machine.IndeterminateCells
 import io.github.hasanismail.themachine.ui.machine.LevelMeter
 import io.github.hasanismail.themachine.ui.machine.scanlines
@@ -196,7 +197,7 @@ fun AssistantOverlay(showCount: Int, hideCount: Int, onDismiss: () -> Unit) {
                         },
                     )
                 }
-                SessionBody(state)
+                SessionBody(state, onChoose = { session.chooseContact(it) })
             }
         }
     }
@@ -247,7 +248,7 @@ private fun CommandField(value: String, onValueChange: (String) -> Unit, onSend:
 }
 
 @Composable
-private fun SessionBody(state: SessionState) {
+private fun SessionBody(state: SessionState, onChoose: (Contact) -> Unit) {
     when (state) {
         SessionState.Idle, SessionState.Preparing -> {
             Working("Getting ready")
@@ -301,8 +302,32 @@ private fun SessionBody(state: SessionState) {
                 Text(it, style = BodyStyle.copy(fontSize = 15.sp), color = Muted)
             }
         }
+
+        is SessionState.ChooseContact -> {
+            Text("Which ${state.spokenName}?", style = LabelStyle, color = Accent)
+            state.options.forEach { option ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onChoose(option) }
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(option.name, style = BodyStyle, color = OnCard)
+                    Text(
+                        "…${option.number.filter { it.isDigit() }.takeLast(NUMBER_HINT_DIGITS)}",
+                        style = FootStyle,
+                        color = Faint,
+                    )
+                }
+            }
+        }
     }
 }
+
+/** Enough of a number to tell two people with the same name apart. */
+private const val NUMBER_HINT_DIGITS = 4
 
 /** A calm status line plus a quiet activity bar, for any state that is still working. */
 @Composable

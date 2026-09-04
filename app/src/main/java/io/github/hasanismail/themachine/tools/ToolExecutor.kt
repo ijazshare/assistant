@@ -137,12 +137,15 @@ class ToolExecutor(
 
     private fun sendMessage(call: ToolCall): ToolResult {
         val recipient = call.string("recipient") ?: return ToolResult.failed("Who should I message?")
+        // The name to say back. When the session resolved an ambiguous name to one the user
+        // chose, "recipient" is that contact's number and "display" is their name.
+        val label = call.string("display")?.takeIf { it.isNotBlank() } ?: recipient
         // A blank body reaches here when the session dropped an invented one: ask for the
         // words rather than send something the user never said.
         val body = call.string("body")?.takeIf { it.isNotBlank() }
-            ?: return ToolResult.failed("What should I say to $recipient?")
+            ?: return ToolResult.failed("What should I say to $label?")
         val number = contacts.resolveNumber(recipient)
-            ?: return ToolResult.failed("I could not find $recipient.")
+            ?: return ToolResult.failed("I could not find $label.")
 
         return try {
             val sms = context.getSystemService(SmsManager::class.java)
@@ -156,7 +159,7 @@ class ToolExecutor(
                     } else {
                         sms.sendTextMessage(number, null, body, null, null)
                     }
-                    ToolResult.ok("Sent to $recipient.", body)
+                    ToolResult.ok("Sent to $label.", body)
                 }
             }
         } catch (e: SecurityException) {
@@ -170,21 +173,22 @@ class ToolExecutor(
 
     private fun callContact(call: ToolCall): ToolResult {
         val recipient = call.string("recipient") ?: return ToolResult.failed("Who should I call?")
+        val label = call.string("display")?.takeIf { it.isNotBlank() } ?: recipient
         val number = contacts.resolveNumber(recipient)
-            ?: return ToolResult.failed("I could not find $recipient.")
+            ?: return ToolResult.failed("I could not find $label.")
         return try {
             // Straight through the system telecom service on the default phone line. A plain
             // ACTION_CALL intent is offered to every app that handles tel: links, so the user
             // was asked to choose between Phone, Voice and Zoom instead of hearing a ring.
             context.getSystemService(TelecomManager::class.java).placeCall("tel:$number".toUri(), Bundle())
-            ToolResult.ok("Calling $recipient.")
+            ToolResult.ok("Calling $label.")
         } catch (e: SecurityException) {
             // No CALL_PHONE, or an emergency number the platform will not auto-dial: open
             // the dialler with the number ready, which needs the one confirming tap.
             Log.w(TAG, "cannot place call directly", e)
             launch(
                 Intent(Intent.ACTION_DIAL, "tel:$number".toUri()),
-                "Ready to call $recipient.",
+                "Ready to call $label.",
                 "No dialler is available.",
             )
         }

@@ -16,6 +16,21 @@ import android.net.Uri
 import android.provider.ContactsContract
 import androidx.core.content.ContextCompat
 
+/** A contact that matched, carrying the number so a chosen option can be acted on. */
+data class Contact(val name: String, val number: String)
+
+/** The outcome of resolving a spoken name to a number. */
+sealed interface ContactResolution {
+    /** Exactly one contact — or a literal number, or the owner — matched. */
+    data class One(val number: String) : ContactResolution
+
+    /** Several distinct contacts matched; the caller must let the user choose, not guess. */
+    data class Many(val options: List<Contact>) : ContactResolution
+
+    /** Nothing matched, or there was no way to resolve. */
+    data object None : ContactResolution
+}
+
 /**
  * Turns a spoken name into a phone number.
  *
@@ -31,21 +46,27 @@ class ContactLookup(
     private val ownNumber: () -> String? = { null },
 ) {
 
-    fun resolveNumber(spoken: String): String? {
+    /** The number to use, or an ambiguity/absence the caller must handle — never a guess. */
+    fun resolve(spoken: String): ContactResolution {
         val trimmed = spoken.trim()
         return when {
-            trimmed.isEmpty() -> null
+            trimmed.isEmpty() -> ContactResolution.None
 
-            looksLikeNumber(trimmed) -> digitsOf(trimmed)
+            looksLikeNumber(trimmed) -> ContactResolution.One(digitsOf(trimmed))
 
             // "me" is the number the owner typed in; the contacts Profile is only a fallback.
-            ContactMatch.isSelf(trimmed) -> savedOwnNumber() ?: profileNumberIfAllowed()
+            ContactMatch.isSelf(trimmed) ->
+                (savedOwnNumber() ?: profileNumberIfAllowed())?.let(ContactResolution::One)
+                    ?: ContactResolution.None
 
-            !hasContactsPermission() -> null
+            !hasContactsPermission() -> ContactResolution.None
 
             else -> lookupByName(trimmed)
         }
     }
+
+    /** The single unambiguous number, or null when absent OR ambiguous. Used by dry probes. */
+    fun resolveNumber(spoken: String): String? = (resolve(spoken) as? ContactResolution.One)?.number
 
     private fun digitsOf(number: String): String = number.filter { it.isDigit() || it == '+' }
 
@@ -54,30 +75,39 @@ class ContactLookup(
     private fun profileNumberIfAllowed(): String? = if (hasContactsPermission()) profileNumber() else null
 
     /**
-     * The first candidate whose display name genuinely matches the spoken name.
-     *
-     * The provider's filter is unreliable both ways: a multi-word filter like "MI Aziz"
-     * returned nothing, while "me" returned a stranger. So the query is driven by the most
-     * distinctive single word of the name (the longest — a surname beats a common first
-     * name), and every candidate is re-checked against the full spoken name in code, where
-     * the acceptance rule actually lives.
+     * Every distinct contact whose display name genuinely matches the spoken name, deduped
+     * by person. One resolves; several is an ambiguity to hand back for the user to choose
+     * — "Hassan" matched both "Hassan" and "Dr Hassan ER Chicago", and a blind pick sent a
+     * message to the wrong one. The query is driven by the most distinctive word (the
+     * longest — a surname beats a common first name); the full-name rule filters the rows.
      */
-    private fun lookupByName(name: String): String? {
+    private fun lookupByName(name: String): ContactResolution {
         val words = name.trim().split(WHITESPACE).filter { it.isNotEmpty() }
+        val byContact = LinkedHashMap<Long, Contact>()
         for (key in words.sortedByDescending { it.length }) {
-            candidateFor(key) { display -> ContactMatch.matches(name, display) }?.let { return it }
+            collectMatches(key, name, byContact)
         }
-        return null
+        // Prefer an exact whole-name match: "Hasan" should reach the contact named exactly
+        // "Hasan", not offer every "Hasan Something" — a common first name matched fourteen
+        // people. Only when no single exact match exists is it a real choice for the user.
+        val exact = byContact.values.filter { it.name.trim().equals(name.trim(), ignoreCase = true) }
+        val matches = exact.ifEmpty { byContact.values.toList() }
+        return when (matches.size) {
+            0 -> ContactResolution.None
+            1 -> ContactResolution.One(matches.first().number)
+            else -> ContactResolution.Many(matches.take(MAX_OPTIONS))
+        }
     }
 
-    private fun candidateFor(filterKey: String, accept: (String) -> Boolean): String? {
+    private fun collectMatches(filterKey: String, name: String, into: MutableMap<Long, Contact>) {
         val uri = Uri.withAppendedPath(
             ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI,
             Uri.encode(filterKey),
         )
-        return context.contentResolver.query(
+        context.contentResolver.query(
             uri,
             arrayOf(
+                ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
                 ContactsContract.CommonDataKinds.Phone.NUMBER,
                 ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
             ),
@@ -86,10 +116,15 @@ class ContactLookup(
             null,
         )?.use { cursor ->
             while (cursor.moveToNext()) {
-                val number = cursor.getString(0) ?: continue
-                if (accept(cursor.getString(1).orEmpty())) return@use number
+                val contactId = cursor.getLong(0)
+                val number = cursor.getString(1) ?: continue
+                val display = cursor.getString(2).orEmpty()
+                // First number per person; a second number for someone already matched is
+                // the same person, not a new ambiguity.
+                if (ContactMatch.matches(name, display) && !into.containsKey(contactId)) {
+                    into[contactId] = Contact(display, number)
+                }
             }
-            null
         }
     }
 
@@ -120,6 +155,9 @@ class ContactLookup(
     private companion object {
         /** Short enough for a shortcode, long enough not to match "7" in "call 7". */
         const val MIN_DIGITS = 3
+
+        /** A selector longer than this is unusable; the user says a fuller name instead. */
+        const val MAX_OPTIONS = 6
         val WHITESPACE = Regex("\\s+")
     }
 }

@@ -22,6 +22,7 @@ import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
 import io.github.hasanismail.themachine.settings.MachineSettings
 import io.github.hasanismail.themachine.tools.ContactLookup
+import io.github.hasanismail.themachine.tools.ContactResolution
 import io.github.hasanismail.themachine.tools.MachineTools
 import io.github.hasanismail.themachine.tools.MessageBody
 import io.github.hasanismail.themachine.tools.ReminderStore
@@ -104,7 +105,12 @@ class PipelineProbeTest {
         val own = runBlocking { MachineSettings(context).ownNumberNow() }
         val lookup = ContactLookup(context) { own }
         for (one in names.split("|")) {
-            Log.i(PIPE, "resolve [$one] -> ${lookup.resolveNumber(one)}")
+            val desc = when (val r = lookup.resolve(one)) {
+                is ContactResolution.One -> "One(${r.number})"
+                is ContactResolution.Many -> "Many[${r.options.joinToString { it.name }}]"
+                ContactResolution.None -> "None"
+            }
+            Log.i(PIPE, "resolve [$one] -> $desc")
         }
         return true
     }
