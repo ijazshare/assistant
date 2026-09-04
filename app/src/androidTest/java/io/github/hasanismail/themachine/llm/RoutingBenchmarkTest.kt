@@ -62,6 +62,10 @@ class RoutingBenchmarkTest {
         Case("text me", MachineTools.SEND_MESSAGE),
         Case("send a message", MachineTools.SEND_MESSAGE),
         Case("Text me this is a test.", MachineTools.SEND_MESSAGE),
+        // The exact phrasings that misrouted live (to read_screen, answer, set_alarm).
+        Case("Text Hassan that my thing is working.", MachineTools.SEND_MESSAGE),
+        Case("text Hassan saying hello", MachineTools.SEND_MESSAGE),
+        Case("text mum I will be late", MachineTools.SEND_MESSAGE),
         Case("call Osman", MachineTools.CALL_CONTACT),
         Case("phone mum", MachineTools.CALL_CONTACT),
         Case("give Dad a call", MachineTools.CALL_CONTACT),

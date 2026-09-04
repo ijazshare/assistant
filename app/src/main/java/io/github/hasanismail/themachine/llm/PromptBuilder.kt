@@ -78,12 +78,15 @@ object PromptBuilder {
         // starts copying: at roughly 620 prompt tokens every reply came back as the
         // first example verbatim, whatever had been asked.
         appendLine("""alarm at 7 -> {"tool":"set_alarm","arguments":{"hour":7,"minute":0}}""")
-        // Carries two things at once: "<fraction> past <hour>" as an idiom, and an
-        // evening hour written in 24-hour form. Different numbers and a different part
-        // of the day than any phrase under test, so what transfers is the shape.
+        // send_message rather than a second set_alarm example. set_alarm is the tool the
+        // model over-predicts when the prompt tips — it needs the least help — and the
+        // prompt has no room to grow without every reply collapsing to the first example.
+        // So this buys the messaging shape (verb "text", recipient then body) at no extra
+        // length. "text Hassan saying hello" had gone to answer, "text mum I will be late"
+        // to set_alarm. A distinct name and body, so the shape transfers, not the words.
         appendLine(
-            """half past ten at night -> """ +
-                """{"tool":"set_alarm","arguments":{"hour":22,"minute":30}}""",
+            """text Sara I'll be late -> """ +
+                """{"tool":"send_message","arguments":{"recipient":"Sara","body":"I'll be late"}}""",
         )
         appendLine("""timer for three minutes -> {"tool":"set_timer","arguments":{"minutes":3}}""")
         // With a time on it, since a reminder without one was the only example and the
