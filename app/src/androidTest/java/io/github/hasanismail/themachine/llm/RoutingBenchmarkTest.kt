@@ -61,6 +61,7 @@ class RoutingBenchmarkTest {
         Case("text me the address", MachineTools.SEND_MESSAGE),
         Case("text me", MachineTools.SEND_MESSAGE),
         Case("send a message", MachineTools.SEND_MESSAGE),
+        Case("Text me this is a test.", MachineTools.SEND_MESSAGE),
         Case("call Osman", MachineTools.CALL_CONTACT),
         Case("phone mum", MachineTools.CALL_CONTACT),
         Case("give Dad a call", MachineTools.CALL_CONTACT),
@@ -140,7 +141,11 @@ class RoutingBenchmarkTest {
         val prompt = dialect.buildPrompt(
             transcript = utterance,
             tools = MachineTools.all,
-            adminName = "Hasan",
+            // Regression guard: "Admin" is the default admin name, and putting a name that
+            // is also an ordinary word into the routing prompt used to drag "text me" to
+            // set_alarm (86% -> 57%). The name is out of the routing prompt now; keep
+            // "Admin" here so that can never silently come back.
+            adminName = "Admin",
             userContext = "- Osman is my brother.",
         )
         val completion = runBlocking { engine.generate(prompt, dialect.grammar(MachineTools.all)) }

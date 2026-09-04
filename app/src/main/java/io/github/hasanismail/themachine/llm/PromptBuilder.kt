@@ -35,6 +35,7 @@ object PromptBuilder {
     private const val TURN_START = "<start_of_turn>"
     private const val TURN_END = "<end_of_turn>"
 
+    @Suppress("UnusedParameter") // adminName kept for the dialect contract; not used in routing
     fun build(
         transcript: String,
         tools: List<Tool>,
@@ -43,7 +44,11 @@ object PromptBuilder {
         now: LocalDateTime = LocalDateTime.now(),
     ): String = buildString {
         append(TURN_START).appendLine("user")
-        appendLine("Pick one tool for $adminName's request. Output JSON only.")
+        // The user's name is deliberately NOT in the routing instruction. It plays no part
+        // in choosing a tool, and a name that is also an ordinary word — "Admin", the
+        // default — dragged "text me" to set_alarm and cut routing from 86% to 57% on
+        // device. The name still personalises the spoken answer; see AnswerPrompt.
+        appendLine("Pick one tool for this request. Output JSON only.")
         appendLine()
 
         // Everything from here to the clock line is byte-identical between requests, and
@@ -115,7 +120,9 @@ object PromptBuilder {
         appendLine()
 
         if (userContext.isNotBlank()) {
-            appendLine("About $adminName:")
+            // "About the user", not "About <name>", for the same reason: keep the name out
+            // of the routing prompt entirely.
+            appendLine("About the user:")
             appendLine(userContext.take(CONTEXT_BUDGET))
             appendLine()
         }
