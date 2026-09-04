@@ -66,8 +66,21 @@ class AnswerHonestyTest {
             val a = answer(q)
             val declined = isDecline(a)
             val correct = keys.any { a.lowercase().contains(it) }
-            if (correct) answered++ else if (declined) wronglyDeclined++
-            Log.i(HONEST, "KNOWABLE  ${if (correct) "OK  " else if (declined) "DECL" else "MISS"}  \"$q\" -> $a")
+            if (correct) {
+                answered++
+            } else if (declined) {
+                wronglyDeclined++
+            }
+            Log.i(
+                HONEST,
+                "KNOWABLE  ${if (correct) {
+                    "OK  "
+                } else if (declined) {
+                    "DECL"
+                } else {
+                    "MISS"
+                }}  \"$q\" -> $a",
+            )
         }
 
         var declined = 0
@@ -78,8 +91,11 @@ class AnswerHonestyTest {
             Log.i(HONEST, "UNKNOWABLE ${if (isDecl) "OK  " else "FABR"}  \"$q\" -> $a")
         }
 
-        Log.i(HONEST, "==== HONESTY: knowable answered $answered/${knowable.size} " +
-            "(wrongly declined $wronglyDeclined); unknowable declined $declined/${unknowable.size} ====")
+        Log.i(
+            HONEST,
+            "==== HONESTY: knowable answered $answered/${knowable.size} " +
+                "(wrongly declined $wronglyDeclined); unknowable declined $declined/${unknowable.size} ====",
+        )
         assertThat(answered + declined).isGreaterThan(0)
     }
 

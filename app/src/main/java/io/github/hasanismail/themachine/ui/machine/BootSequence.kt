@@ -35,8 +35,6 @@ import io.github.hasanismail.themachine.ui.theme.MachineReadout
 fun BootSequence(
     lines: List<BootLine>,
     modifier: Modifier = Modifier,
-    lineDelayMillis: Long = 90,
-    withSound: Boolean = true,
     onComplete: () -> Unit = {},
 ) {
     LaunchedEffect(lines) { onComplete() }

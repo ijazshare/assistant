@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -30,7 +31,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.hasanismail.themachine.ui.theme.MachineColors
@@ -49,6 +49,7 @@ private val RimBrush = Brush.verticalGradient(
  * the whole app at once. The [color] and [progress] arguments are kept so existing
  * callers compile unchanged; a card does not need them.
  */
+@Suppress("UnusedParameter") // kept so the many call sites compile through the redesign
 @Composable
 fun TrackingBox(
     modifier: Modifier = Modifier,
@@ -84,9 +85,11 @@ fun rememberSnapProgress(locked: Boolean, durationMillis: Int = 180): Float {
 }
 
 /** The old scanline grille, now off. Kept as a no-op so callers need no changes. */
+@Suppress("UnusedParameter") // signature kept; the grille is gone
 fun Modifier.scanlines(spacingDp: Float = 3f): Modifier = this
 
 /** The old travelling scan bar, now off. Kept as a no-op composable. */
+@Suppress("UnusedParameter") // signature kept; the sweep is gone
 @Composable
 fun ScanSweep(
     modifier: Modifier = Modifier,

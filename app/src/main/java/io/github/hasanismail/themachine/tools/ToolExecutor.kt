@@ -144,14 +144,19 @@ class ToolExecutor(
 
         return try {
             val sms = context.getSystemService(SmsManager::class.java)
-                ?: return ToolResult.failed("This phone cannot send texts.")
-            val parts = sms.divideMessage(body)
-            if (parts.size > 1) {
-                sms.sendMultipartTextMessage(number, null, parts, null, null)
-            } else {
-                sms.sendTextMessage(number, null, body, null, null)
+            when {
+                sms == null -> ToolResult.failed("This phone cannot send texts.")
+
+                else -> {
+                    val parts = sms.divideMessage(body)
+                    if (parts.size > 1) {
+                        sms.sendMultipartTextMessage(number, null, parts, null, null)
+                    } else {
+                        sms.sendTextMessage(number, null, body, null, null)
+                    }
+                    ToolResult.ok("Sent to $recipient.", body)
+                }
             }
-            ToolResult.ok("Sent to $recipient.", body)
         } catch (e: SecurityException) {
             Log.w(TAG, "no SMS permission", e)
             ToolResult.failed("I do not have permission to send texts.", "Grant SMS under System access.")

@@ -76,11 +76,16 @@ private val CardShape = RoundedCornerShape(30.dp)
 private val CardBrush = Brush.verticalGradient(listOf(Color(0xEB222A3A), Color(0xD40C1017)))
 private val RimBrush = Brush.verticalGradient(listOf(Color(0x3DFFFFFF), Color(0x0AFFFFFF)))
 
-private val TitleStyle = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.2.sp)
-private val BodyStyle = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 18.sp, lineHeight = 24.sp)
-private val ResultStyle = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 20.sp, lineHeight = 27.sp)
-private val LabelStyle = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.3.sp)
-private val FootStyle = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 11.sp, letterSpacing = 0.2.sp)
+private val TitleStyle =
+    TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.2.sp)
+private val BodyStyle =
+    TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 18.sp, lineHeight = 24.sp)
+private val ResultStyle =
+    TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 20.sp, lineHeight = 27.sp)
+private val LabelStyle =
+    TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.3.sp)
+private val FootStyle =
+    TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 11.sp, letterSpacing = 0.2.sp)
 
 /**
  * What the side button brings up.
