@@ -143,6 +143,13 @@ class VoiceRecorder {
         var speaking = false
         var framesSinceSnapshot = 0
 
+        // Diagnostics for "the mic didn't work": how many frames actually arrived and how
+        // loud the loudest was. A peak of ~0 across many frames means the source opened but
+        // fed silence (a known VOICE_RECOGNITION state after a route change) rather than the
+        // room being quiet; few frames with no speech means it was dismissed before it heard.
+        var frames = 0
+        var peak = 0f
+
         var barrenReads = 0
         while (currentCoroutineContext().isActive) {
             val read = record.read(buffer, 0, buffer.size)
@@ -159,6 +166,8 @@ class VoiceRecorder {
             barrenReads = 0
 
             val rms = appendAndMeasure(buffer, read, collected)
+            frames++
+            if (rms > peak) peak = rms
             trySend(CaptureEvent.Level(displayLevel(rms)))
 
             // Offer the audio so far often enough to feel live, rarely enough that the
@@ -184,12 +193,21 @@ class VoiceRecorder {
                     // detected, and was told nothing had been heard while a perfectly
                     // good recording of them was dropped. Transcribing costs about
                     // 150 ms and settles the question properly.
+                    logOutcome(verdict.reason, frames, peak, speaking)
                     trySend(CaptureEvent.Finished(collected.toFloatArray(), verdict.reason))
                     return
                 }
             }
         }
+        logOutcome(StopReason.CANCELLED, frames, peak, speaking)
         trySend(CaptureEvent.Finished(collected.toFloatArray(), StopReason.CANCELLED))
+    }
+
+    private fun logOutcome(reason: StopReason, frames: Int, peak: Float, speaking: Boolean) {
+        Log.i(
+            TAG,
+            "capture done: reason=$reason frames=$frames peak=${"%.4f".format(peak)} speechDetected=$speaking",
+        )
     }
 
     /** Converts one frame to float, accumulates it, and returns its RMS. */
