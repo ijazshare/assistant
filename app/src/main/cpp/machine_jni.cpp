@@ -284,7 +284,8 @@ Java_io_github_hasanismail_themachine_stt_WhisperNative_nativeFree(
  */
 JNIEXPORT jstring JNICALL
 Java_io_github_hasanismail_themachine_stt_WhisperNative_nativeTranscribe(
-        JNIEnv *env, jobject /* this */, jlong handle, jfloatArray samples, jint threads) {
+        JNIEnv *env, jobject /* this */, jlong handle, jfloatArray samples, jint threads,
+        jstring prompt) {
     if (handle == 0) return env->NewStringUTF("");
     auto *ctx = reinterpret_cast<whisper_context *>(handle);
 
@@ -337,6 +338,22 @@ Java_io_github_hasanismail_themachine_stt_WhisperNative_nativeTranscribe(
     // itself runs to the segment limit: one utterance produced its own transcript
     // fourteen times over and took thirteen seconds to do it.
     params.max_tokens = WHISPER_MAX_TOKENS;
+
+    // Bias decoding toward the caller's contact names. Whisper prefers real words, so an
+    // unusual name is heard as the nearest English one ("Hasan" -> "Hudson"); seeding the
+    // decoder with the actual names makes them candidates. Held in a local so the borrowed
+    // char* stays valid until whisper_full returns.
+    std::string promptStr;
+    if (prompt != nullptr) {
+        const char *promptC = env->GetStringUTFChars(prompt, nullptr);
+        if (promptC != nullptr) {
+            promptStr.assign(promptC);
+            env->ReleaseStringUTFChars(prompt, promptC);
+        }
+    }
+    if (!promptStr.empty()) {
+        params.initial_prompt = promptStr.c_str();
+    }
 
     const auto t_start = std::chrono::steady_clock::now();
     const int rc = whisper_full(ctx, params, pcm, count);

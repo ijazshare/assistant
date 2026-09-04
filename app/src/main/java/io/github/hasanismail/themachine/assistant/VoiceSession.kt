@@ -34,6 +34,7 @@ import io.github.hasanismail.themachine.models.ModelRole
 import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
 import io.github.hasanismail.themachine.settings.MachineSettings
+import io.github.hasanismail.themachine.stt.ContactNames
 import io.github.hasanismail.themachine.stt.WhisperEngine
 import io.github.hasanismail.themachine.tools.ContactLookup
 import io.github.hasanismail.themachine.tools.MachineTools
@@ -162,6 +163,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     /** Whether this session has already written its prompt cache. */
     private var cacheWritten = false
 
+    /** The caller's contact names for transcriber biasing, read once and reused. */
+    private var contactBias: String? = null
+
     private val _state = MutableStateFlow<SessionState>(SessionState.Idle)
     val state: StateFlow<SessionState> = _state.asStateFlow()
 
@@ -207,6 +211,12 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
                 fail("The speech model could not be loaded.")
                 return@launch
             }
+            // Bias the transcriber toward the caller's contacts, so a name like "Hasan" is
+            // heard as itself and not the nearest English word. Read once and reused.
+            whisper.setBias(
+                contactBias ?: withContext(Dispatchers.IO) { ContactNames(context).forBias() }
+                    .also { contactBias = it },
+            )
             // The voice is prepared in the background too. Unpacking it is a one-off
             // that costs a few seconds, and doing it here means the first reply is
             // spoken rather than silently skipped.

@@ -38,7 +38,18 @@ class WhisperEngine(private val context: Context) {
     @Volatile
     private var handle: Long = 0
 
+    @Volatile
+    private var bias: String = ""
+
     val isLoaded: Boolean get() = handle != 0L
+
+    /**
+     * Names to bias recognition toward, so a contact like "Hasan" is heard as itself rather
+     * than the nearest English word. Set once per session; empty disables biasing.
+     */
+    fun setBias(names: String) {
+        bias = names
+    }
 
     /**
      * Loads a GGML model. Returns false if the file is missing or unreadable, which is
@@ -69,7 +80,7 @@ class WhisperEngine(private val context: Context) {
         val audioMillis = samples.size * MILLIS_PER_SECOND / SAMPLE_RATE
         val startedAt = System.nanoTime()
         val text = synchronized(this@WhisperEngine) {
-            if (handle == 0L) "" else WhisperNative.nativeTranscribe(handle, samples, threadCount())
+            if (handle == 0L) "" else WhisperNative.nativeTranscribe(handle, samples, threadCount(), bias)
         }
         val elapsed = (System.nanoTime() - startedAt) / NANOS_PER_MILLI
         Transcription(text.trim(), elapsed, audioMillis.toLong())
