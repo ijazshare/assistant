@@ -44,14 +44,22 @@ class PipelineProbeTest {
 
     @Test
     fun probe() {
-        assumeTrue("No language model installed", available)
         val args = InstrumentationRegistry.getArguments()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val live = args.getString("live") == "true"
 
+        // `-e resolve "<name>"` just reports what a name resolves to — no model, no send.
+        args.getString("resolve")?.let { name ->
+            for (one in name.split("|")) {
+                Log.i(PIPE, "resolve [$one] -> ${ContactLookup(context).resolveNumber(one)}")
+            }
+            return
+        }
+
+        assumeTrue("No language model installed", available)
         val smsto = args.getString("smsto")
         val runcmd = args.getString("runcmd")
-        assumeTrue("Pass -e runcmd or -e smsto to drive the pipeline", smsto != null || runcmd != null)
+        assumeTrue("Pass -e runcmd, -e smsto or -e resolve to drive the pipeline", smsto != null || runcmd != null)
 
         var call: ToolCall? = when {
             smsto != null -> ToolCall(

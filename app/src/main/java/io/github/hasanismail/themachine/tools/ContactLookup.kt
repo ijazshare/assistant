@@ -39,14 +39,26 @@ class ContactLookup(private val context: Context) {
     }
 
     /**
-     * The first candidate whose display name actually matches the spoken name. Fetching the
-     * name alongside the number is the whole point: without it the provider's first row —
-     * whatever it fuzzily matched — was taken on trust.
+     * The first candidate whose display name genuinely matches the spoken name.
+     *
+     * The provider's filter is unreliable both ways: a multi-word filter like "MI Aziz"
+     * returned nothing, while "me" returned a stranger. So the query is driven by the most
+     * distinctive single word of the name (the longest — a surname beats a common first
+     * name), and every candidate is re-checked against the full spoken name in code, where
+     * the acceptance rule actually lives.
      */
     private fun lookupByName(name: String): String? {
+        val words = name.trim().split(WHITESPACE).filter { it.isNotEmpty() }
+        for (key in words.sortedByDescending { it.length }) {
+            candidateFor(key) { display -> ContactMatch.matches(name, display) }?.let { return it }
+        }
+        return null
+    }
+
+    private fun candidateFor(filterKey: String, accept: (String) -> Boolean): String? {
         val uri = Uri.withAppendedPath(
             ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI,
-            Uri.encode(name),
+            Uri.encode(filterKey),
         )
         return context.contentResolver.query(
             uri,
@@ -60,8 +72,7 @@ class ContactLookup(private val context: Context) {
         )?.use { cursor ->
             while (cursor.moveToNext()) {
                 val number = cursor.getString(0) ?: continue
-                val display = cursor.getString(1).orEmpty()
-                if (ContactMatch.matches(name, display)) return@use number
+                if (accept(cursor.getString(1).orEmpty())) return@use number
             }
             null
         }
@@ -94,5 +105,6 @@ class ContactLookup(private val context: Context) {
     private companion object {
         /** Short enough for a shortcode, long enough not to match "7" in "call 7". */
         const val MIN_DIGITS = 3
+        val WHITESPACE = Regex("\\s+")
     }
 }

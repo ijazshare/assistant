@@ -41,6 +41,19 @@ class ContactMatchTest {
     }
 
     @Test
+    fun matchesCaseInsensitivelyIncludingNoise() {
+        // The real contact from testing, with its "(Father In Law)" note.
+        assertThat(ContactMatch.matches("ml aziz", "Ml Aziz (Father In Law)")).isTrue()
+        assertThat(ContactMatch.matches("Ml Aziz", "Ml Aziz (Father In Law)")).isTrue()
+    }
+
+    @Test
+    fun distinguishesNearMisspellings() {
+        // "MI" (capital i) must not match "Ml" (lowercase L) — different people.
+        assertThat(ContactMatch.matches("MI Aziz", "Ml Aziz")).isFalse()
+    }
+
+    @Test
     fun treatsMeAsSelf() {
         assertThat(ContactMatch.isSelf("me")).isTrue()
         assertThat(ContactMatch.isSelf("Myself")).isTrue()
