@@ -20,12 +20,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -35,13 +36,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.hasanismail.themachine.ui.theme.MachineColors
 
-/** Glass panel fill and lit rim, shared by every card on every screen. */
+/** Holographic panel fill and a glowing cyan rim, shared by every card on every screen. */
 private val CardBrush = Brush.verticalGradient(
     listOf(MachineColors.PanelActive, MachineColors.Panel),
 )
 private val RimBrush = Brush.verticalGradient(
-    listOf(Color(0x1FFFFFFF), Color(0x0AFFFFFF)),
+    listOf(Color(0x8054D2FF), Color(0x2254D2FF)),
 )
+
+/** The Halo panel: corners chamfered off, more on one diagonal, for the UNSC/HUD angle. */
+private val HaloPanel = CutCornerShape(topStart = 14.dp, bottomEnd = 14.dp, topEnd = 3.dp, bottomStart = 3.dp)
 
 /**
  * A rounded glass card. This was the terminal "tracking box" of corner brackets; every
@@ -60,12 +64,11 @@ fun TrackingBox(
     filled: Boolean = false,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
-    val shape = RoundedCornerShape(20.dp)
     Box(
         modifier = modifier
-            .clip(shape)
+            .clip(HaloPanel)
             .background(CardBrush)
-            .border(1.dp, RimBrush, shape),
+            .border(1.dp, RimBrush, HaloPanel),
         content = content,
     )
 }
@@ -84,9 +87,16 @@ fun rememberSnapProgress(locked: Boolean, durationMillis: Int = 180): Float {
     return progress
 }
 
-/** The old scanline grille, now off. Kept as a no-op so callers need no changes. */
-@Suppress("UnusedParameter") // signature kept; the grille is gone
-fun Modifier.scanlines(spacingDp: Float = 3f): Modifier = this
+/** The hologram scanline wash — a faint cyan grille, the Cortana/HUD shimmer. */
+fun Modifier.scanlines(spacingDp: Float = 3f): Modifier = this then Modifier.drawWithContent {
+    drawContent()
+    val spacing = spacingDp * density
+    var y = 0f
+    while (y < size.height) {
+        drawRect(color = MachineColors.Scanline, topLeft = Offset(0f, y), size = Size(size.width, 1f))
+        y += spacing
+    }
+}
 
 /** The old travelling scan bar, now off. Kept as a no-op composable. */
 @Suppress("UnusedParameter") // signature kept; the sweep is gone

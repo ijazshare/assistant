@@ -26,7 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -60,21 +60,21 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.hasanismail.themachine.ui.machine.IndeterminateCells
 import io.github.hasanismail.themachine.ui.machine.LevelMeter
+import io.github.hasanismail.themachine.ui.machine.scanlines
 
-// ponytail: the whole minimal skin lives in this one file, so the launcher/boot
-// screens keep the terminal theme untouched. Widen scope only if the user asks.
-private val OnCard = Color(0xFFECEFF3)
-private val Muted = Color(0xFFA0AAB8)
-private val Faint = Color(0xFF6A7684)
-private val Accent = Color(0xFF8CB8FF)
-private val Bad = Color(0xFFF2857F)
+// Halo HUD palette for the overlay: Cortana cyan on a translucent UNSC-navy hologram.
+private val OnCard = Color(0xFFDCF2FF)
+private val Muted = Color(0xFF8FB6CE)
+private val Faint = Color(0xFF54748A)
+private val Accent = Color(0xFF54D2FF)
+private val Bad = Color(0xFFFF7A45)
 
-// Translucent glass: the assistant window is transparent behind the card, so a
-// semi-opaque gradient genuinely shows the app underneath. Top is lighter and cooler,
-// bottom darker, with a lit top rim to read as a raised pane of glass.
-private val CardShape = RoundedCornerShape(30.dp)
-private val CardBrush = Brush.verticalGradient(listOf(Color(0xEB222A3A), Color(0xD40C1017)))
-private val RimBrush = Brush.verticalGradient(listOf(Color(0x3DFFFFFF), Color(0x0AFFFFFF)))
+// A holographic pane: the assistant window is transparent behind it, so a semi-opaque
+// cyan-navy gradient shows the app underneath, chamfered like a Halo panel, edged with a
+// glowing cyan rim and washed with faint scanlines.
+private val CardShape = CutCornerShape(topStart = 20.dp, bottomEnd = 20.dp, topEnd = 5.dp, bottomStart = 5.dp)
+private val CardBrush = Brush.verticalGradient(listOf(Color(0xEA0E2436), Color(0xD6061420)))
+private val RimBrush = Brush.verticalGradient(listOf(Color(0x9954D2FF), Color(0x3354D2FF)))
 
 private val TitleStyle =
     TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.2.sp)
@@ -153,6 +153,7 @@ fun AssistantOverlay(showCount: Int, hideCount: Int, onDismiss: () -> Unit) {
                     .shadow(24.dp, CardShape, clip = false)
                     .clip(CardShape)
                     .background(CardBrush)
+                    .scanlines()
                     .border(1.dp, RimBrush, CardShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
