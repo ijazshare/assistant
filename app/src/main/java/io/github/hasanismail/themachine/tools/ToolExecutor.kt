@@ -68,7 +68,9 @@ class ToolExecutor(
         MachineTools.SCROLL to { call -> scroll(call) },
         MachineTools.NAVIGATE to { call -> navigate(call) },
         MachineTools.READ_NOTIFICATIONS to { _ -> readNotifications() },
-        MachineTools.ANSWER to { call -> ToolResult.ok(call.string("text") ?: "") },
+        MachineTools.ANSWER to { call ->
+            ToolResult.ok(call.string("text") ?: "", call.string("via")?.let { "via $it" })
+        },
         MachineTools.UNSUPPORTED to { call ->
             ToolResult.failed("I cannot do that yet.", call.string("reason"))
         },

@@ -39,6 +39,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.hasanismail.themachine.context.MachineFile
 import io.github.hasanismail.themachine.context.MachineFiles
@@ -71,9 +73,16 @@ fun ContextScreen(modifier: Modifier = Modifier) {
 
     var adminName by remember { mutableStateOf("") }
     var ownNumber by remember { mutableStateOf("") }
+    var remoteUrl by remember { mutableStateOf("") }
+    var remoteKey by remember { mutableStateOf("") }
+    var remoteModel by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         adminName = settings.adminNameNow()
         ownNumber = settings.ownNumberNow().orEmpty()
+        val (url, key, model) = settings.remoteLlmFieldsNow()
+        remoteUrl = url
+        remoteKey = key
+        remoteModel = model
     }
 
     val drafts = remember { mutableStateMapOf<String, String>() }
@@ -117,6 +126,7 @@ fun ContextScreen(modifier: Modifier = Modifier) {
                 adminName = name
                 scope.launch { settings.setAdminName(name) }
             },
+            kind = FieldKind.NAME,
         )
         SettingField(
             label = "YOUR NUMBER",
@@ -126,7 +136,37 @@ fun ContextScreen(modifier: Modifier = Modifier) {
                 ownNumber = number
                 scope.launch { settings.setOwnNumber(number) }
             },
-            numeric = true,
+            kind = FieldKind.NUMBER,
+        )
+        SettingField(
+            label = "REMOTE MODEL · URL",
+            help = "Optional. An OpenAI-compatible base URL for general-knowledge answers, e.g. " +
+                "${MachineSettings.DEFAULT_REMOTE_LLM_URL} or your own llama.cpp server. Only the text of a " +
+                "question is ever sent, never audio. Leave all three blank to stay fully offline.",
+            value = remoteUrl,
+            onChange = { url ->
+                remoteUrl = url
+                scope.launch { settings.setRemoteLlmUrl(url) }
+            },
+        )
+        SettingField(
+            label = "REMOTE MODEL · API KEY",
+            help = "The bearer key for that endpoint. Stored only on this phone.",
+            value = remoteKey,
+            onChange = { key ->
+                remoteKey = key
+                scope.launch { settings.setRemoteLlmKey(key) }
+            },
+            kind = FieldKind.SECRET,
+        )
+        SettingField(
+            label = "REMOTE MODEL · NAME",
+            help = "The model id, e.g. openai/gpt-4o-mini on OpenRouter, or the name your own server exposes.",
+            value = remoteModel,
+            onChange = { model ->
+                remoteModel = model
+                scope.launch { settings.setRemoteLlmModel(model) }
+            },
         )
 
         for (spec in MachineFiles.ALL) {
@@ -147,10 +187,13 @@ fun ContextScreen(modifier: Modifier = Modifier) {
     }
 }
 
+/** What a setting field holds, which decides its keyboard, masking and blank-state hint. */
+private enum class FieldKind { NAME, NUMBER, TEXT, SECRET }
+
 /**
- * The two settings that are not files: the name the assistant addresses you by, and the
- * number "text me" goes to. Asked for separately because the assistant depends on them,
- * and burying either in a Markdown file would make it look optional.
+ * The settings that are not files: the name the assistant addresses you by, the number
+ * "text me" goes to, and the optional remote model. Asked for separately because the
+ * assistant depends on them, and burying them in a Markdown file would make them look optional.
  */
 @Composable
 private fun SettingField(
@@ -158,7 +201,7 @@ private fun SettingField(
     help: String,
     value: String,
     onChange: (String) -> Unit,
-    numeric: Boolean = false,
+    kind: FieldKind = FieldKind.TEXT,
 ) {
     TrackingBox(
         modifier = Modifier.fillMaxWidth(),
@@ -180,9 +223,16 @@ private fun SettingField(
                     androidx.compose.ui.text.TextStyle(color = MachineColors.Bone),
                 ),
                 cursorBrush = SolidColor(MachineColors.Admin),
+                visualTransformation =
+                if (kind == FieldKind.SECRET) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardOptions = KeyboardOptions(
-                    keyboardType = if (numeric) KeyboardType.Phone else KeyboardType.Text,
-                    capitalization = if (numeric) KeyboardCapitalization.None else KeyboardCapitalization.Words,
+                    keyboardType = when (kind) {
+                        FieldKind.NUMBER -> KeyboardType.Phone
+                        FieldKind.SECRET -> KeyboardType.Password
+                        FieldKind.NAME, FieldKind.TEXT -> KeyboardType.Text
+                    },
+                    capitalization =
+                    if (kind == FieldKind.NAME) KeyboardCapitalization.Words else KeyboardCapitalization.None,
                     imeAction = ImeAction.Done,
                 ),
                 modifier = Modifier
@@ -190,17 +240,15 @@ private fun SettingField(
                     .background(MachineColors.PanelActive)
                     .padding(8.dp),
             )
-            if (value.isBlank()) {
-                // ponytail: the blank-state hint is derived here rather than a sixth parameter.
-                Text(
-                    text = if (numeric) {
-                        "Not set — \"text me\" will say it has nowhere to send."
-                    } else {
-                        "Defaults to \"${MachineSettings.DEFAULT_ADMIN_NAME}\"."
-                    },
-                    style = MachineReadout,
-                    color = MachineColors.Ghost,
-                )
+            // ponytail: the blank-state hint is derived from the kind rather than a sixth parameter.
+            val blankHint = when (kind) {
+                FieldKind.NAME -> "Defaults to \"${MachineSettings.DEFAULT_ADMIN_NAME}\"."
+                FieldKind.NUMBER -> "Not set — \"text me\" will say it has nowhere to send."
+                FieldKind.SECRET -> "Not set — the remote model is off and everything stays on the phone."
+                FieldKind.TEXT -> null
+            }
+            if (value.isBlank() && blankHint != null) {
+                Text(blankHint, style = MachineReadout, color = MachineColors.Ghost)
             }
         }
     }

@@ -18,6 +18,7 @@ import io.github.hasanismail.themachine.models.ModelRegistry
 import io.github.hasanismail.themachine.models.ModelRole
 import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
+import io.github.hasanismail.themachine.settings.RemoteLlmConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,6 +45,7 @@ class ModelRouter(private val context: Context) {
     private val storage = ModelStorage(context)
     private val registry = ModelRegistry(context)
     private val strong = LlamaEngine(context)
+    private val remoteAnswerer = RemoteAnswerer()
     private val loading = Mutex()
 
     /** Whether this router has already written the larger model's prompt cache. */
@@ -93,8 +95,22 @@ class ModelRouter(private val context: Context) {
      * a phone that is short of memory reclaims exactly those pages first — mid-reply,
      * which turns each token into a re-read from flash.
      */
-    suspend fun answer(question: String, adminName: String, userContext: String): Completion? =
-        generateWith(AnswerPrompt.build(question, adminName, userContext), AnswerPrompt.MAX_TOKENS)
+    suspend fun answer(
+        question: String,
+        adminName: String,
+        userContext: String,
+        remote: RemoteLlmConfig? = null,
+    ): Completion? {
+        // A configured remote model is the stronger answerer and costs the phone no memory,
+        // and only the question text crosses the wire. Any failure falls through to the
+        // on-device path exactly as if no remote existed, so a dead network is never a dead
+        // assistant.
+        if (remote != null) {
+            remoteAnswerer.answer(remote, question, adminName, userContext)?.let { return it }
+            Log.i(TAG, "remote model unavailable; falling back to the on-device model")
+        }
+        return generateWith(AnswerPrompt.build(question, adminName, userContext), AnswerPrompt.MAX_TOKENS)
+    }
 
     private suspend fun generateWith(
         prompt: String,

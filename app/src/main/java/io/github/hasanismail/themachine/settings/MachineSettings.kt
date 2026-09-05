@@ -57,6 +57,42 @@ class MachineSettings(private val context: Context) {
         }
     }
 
+    /**
+     * An optional remote language model for general-knowledge answers, spoken to over the
+     * OpenAI chat-completions API so the same client works against OpenRouter today and a
+     * llama.cpp server at home tomorrow. Only the transcript TEXT is ever sent; speech
+     * recognition, tool routing and speech synthesis stay on the phone. Disabled — and
+     * nothing leaves the device — until all three fields are filled in.
+     */
+    val remoteLlm: Flow<RemoteLlmConfig?> = context.dataStore.data.map { prefs ->
+        val url = prefs[REMOTE_LLM_URL]?.trim().orEmpty()
+        val key = prefs[REMOTE_LLM_KEY]?.trim().orEmpty()
+        val model = prefs[REMOTE_LLM_MODEL]?.trim().orEmpty()
+        if (url.isEmpty() || key.isEmpty() || model.isEmpty()) null else RemoteLlmConfig(url, key, model)
+    }
+
+    suspend fun remoteLlmNow(): RemoteLlmConfig? = remoteLlm.first()
+
+    suspend fun remoteLlmFieldsNow(): Triple<String, String, String> {
+        val prefs = context.dataStore.data.first()
+        return Triple(
+            prefs[REMOTE_LLM_URL].orEmpty(),
+            prefs[REMOTE_LLM_KEY].orEmpty(),
+            prefs[REMOTE_LLM_MODEL].orEmpty(),
+        )
+    }
+
+    suspend fun setRemoteLlmUrl(value: String) = setOrClear(REMOTE_LLM_URL, value)
+    suspend fun setRemoteLlmKey(value: String) = setOrClear(REMOTE_LLM_KEY, value)
+    suspend fun setRemoteLlmModel(value: String) = setOrClear(REMOTE_LLM_MODEL, value)
+
+    private suspend fun setOrClear(key: androidx.datastore.preferences.core.Preferences.Key<String>, value: String) {
+        context.dataStore.edit { prefs ->
+            val trimmed = value.trim()
+            if (trimmed.isEmpty()) prefs.remove(key) else prefs[key] = trimmed
+        }
+    }
+
     companion object {
         /**
          * The Machine calls its operator "Admin" until told otherwise — which is both
@@ -64,7 +100,16 @@ class MachineSettings(private val context: Context) {
          */
         const val DEFAULT_ADMIN_NAME = "Admin"
 
+        /** OpenRouter's OpenAI-compatible root; a home llama.cpp server is e.g. https://box.tailnet.ts.net/v1. */
+        const val DEFAULT_REMOTE_LLM_URL = "https://openrouter.ai/api/v1"
+
         private val ADMIN_NAME = stringPreferencesKey("admin_name")
         private val OWN_NUMBER = stringPreferencesKey("own_number")
+        private val REMOTE_LLM_URL = stringPreferencesKey("remote_llm_url")
+        private val REMOTE_LLM_KEY = stringPreferencesKey("remote_llm_key")
+        private val REMOTE_LLM_MODEL = stringPreferencesKey("remote_llm_model")
     }
 }
+
+/** Where to reach a remote model and how: an OpenAI-compatible base URL, bearer key and model id. */
+data class RemoteLlmConfig(val baseUrl: String, val apiKey: String, val model: String)

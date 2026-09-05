@@ -468,10 +468,23 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             // this command and is cheap to bring back; the large one is not, and the two
             // together do not fit alongside everything else the phone is running.
             llama.unload()
-            val answer = router.answer(transcript, settings.adminNameNow(), files.contextForPrompt())
+            val answer = router.answer(
+                transcript,
+                settings.adminNameNow(),
+                files.contextForPrompt(),
+                remote = settings.remoteLlmNow(),
+            )
             call = if (answer != null) {
                 llmMillis += answer.millis
-                ToolCall(MachineTools.ANSWER, mapOf("text" to answer.text))
+                ToolCall(
+                    MachineTools.ANSWER,
+                    buildMap {
+                        put("text", answer.text)
+                        // Shown under the reply: the user should always know when an answer
+                        // came from off the phone.
+                        answer.via?.let { put("via", it) }
+                    },
+                )
             } else {
                 // Said out loud, so it has to name the actual obstacle: telling someone
                 // to download a model they already have is worse than saying nothing.

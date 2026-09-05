@@ -17,8 +17,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/** A completion and how long it took. */
-data class Completion(val text: String, val millis: Long)
+/**
+ * A generated reply and how long it took. [via] names a remote model when the answer came
+ * from one rather than from the phone, so the user is always told when a reply left the device.
+ */
+data class Completion(val text: String, val millis: Long, val via: String? = null)
 
 /**
  * Runs the language model.
