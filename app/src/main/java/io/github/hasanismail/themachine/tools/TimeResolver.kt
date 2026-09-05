@@ -9,6 +9,8 @@
  */
 package io.github.hasanismail.themachine.tools
 
+import java.time.LocalTime
+
 /**
  * Turns the pieces of a time the model heard into the numbers Android wants.
  *
@@ -29,6 +31,18 @@ object TimeResolver {
     private const val NOON = 12
     private const val LAST_HOUR = 23
     private const val LAST_MINUTE = 59
+
+    /**
+     * Whether [hour]:[minute] is the current clock minute.
+     *
+     * The routing prompt states the current time, and when no time is actually spoken the
+     * model copies it — so "create a note about this" came back as an alarm for this very
+     * minute. That is never a real request: an alarm or reminder for now is useless. The
+     * caller treats a match as "no time given" rather than setting something that fires at
+     * once (or, once rolled forward, a day later).
+     */
+    fun echoesNow(hour: Int?, minute: Int?, now: LocalTime = LocalTime.now()): Boolean =
+        hour != null && minute != null && hour == now.hour && minute == now.minute
 
     /** Longest timer worth honouring; beyond a day it is a reminder, not a countdown. */
     private const val MAX_TIMER_SECONDS =

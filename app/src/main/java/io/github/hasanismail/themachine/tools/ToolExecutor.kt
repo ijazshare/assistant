@@ -97,6 +97,11 @@ class ToolExecutor(
             ?: return ToolResult.failed("I did not catch the time.")
         val minute = TimeResolver.minuteOf(call.int("minute"))
             ?: return ToolResult.failed("That is not a time I can set.")
+        // The model copies the current clock time when none was actually spoken, so an
+        // out-of-nowhere phrase set an alarm for this very minute. Ask instead of setting it.
+        if (TimeResolver.echoesNow(hour, minute)) {
+            return ToolResult.failed("What time should I set the alarm for?")
+        }
         val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
             putExtra(AlarmClock.EXTRA_HOUR, hour)
             putExtra(AlarmClock.EXTRA_MINUTES, minute)
@@ -130,7 +135,10 @@ class ToolExecutor(
         val task = call.string("task") ?: return ToolResult.failed("What should I remind you about?")
         val hour = TimeResolver.hourOf(call.int("hour"))
         val minute = TimeResolver.minuteOf(call.int("minute")) ?: 0
-        return reminders.create(task, hour, minute, call.bool("tomorrow"))
+        // A time that is exactly now is the model echoing the clock, not a time the user
+        // gave. Drop it: keep the task, but as a plain note rather than one that fires now.
+        val dueHour = if (TimeResolver.echoesNow(hour, minute)) null else hour
+        return reminders.create(task, dueHour, minute, call.bool("tomorrow"))
     }
 
     // ---- Messaging ---------------------------------------------------------------

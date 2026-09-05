@@ -11,12 +11,26 @@ package io.github.hasanismail.themachine.tools
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
+import java.time.LocalTime
 
 /**
  * These cases are the ones the model actually got wrong on device before the arithmetic
  * moved out of the prompt, so they are regression guards rather than illustrations.
  */
 class TimeResolverTest {
+
+    @Test
+    fun `flags a time that only echoes the current clock`() {
+        val now = LocalTime.of(23, 51)
+        // The exact bug: "create a note about this" came back as hour 23, minute 51 at 23:51.
+        assertThat(TimeResolver.echoesNow(23, 51, now)).isTrue()
+        // A real, different time is not an echo.
+        assertThat(TimeResolver.echoesNow(7, 0, now)).isFalse()
+        assertThat(TimeResolver.echoesNow(23, 50, now)).isFalse()
+        // No time at all is not an echo either.
+        assertThat(TimeResolver.echoesNow(null, 0, now)).isFalse()
+        assertThat(TimeResolver.echoesNow(23, null, now)).isFalse()
+    }
 
     @Test
     fun `sums the parts of a duration`() {
