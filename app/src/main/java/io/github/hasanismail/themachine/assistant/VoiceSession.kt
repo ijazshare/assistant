@@ -12,6 +12,9 @@ package io.github.hasanismail.themachine.assistant
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import io.github.hasanismail.themachine.audio.CaptureEvent
@@ -134,6 +137,10 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     private val piper = PiperEngine()
     private val router = ModelRouter(context)
+
+    /** Held while the assistant is active so other apps' media pauses, kept so it can be given back. */
+    private val audioManager = context.getSystemService(AudioManager::class.java)
+    private var audioFocus: AudioFocusRequest? = null
     private val cache = CommandCache.shared(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
     private val history = QueryLog(context)
 
@@ -201,6 +208,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      */
     fun start() {
         source = QuerySource.VOICE
+        // Pause other apps' media the moment we are summoned: it would otherwise bleed into
+        // the microphone and, later, play over the spoken reply.
+        requestAudioFocus()
         val previous = listening
         listening = scope.launch {
             // Joined, not merely cancelled: a second summon before the first gave up used
@@ -272,6 +282,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // A dismissal abandons a pending contact choice too: the held command is gone, so
         // a later tap on a stale selector must not send anything.
         pendingChoice = null
+        // Give media back. A typed command re-takes focus in submitText, since it still
+        // speaks a reply; a dismissal leaves it released, so the music resumes.
+        abandonAudioFocus()
         val current = _state.value
         if (current is SessionState.Listening || current is SessionState.Preparing) {
             _state.value = SessionState.Idle
@@ -290,6 +303,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         if (typed.isEmpty()) return
         source = QuerySource.TYPED
         stopListening()
+        // stopListening gave media back; a typed command still speaks, so take focus again.
+        requestAudioFocus()
         scope.launch {
             _state.value = SessionState.Thinking(typed)
             act(typed, sttMillis = 0)
@@ -712,8 +727,37 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
 
+    /**
+     * Takes audio focus so other apps' media pauses while the assistant is active — both to
+     * keep the microphone clean and so the reply is heard rather than talked over. Transient
+     * exclusive, so others pause rather than duck, and it is given straight back when done.
+     */
+    private fun requestAudioFocus() {
+        val manager = audioManager ?: return
+        if (audioFocus != null) return
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            .setOnAudioFocusChangeListener { }
+            .build()
+        manager.requestAudioFocus(request)
+        audioFocus = request
+    }
+
+    private fun abandonAudioFocus() {
+        val manager = audioManager ?: return
+        audioFocus?.let { manager.abandonAudioFocusRequest(it) }
+        audioFocus = null
+    }
+
     /** Frees both models. Called when the overlay goes away, not between utterances. */
     fun release() {
+        // Media the assistant paused resumes when the session ends, not just on a dismiss.
+        abandonAudioFocus()
         // The microphone is done the moment the overlay closes; drop the foreground state
         // with it rather than leave a "listening" notification up after the session is gone.
         MicForegroundService.stop(context)
