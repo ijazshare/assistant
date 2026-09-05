@@ -132,7 +132,12 @@ class ToolExecutor(
     // ---- Reminders ---------------------------------------------------------------
 
     private suspend fun createReminder(call: ToolCall): ToolResult {
-        val task = call.string("task") ?: return ToolResult.failed("What should I remind you about?")
+        val task = call.string("task")?.takeIf { it.isNotBlank() }
+            ?: return ToolResult.failed("What should I remind you about?")
+        // The model sometimes copies a tool-name token into the task ("set_reminder").
+        // Speech never contains underscores, so one marks a hallucinated task, not a real
+        // thing to be reminded of. Refuse — which also stops the bad parse being learned.
+        if ('_' in task) return ToolResult.failed("What should I remind you about?")
         val hour = TimeResolver.hourOf(call.int("hour"))
         val minute = TimeResolver.minuteOf(call.int("minute")) ?: 0
         // A time that is exactly now is the model echoing the clock, not a time the user
