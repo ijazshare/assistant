@@ -95,11 +95,7 @@ object TimeResolver {
         val morning = words.any { it in MORNING_CUES }
         if (evening == morning) return resolved
 
-        // The first clock-sized number is the hour; a later one is its minutes.
-        val said = words.firstNotNullOfOrNull { word ->
-            (SPOKEN_NUMBERS[word] ?: word.takeWhile { it.isDigit() }.toIntOrNull())
-                ?.takeIf { it in 1..NOON }
-        } ?: return resolved
+        val said = hourSaid(words) ?: return resolved
 
         val corrected = when {
             evening && said == NOON -> NOON
@@ -110,6 +106,38 @@ object TimeResolver {
         return corrected
     }
 
+    /**
+     * The hour that was said, on a 12-hour clock, or null if no clock-sized number was.
+     *
+     * Usually the first clock-sized number is the hour and a later one is its minutes.
+     * "Ten to six" says its minutes first, though, and read that way it becomes an alarm
+     * for 10:50 when 5:50 was asked for. So minutes, then to or past, then a clock-sized
+     * number is read as a time, with "to" counting back into the hour before. Both ends
+     * are required: the minutes in front keep "set the alarm to seven" and "remind me to
+     * call" out of it, and the hour straight after keeps the "one to" of "give one to Ali
+     * at ten to six" out of it.
+     */
+    private fun hourSaid(words: List<String>): Int? {
+        val counted = words.windowed(size = 3).firstNotNullOfOrNull { (minutes, pivot, next) ->
+            val hour = clockHour(next)
+            when {
+                hour == null || !isMinutes(minutes) -> null
+                pivot in PAST_THE_HOUR -> hour
+                pivot in TO_THE_HOUR -> if (hour == 1) NOON else hour - 1
+                else -> null
+            }
+        }
+        // Otherwise the first clock-sized number is the hour; a later one is its minutes.
+        return counted ?: words.firstNotNullOfOrNull(::clockHour)
+    }
+
+    private fun clockHour(word: String): Int? =
+        (SPOKEN_NUMBERS[word] ?: word.takeWhile { it.isDigit() }.toIntOrNull())
+            ?.takeIf { it in 1..NOON }
+
+    private fun isMinutes(word: String): Boolean =
+        word in SPOKEN_MINUTES || word.toIntOrNull() in 1..LAST_MINUTE
+
     private val WORD_BREAK = Regex("""[^a-z0-9]+""")
     private val DIGIT_LETTER_BOUNDARY = Regex("""(?<=\d)(?=[a-z])""")
     private val EVENING_CUES = setOf("pm", "evening", "night", "tonight", "afternoon")
@@ -118,6 +146,18 @@ object TimeResolver {
         "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5, "six" to 6,
         "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10, "eleven" to 11, "twelve" to 12,
         "noon" to 12, "midday" to 12,
+    )
+
+    // "Ten past six" is six o'clock and ten; "ten to six" is five o'clock and fifty.
+    private val PAST_THE_HOUR = setOf("past", "after")
+    private val TO_THE_HOUR = setOf("to", "till", "til")
+
+    // The minutes as spoken in front of to or past. "Twenty-five" is already twenty and five
+    // by the time this is asked, so the tens are enough. Noon is a time, never an amount.
+    private val SPOKEN_MINUTES = setOf(
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+        "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+        "twenty", "thirty", "forty", "fifty", "quarter", "half",
     )
 
     /** Minutes, defaulting to o'clock, and rejecting anything outside the hour. */

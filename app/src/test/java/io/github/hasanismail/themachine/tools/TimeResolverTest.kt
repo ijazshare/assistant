@@ -101,6 +101,35 @@ class TimeResolverTest {
     }
 
     @Test
+    fun `minutes said before the hour are not mistaken for it`() {
+        // The model had each of these right, and reading the minutes as the hour broke them:
+        // "ten to six in the morning" would have moved the alarm to 10:50.
+        assertThat(TimeResolver.reconcileHour("Set an alarm for ten to six in the morning", 5)).isEqualTo(5)
+        assertThat(TimeResolver.reconcileHour("quarter to eight in the morning", 7)).isEqualTo(7)
+        assertThat(TimeResolver.reconcileHour("alarm 5 past 7 pm", 19)).isEqualTo(19)
+        assertThat(TimeResolver.reconcileHour("remind me at 10 to 9 tonight", 20)).isEqualTo(20)
+        // A model that missed the evening is still put right through the same reading.
+        assertThat(TimeResolver.reconcileHour("twenty past six in the evening", 6)).isEqualTo(18)
+        assertThat(TimeResolver.reconcileHour("half past six in the evening", 16)).isEqualTo(18)
+    }
+
+    @Test
+    fun `to counts back into the hour before`() {
+        // 12:50 and 23:50: "to one" is twelve, and "to twelve" is eleven.
+        assertThat(TimeResolver.reconcileHour("ten to one in the afternoon", 12)).isEqualTo(12)
+        assertThat(TimeResolver.reconcileHour("quarter to 12 at night", 23)).isEqualTo(23)
+    }
+
+    @Test
+    fun `to after anything but minutes is only a preposition`() {
+        assertThat(TimeResolver.reconcileHour("set alarm to 7 am", 7)).isEqualTo(7)
+        assertThat(TimeResolver.reconcileHour("remind me to take pills at 8 pm", 20)).isEqualTo(20)
+        // "One to" in the task is not a time: the word after it has to be the hour.
+        assertThat(TimeResolver.reconcileHour("remind me to give one to Ali at ten to six tonight", 17))
+            .isEqualTo(17)
+    }
+
+    @Test
     fun `defaults minutes to the hour and rejects the impossible`() {
         assertThat(TimeResolver.minuteOf(null)).isEqualTo(0)
         assertThat(TimeResolver.minuteOf(30)).isEqualTo(30)
