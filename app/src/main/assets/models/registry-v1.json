@@ -50,28 +50,28 @@
       "role": "LLM",
       "displayName": "Gemma 3 1B (QAT Q4_0)",
       "detail": "The default. Picks the right tool reliably, including 24-hour conversions like \"half past six in the evening\".",
-      "fileName": "gemma-3-1b-it-q4_0.gguf",
-      "url": "https://huggingface.co/vinimuchulski/gemma-3-1b-it-qat-q4_0-gguf/resolve/main/gemma-3-1b-it-q4_0.gguf",
-      "sha256": "cd2a46a3581fd385ee72688490370ef3e025b7e2daf016615593241b18bd6166",
-      "byteSize": 1003541152,
+      "fileName": "gemma-3-1b-it-qat-Q4_0.gguf",
+      "url": "https://huggingface.co/ggml-org/gemma-3-1b-it-qat-GGUF/resolve/main/gemma-3-1b-it-qat-Q4_0.gguf",
+      "sha256": "ef60e4e91a738c99ae9976b050657dfe68a4007a0ccca121b55ec0c413dccd58",
+      "byteSize": 720425600,
       "minRamMb": 2048,
       "isDefault": true,
       "license": "Gemma Terms of Use",
-      "source": "Ungated mirror of google/gemma-3-1b-it-qat-q4_0-gguf, which is licence-gated and needs a token. The mirror's file is the same byte size as Google's (1003541152), and the companion mmproj file in this mirror has an identical sha256 to two other independent mirrors."
+      "source": "ggml-org, the llama.cpp organisation's own GGUF conversion of Google's QAT checkpoint (google/gemma-3-1b-it-qat), at Q4_0, ungated. Replaces the vinimuchulski mirror of google/gemma-3-1b-it-qat-q4_0-gguf, whose file does not tokenise <start_of_turn> as a control token, so the model never saw its own turn markers. Digest and size read from the Hugging Face LFS metadata and matched against a downloaded copy on 2026-10-26."
     },
     {
       "id": "llm-gemma3-4b",
       "role": "LLM",
       "displayName": "Gemma 3 4B (QAT Q4_0)",
       "detail": "Noticeably better at unusual phrasing, at roughly three times the size and latency. Only worth it on a phone with RAM to spare.",
-      "fileName": "gemma-3-4b-it-q4_0.gguf",
-      "url": "https://huggingface.co/vinimuchulski/gemma-3-4b-it-qat-q4_0-gguf/resolve/main/gemma-3-4b-it-q4_0.gguf",
-      "sha256": "2ca493d426ffcb43db27132f183a0230eda4a3621e58b328d55b665f1937a317",
-      "byteSize": 3155051328,
+      "fileName": "gemma-3-4b-it-qat-Q4_0.gguf",
+      "url": "https://huggingface.co/ggml-org/gemma-3-4b-it-qat-GGUF/resolve/main/gemma-3-4b-it-qat-Q4_0.gguf",
+      "sha256": "ee91c3e7a4ab95d8c95672f9fcb58bf236b257e9f217966bcf53a5a6df4ab49a",
+      "byteSize": 2526080992,
       "minRamMb": 6144,
       "isDefault": false,
       "license": "Gemma Terms of Use",
-      "source": "Ungated mirror of google/gemma-3-4b-it-qat-q4_0-gguf. Same byte size as Google's (3155051328). Note this is larger than the ~2.6 GB quoted in CLAUDE.md."
+      "source": "ggml-org's GGUF conversion of google/gemma-3-4b-it-qat at Q4_0, ungated. Replaces the vinimuchulski mirror, which had the same <start_of_turn> tokenisation defect as the 1B. The text model only: the repository's mmproj file is for images, which nothing here uses. Digest and size read from the Hugging Face LFS metadata and matched against a downloaded copy on 2026-10-26."
     },
     {
       "id": "tts-piper-amy",
