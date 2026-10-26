@@ -519,7 +519,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // executor asks for the words rather than sending "hello how are you" to someone.
         if (call.tool == MachineTools.SEND_MESSAGE) {
             val body = call.arguments["body"].orEmpty()
-            if (body.isNotBlank() && !MessageBody.isTraceable(transcript, body)) {
+            val recipient = call.arguments["recipient"].orEmpty()
+            if (body.isNotBlank() && !MessageBody.isTraceable(transcript, body, recipient)) {
                 Log.i(TAG, "dropping invented body \"$body\" for [$transcript]")
                 return call.copy(arguments = call.arguments - "body")
             }

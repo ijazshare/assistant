@@ -73,7 +73,8 @@ class PipelineProbeTest {
         // Mirror the session's guard: never send a body the user did not actually say.
         if (call.tool == MachineTools.SEND_MESSAGE && runcmd != null) {
             val body = call.arguments["body"].orEmpty()
-            if (body.isNotBlank() && !MessageBody.isTraceable(runcmd, body)) {
+            val recipient = call.arguments["recipient"].orEmpty()
+            if (body.isNotBlank() && !MessageBody.isTraceable(runcmd, body, recipient)) {
                 Log.i(PIPE, "dropped invented body \"$body\"")
                 call = call.copy(arguments = call.arguments - "body")
             }
