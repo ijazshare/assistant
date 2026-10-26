@@ -32,15 +32,27 @@ import java.io.File
  * it. Without that, dismissing the overlay while a reply was still being synthesised
  * freed the engine under a thread that was reading from it — a SIGSEGV, found the first
  * time a test tore a session down promptly.
+ *
+ * Starting playback and [stop] both happen under [playbackLock], so a stop can never land
+ * between a reply's last check and its first sample.
  */
 class PiperEngine {
 
     private val engineLock = Any()
 
+    /** Guards [track] and [stops]. Never held across synthesis, so stop() returns at once. */
+    private val playbackLock = Any()
+
     private var tts: OfflineTts? = null
 
-    @Volatile
     private var track: AudioTrack? = null
+
+    /**
+     * Calls to [stop] so far. A reply notes the count when it is asked for and plays only if
+     * it has not moved since. Synthesis takes long enough that a stop used to land in the
+     * middle of it, and the reply then started anyway, after the stop meant to silence it.
+     */
+    private var stops = 0
 
     @Volatile
     private var closing = false
@@ -104,29 +116,32 @@ class PiperEngine {
      *
      * Silently does nothing when no voice is loaded: the assistant still shows its reply
      * on screen, and a missing voice should degrade the experience rather than end it.
+     * Nor is anything played if [stop] is called after this was, even while it is still
+     * being synthesised.
      */
-    suspend fun speak(text: String): Boolean = withContext(Dispatchers.Default) {
-        if (text.isBlank()) return@withContext false
-
-        // Synthesis under the lock, so release() cannot free the engine mid-sentence.
-        // Playback is plain AudioTrack and needs no such protection.
-        val audio = synchronized(engineLock) {
-            val engine = tts
-            if (engine == null || closing) {
-                Log.w(TAG, "piper: nothing to speak with (loaded=${engine != null}, closing=$closing)")
-                return@withContext false
+    suspend fun speak(text: String): Boolean {
+        if (text.isBlank()) return false
+        // Noted before synthesis, so a stop() that lands during it still counts.
+        val turn = synchronized(playbackLock) { stops }
+        return withContext(Dispatchers.Default) {
+            // Synthesis under the lock, so release() cannot free the engine mid-sentence.
+            val audio = synchronized(engineLock) {
+                val engine = tts
+                if (engine == null || closing) {
+                    Log.w(TAG, "piper: nothing to speak with (loaded=${engine != null}, closing=$closing)")
+                    return@withContext false
+                }
+                runCatching { engine.generate(text, SPEAKER, SPEED) }.getOrElse {
+                    Log.e(TAG, "piper: synthesis failed", it)
+                    return@withContext false
+                }
             }
-            runCatching { engine.generate(text, SPEAKER, SPEED) }.getOrElse {
-                Log.e(TAG, "piper: synthesis failed", it)
-                return@withContext false
-            }
+            play(audio.samples, audio.sampleRate, turn)
         }
-        play(audio.samples, audio.sampleRate)
     }
 
-    private fun play(samples: FloatArray, sampleRate: Int): Boolean {
+    private fun play(samples: FloatArray, sampleRate: Int, turn: Int): Boolean {
         if (samples.isEmpty() || closing) return false
-        stop()
 
         val minimum = AudioTrack.getMinBufferSize(
             sampleRate,
@@ -157,10 +172,21 @@ class PiperEngine {
             Log.e(TAG, "piper: no audio track", it)
             return false
         }
-
-        track = player
         player.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-        player.play()
+
+        // Checked and started under the lock stop() takes, so a stop() made since this reply
+        // was asked for keeps it silent, and one made after it starts cuts it off.
+        synchronized(playbackLock) {
+            if (turn != stops || closing) {
+                player.release()
+                Log.i(TAG, "piper: reply stopped before it started")
+                return false
+            }
+            // A newer reply replaces one still playing, as it always has.
+            releaseTrack()
+            track = player
+            player.play()
+        }
         Log.i(TAG, "piper: speaking ${samples.size * MILLIS_PER_SECOND / sampleRate} ms")
 
         // MODE_STATIC plays from a buffer already written, so waiting means watching the
@@ -174,12 +200,24 @@ class PiperEngine {
         ) {
             Thread.sleep(POLL_MILLIS)
         }
-        stop()
+        // Only if it is still this reply's track: a newer reply may have replaced it.
+        synchronized(playbackLock) { if (track === player) releaseTrack() }
         return true
     }
 
-    /** Cuts playback short, for a reply the user has already moved on from. */
+    /**
+     * Cuts playback short, for a reply the user has already moved on from. A reply still
+     * being synthesised is dropped too: it will not start afterwards.
+     */
     fun stop() {
+        synchronized(playbackLock) {
+            stops++
+            releaseTrack()
+        }
+    }
+
+    /** Stops and frees the current track. The caller holds [playbackLock]. */
+    private fun releaseTrack() {
         track?.runCatching {
             if (state == AudioTrack.STATE_INITIALIZED) {
                 pause()

@@ -244,6 +244,13 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             }
             // A new command replaces the old one, including a reply still being spoken.
             processing?.cancel()
+            // Cancelling the job does not silence the voice: synthesis and playback are
+            // blocking calls that run to the end regardless. A summon during a reply (the
+            // same session, summoned again) opened the microphone on it, and the assistant
+            // transcribed its own words. Stopped here, before the microphone opens; a reply
+            // still being synthesised is dropped, and so is one from fail(), which runs
+            // outside the job.
+            piper.stop()
             _state.value = SessionState.Preparing
             if (!hasMicrophonePermission()) {
                 fail(

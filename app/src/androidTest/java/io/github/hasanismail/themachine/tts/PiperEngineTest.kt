@@ -18,6 +18,8 @@ import io.github.hasanismail.themachine.models.ModelRegistry
 import io.github.hasanismail.themachine.models.ModelRole
 import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -60,6 +62,39 @@ class PiperEngineTest {
             val spoken = runBlocking { engine.speak("Alarm set for seven in the morning.") }
             Log.i("TheMachine", "PIPER spoke=$spoken")
             assertThat(spoken).isTrue()
+        } finally {
+            engine.release()
+        }
+    }
+
+    @Test
+    fun aReplyStoppedBeforeItPlaysIsNeverHeardButTheNextOneIs() {
+        val asset = voice()
+        assumeTrue("No voice installed on this device", asset != null)
+        requireNotNull(asset)
+
+        val directory = storage.extractedDir(asset)
+        assertThat(ModelArchive.unpack(storage.target(asset), directory)).isTrue()
+
+        val engine = PiperEngine()
+        try {
+            assertThat(runBlocking { engine.load(directory) }).isTrue()
+
+            // What a second summon does to the previous command's reply: asked for first,
+            // then stopped while it is still being synthesised. Undispatched, so the reply
+            // has really been asked for by the time stop() runs.
+            val stopped = runBlocking {
+                val reply = async(start = CoroutineStart.UNDISPATCHED) {
+                    engine.speak("I could not find anyone by that name in your contacts.")
+                }
+                engine.stop()
+                reply.await()
+            }
+            assertThat(stopped).isFalse()
+
+            // A stop silences the reply it was meant for, not the voice: the question asked
+            // after it, like a follow-up for a message body, is still spoken.
+            assertThat(runBlocking { engine.speak("What should I say to them?") }).isTrue()
         } finally {
             engine.release()
         }
