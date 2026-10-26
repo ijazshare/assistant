@@ -56,4 +56,30 @@ class ScreenQuestionTest {
     fun `an empty argument is not corroboration`() {
         assertThat(ScreenQuestion.of("read this", modelArgument = "   ")).isNull()
     }
+
+    @Test
+    fun `requests about the screen point at it`() {
+        assertThat(ScreenQuestion.pointsAtScreen("what does this say")).isTrue()
+        assertThat(ScreenQuestion.pointsAtScreen("Read out what's on my screen.")).isTrue()
+        assertThat(ScreenQuestion.pointsAtScreen("How much is the total on this receipt?")).isTrue()
+        assertThat(ScreenQuestion.pointsAtScreen("what does it say")).isTrue()
+        // A mishearing still carries the verb.
+        assertThat(ScreenQuestion.pointsAtScreen("Read what's on the scream.")).isTrue()
+        // Nothing but the screen can be summarised or translated.
+        assertThat(ScreenQuestion.pointsAtScreen("summarize it")).isTrue()
+        assertThat(ScreenQuestion.pointsAtScreen("give me a summary")).isTrue()
+        assertThat(ScreenQuestion.pointsAtScreen("Translate that.")).isTrue()
+    }
+
+    @Test
+    fun `questions and overheard speech do not`() {
+        // The 4B sent all of these to read_screen.
+        assertThat(ScreenQuestion.pointsAtScreen("What's the week's forecast?")).isFalse()
+        assertThat(ScreenQuestion.pointsAtScreen("What is the traffic like right now?")).isFalse()
+        assertThat(
+            ScreenQuestion.pointsAtScreen("The next train to Manchester Piccadilly will depart from platform 2."),
+        ).isFalse()
+        assertThat(ScreenQuestion.pointsAtScreen("Thanks for watching, and I'll see you in the next one.")).isFalse()
+        assertThat(ScreenQuestion.pointsAtScreen("Could you explain the meaning of exorbitant?")).isFalse()
+    }
 }

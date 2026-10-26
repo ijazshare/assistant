@@ -514,12 +514,21 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     }
 
     /**
-     * Corrects an hour the model converted badly, using the words it was given.
+     * Checks the model's call against the words it was given: declines a screen read
+     * nobody asked for, drops a message body nobody said, and corrects an hour the model
+     * converted badly.
      *
      * The only place the transcript and the resolved call are both in hand, which is
      * what this needs: the executor sees a call and never the sentence behind it.
      */
     private fun reconciled(transcript: String, call: ToolCall): ToolCall {
+        // Nobody asked about the screen, so reading it out answers nothing; a decline at
+        // least says so. Unsuccessful, so the guess is never learned either.
+        if (call.tool == MachineTools.READ_SCREEN && !ScreenQuestion.pointsAtScreen(transcript)) {
+            Log.i(TAG, "declining read_screen, nothing points at the screen in [$transcript]")
+            return ToolCall(MachineTools.UNSUPPORTED, mapOf("reason" to "For the screen, say \"read this\"."))
+        }
+
         // A message body the user never said is invented, not dictated; drop it so the
         // executor asks for the words rather than sending "hello how are you" to someone.
         if (call.tool == MachineTools.SEND_MESSAGE) {

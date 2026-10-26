@@ -41,6 +41,29 @@ object ScreenQuestion {
     }
 
     /**
+     * Whether the user pointed at the screen at all, which read_screen needs to be theirs.
+     *
+     * The router reaches for read_screen when it has nothing better: questions it could
+     * not place, and above all speech that was never meant for it — on a recorded
+     * benchmark it was the 4B's commonest wrong call on background speech, while every
+     * request there that really was about the screen said one of these words. Without one
+     * the call is the model's guess, and a guess reads out whatever happens to be open.
+     */
+    fun pointsAtScreen(transcript: String): Boolean =
+        transcript.lowercase().split(NON_LETTER).any { word ->
+            word in POINTING || TEXT_ONLY.any { word.startsWith(it) }
+        }
+
+    private val POINTING = setOf("this", "these", "here", "screen", "page", "read", "say", "says")
+
+    /**
+     * Requests that can only be about text in front of the user, so "summarise it" and
+     * "translate that" need no pointing word. Not "explain" or "mean": "explain gravity"
+     * and "what does exorbitant mean" are questions, and the model sends those here too.
+     */
+    private val TEXT_ONLY = listOf("summar", "translat", "tldr")
+
+    /**
      * Prefixes, not whole words, so "summarise", "summarize", "summary" and "summarising"
      * all count without listing each.
      *
