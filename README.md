@@ -102,8 +102,10 @@ These are enforced, not just promised:
   language model for general-knowledge answers, which you point at any OpenAI-compatible
   endpoint (OpenRouter, or your own llama.cpp server at home). It is off until you enter
   a URL, key and model, and it only ever receives the transcript text of a question.
-- Audio is processed in memory and never written to disk or transmitted — with or
-  without the remote model.
+- Audio is never transmitted, with or without the remote model. Release builds process it
+  in memory only. Debug builds, for now, also keep the last 500 recordings on the device
+  (`history/captures/` in the app's storage) to diagnose end-of-speech detection; that goes,
+  or becomes a setting, once detection works.
 
 ## Building
 

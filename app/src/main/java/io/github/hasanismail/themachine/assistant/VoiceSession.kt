@@ -23,6 +23,7 @@ import io.github.hasanismail.themachine.audio.MachineSounds
 import io.github.hasanismail.themachine.audio.StopReason
 import io.github.hasanismail.themachine.audio.VoiceRecorder
 import io.github.hasanismail.themachine.context.MachineFiles
+import io.github.hasanismail.themachine.history.CaptureArchive
 import io.github.hasanismail.themachine.history.QueryLog
 import io.github.hasanismail.themachine.history.QueryRecord
 import io.github.hasanismail.themachine.history.QuerySource
@@ -115,7 +116,20 @@ data class Timing(val sttMillis: Long, val llmMillis: Long) {
 @Suppress("TooManyFunctions")
 class VoiceSession(private val context: Context, private val scope: CoroutineScope) {
 
-    private val recorder = VoiceRecorder()
+    // Debug builds keep every capture for diagnosing end-of-speech (CaptureArchive), written
+    // off the microphone's thread; release builds skip even the copy.
+    private val captures = CaptureArchive(context)
+    private val recorder = VoiceRecorder(
+        onCaptured = if (captures.enabled) {
+            { c ->
+                teardown.launch {
+                    captures.save(System.currentTimeMillis(), c.samples, c.levels, c.reason.name, c.source)
+                }
+            }
+        } else {
+            null
+        },
+    )
     private val whisper = WhisperEngine(context)
     private val llama = LlamaEngine(context)
     private val storage = ModelStorage(context)

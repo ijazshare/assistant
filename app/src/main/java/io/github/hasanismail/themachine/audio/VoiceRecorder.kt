@@ -76,14 +76,21 @@ enum class StopReason {
     NO_SPEECH,
 }
 
+/** One capture on one source as it closed, whatever closed it: the audio and every frame's RMS. */
+class Captured(val samples: FloatArray, val levels: FloatArray, val reason: StopReason, val source: Int)
+
 /**
  * Opens the microphone, streams level events, and stops when [Endpointer] says the
  * speaker has finished.
  *
  * Cold flow: capture starts on collection and the AudioRecord is released when
  * collection ends, so cancelling a session cannot leave the microphone open.
+ *
+ * [onCaptured] sees every capture as the microphone closes — a dismissal included, which
+ * never reaches the collector as [CaptureEvent.Finished]. Debug builds archive them; null
+ * skips the copy entirely.
  */
-class VoiceRecorder {
+class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
 
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun capture(endpointer: Endpointer = Endpointer()): Flow<CaptureEvent> = callbackFlow {
@@ -164,6 +171,9 @@ class VoiceRecorder {
             stopOnCancel.dispose()
             runCatching { record.stop() }
             record.release()
+            onCaptured?.invoke(
+                Captured(stats.samples.toFloatArray(), stats.levels.toFloatArray(), stats.reason, source),
+            )
         }
     }
 
@@ -177,6 +187,8 @@ class VoiceRecorder {
         var peak = 0f
         var speaking = false
         var reason = StopReason.CANCELLED
+        val samples = ArrayList<Float>(WhisperEngine.SAMPLE_RATE * INITIAL_SECONDS)
+        val levels = ArrayList<Float>()
     }
 
     /** Reads frames until the endpointer stops it, the source proves silent, or it is cancelled. */
@@ -185,7 +197,7 @@ class VoiceRecorder {
         endpointer: Endpointer,
         stats: CaptureStats,
     ): PumpResult {
-        val collected = ArrayList<Float>(WhisperEngine.SAMPLE_RATE * INITIAL_SECONDS)
+        val collected = stats.samples
         val buffer = ShortArray(FRAME_SAMPLES)
         var framesSinceSnapshot = 0
 
@@ -206,6 +218,7 @@ class VoiceRecorder {
             barrenReads = 0
 
             val rms = appendAndMeasure(buffer, read, collected)
+            stats.levels.add(rms)
             stats.frames++
             if (rms > stats.peak) stats.peak = rms
             trySend(CaptureEvent.Level(displayLevel(rms)))
