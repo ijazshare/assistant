@@ -38,6 +38,7 @@ import io.github.hasanismail.themachine.models.ModelState
 import io.github.hasanismail.themachine.models.ModelStorage
 import io.github.hasanismail.themachine.settings.MachineSettings
 import io.github.hasanismail.themachine.stt.ContactNames
+import io.github.hasanismail.themachine.stt.JunkTranscript
 import io.github.hasanismail.themachine.stt.WhisperEngine
 import io.github.hasanismail.themachine.tools.Contact
 import io.github.hasanismail.themachine.tools.ContactLookup
@@ -408,7 +409,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         _state.value = SessionState.Transcribing
 
         val heard = transcriber.withLock { whisper.transcribe(event.samples) }
-        if (heard.text.isBlank()) {
+        // Blank is not the only way Whisper reports no words: music or a quiet room comes back
+        // as "you", "Thank you." or "♪", and the router made alarms out of those. They get
+        // exactly the answer a blank transcript gets.
+        if (JunkTranscript.isJunk(heard.text)) {
+            if (heard.text.isNotBlank()) Log.i(TAG, "dropping junk transcript [${heard.text}]")
             fail(if (gaveUp) "I did not hear anything." else "I heard something, but could not make out any words.")
             return
         }
