@@ -10,7 +10,8 @@
 package io.github.hasanismail.themachine.audio
 
 /**
- * The endpointer's ears: a 4th-order Butterworth high-pass for 16 kHz audio, in one of two bands.
+ * The endpointer's ears: a Butterworth high-pass for 16 kHz audio, in one of two bands (4th order),
+ * and a third, 2nd-order one for the voice check.
  *
  *  - [voiceBand] (400 Hz) is what the endpointer judges speech on. A car's vent or a fan is mostly
  *    energy below 300 Hz at speaking volume; the voice a person can follow lives above it.
@@ -47,6 +48,13 @@ class HighPass private constructor(private val sections: Array<DoubleArray>) {
         /** 1500 Hz: the level that keeps [Endpointer] listening through a vent's rumble. -47 dB at 400 Hz. */
         fun highBand(): HighPass = HighPass(HIGH_BAND)
 
+        /**
+         * 300 Hz, second order: the signal [VoiceCheckLayer] hands to its voice model, the one it
+         * was measured on. Its own filter, not [voiceBand]: the model has not been tried on that one.
+         * -19 dB at 100 Hz, -3 dB at 300 Hz.
+         */
+        fun voiceCheck(): HighPass = HighPass(VOICE_CHECK)
+
         // Each section is (b0, b1, b2, a1, a2), with a0 = 1.
         private const val B0 = 0
         private const val B1 = 1
@@ -54,6 +62,15 @@ class HighPass private constructor(private val sections: Array<DoubleArray>) {
         private const val A1 = 3
         private const val A2 = 4
 
+        private val VOICE_CHECK = arrayOf(
+            doubleArrayOf(
+                0.92006615842916795,
+                -1.8401323168583359,
+                0.92006615842916795,
+                -1.8337326589246479,
+                0.8465319747920238,
+            ),
+        )
         private val VOICE_BAND = arrayOf(
             doubleArrayOf(
                 0.8683451917361831,

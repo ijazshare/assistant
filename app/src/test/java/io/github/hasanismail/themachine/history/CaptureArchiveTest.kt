@@ -13,6 +13,8 @@ import com.google.common.truth.Truth.assertThat
 import io.github.hasanismail.themachine.audio.Captured
 import io.github.hasanismail.themachine.audio.FrameMeter
 import io.github.hasanismail.themachine.audio.StopReason
+import io.github.hasanismail.themachine.audio.VoiceCheckLayer
+import io.github.hasanismail.themachine.audio.VoiceCheckReport
 import kotlinx.serialization.json.Json
 import org.junit.Rule
 import org.junit.Test
@@ -40,7 +42,8 @@ class CaptureArchiveTest {
         levels: FloatArray,
         highBandLevels: FloatArray = FloatArray(levels.size),
         reason: StopReason = StopReason.ENDPOINT,
-    ) = Captured(samples, levels, highBandLevels, reason, source = 6)
+        voiceCheck: VoiceCheckReport = VoiceCheckReport(active = false, armedFrame = 0, stoppedBy = null),
+    ) = Captured(samples, levels, highBandLevels, reason, source = 6, voiceCheck = voiceCheck)
 
     @Test
     fun `a capture becomes a wav and an index line that names it`() {
@@ -87,6 +90,36 @@ class CaptureArchiveTest {
         assertThat(record.levels).containsExactly(0.01235f, 0.5f).inOrder()
         assertThat(record.highBandLevels).isEmpty()
         assertThat(record.levelsFrontEnd).isEqualTo(CaptureArchive.RAW_LEVELS)
+    }
+
+    @Test
+    fun `what the voice check did is recorded with the capture`() {
+        val archive = CaptureArchive(folder.root, enabled = true)
+        val ended = VoiceCheckReport(active = true, armedFrame = 61, stoppedBy = VoiceCheckLayer.StoppedBy.VOICE)
+        archive.save(1_000L, captured(FloatArray(2), FloatArray(2), voiceCheck = ended))
+        val without = VoiceCheckReport(active = false, armedFrame = 0, stoppedBy = null)
+        archive.save(2_000L, captured(FloatArray(2), FloatArray(2), voiceCheck = without))
+
+        val (voice, none) = index()
+        assertThat(voice.voiceCheck).isTrue()
+        assertThat(voice.stoppedBy).isEqualTo("voice")
+        assertThat(voice.armedFrame).isEqualTo(61)
+        assertThat(none.voiceCheck).isFalse()
+        assertThat(none.stoppedBy).isEmpty()
+        assertThat(none.armedFrame).isEqualTo(0)
+    }
+
+    @Test
+    fun `an index line from before the voice check still reads, as no check`() {
+        val line = """{"atEpochMillis":1000,"reason":"ENDPOINT","source":6,"frameMillis":20,""" +
+            """"recording":"19700101-000001-000-endpoint.wav","levels":[0.5],"highBandLevels":[0.1],""" +
+            """"levelsFrontEnd":"hp400o4+hp1500o4"}"""
+
+        val record = Json.decodeFromString<CaptureRecord>(line)
+
+        assertThat(record.voiceCheck).isFalse()
+        assertThat(record.stoppedBy).isEmpty()
+        assertThat(record.armedFrame).isEqualTo(0)
     }
 
     @Test

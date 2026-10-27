@@ -114,4 +114,24 @@ class ModelRegistryTest {
             assertThat(assets.count { it.isDefault }).isEqualTo(1)
         }
     }
+
+    @Test
+    fun `the voice check's model is optional, and pinned to the one file the check can run`() {
+        // A Silero model of another version has another window size, and sherpa-onnx ends the whole
+        // process on a window of the wrong length. Nothing but these exact bytes may be loaded.
+        val vad = registry.byRole(ModelRole.VAD).single()
+        assertThat(ModelRole.VAD.required).isFalse()
+        assertThat(vad.sha256).isEqualTo("2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f")
+        assertThat(vad.byteSize).isEqualTo(2_327_524L)
+        assertThat(vad.url).contains("/v5.1.2/")
+        assertThat(vad.isDefault).isTrue()
+    }
+
+    @Test
+    fun `a phone without the voice check's model still has everything it needs`() {
+        val (ready, needed) = registry.rolesSatisfied { it.role != ModelRole.VAD }
+
+        assertThat(ready).isEqualTo(needed)
+        assertThat(needed).isEqualTo(ModelRole.entries.count { it.required })
+    }
 }

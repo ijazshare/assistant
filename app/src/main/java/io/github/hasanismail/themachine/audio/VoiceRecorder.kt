@@ -79,7 +79,7 @@ enum class StopReason {
 /**
  * One capture on one source as it closed, whatever closed it: the audio as recorded, and each
  * frame's two levels exactly as [Endpointer.accept] was given them — [levels] above 400 Hz and
- * [highBandLevels] above 1.5 kHz ([FrameMeter]).
+ * [highBandLevels] above 1.5 kHz ([FrameMeter]) — and what the [voiceCheck] did.
  */
 class Captured(
     val samples: FloatArray,
@@ -87,6 +87,7 @@ class Captured(
     val highBandLevels: FloatArray,
     val reason: StopReason,
     val source: Int,
+    val voiceCheck: VoiceCheckReport,
 )
 
 /**
@@ -103,13 +104,16 @@ class Captured(
 class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
 
     /**
-     * [newEndpointer] makes a fresh endpointer for each source tried. The endpointer measures
-     * the room as the source opens and follows it from there; a source that opened and fed
-     * silence would hand its next one a room measured at nothing, and the opening transient of
-     * the next source would land after the lead-in instead of inside it.
+     * [newEndpointer] makes a fresh endpointer, wrapped in its voice check, for each source
+     * tried. The endpointer measures the room as the source opens and follows it from there; a
+     * source that opened and fed silence would hand its next one a room measured at nothing, and
+     * the opening transient of the next source would land after the lead-in instead of inside
+     * it. The voice check and its model start from silence with it.
      */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-    fun capture(newEndpointer: () -> Endpointer = { Endpointer() }): Flow<CaptureEvent> = callbackFlow {
+    fun capture(
+        newEndpointer: () -> VoiceCheckLayer = { VoiceCheckLayer(Endpointer()::accept, null) },
+    ): Flow<CaptureEvent> = callbackFlow {
         val minBuffer = AudioRecord.getMinBufferSize(
             WhisperEngine.SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
@@ -158,7 +162,7 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
     private suspend fun ProducerScope<CaptureEvent>.runAttempt(
         record: AudioRecord,
         source: Int,
-        endpointer: Endpointer,
+        endpointer: VoiceCheckLayer,
     ): Boolean {
         val stats = CaptureStats()
         // AudioRecord.read is an uninterruptible native call, so a cancelled collector does
@@ -179,10 +183,14 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
             // In the finally, not after the loop: a dismissal cancels the coroutine while
             // the loop is blocked in read(), and the tail never runs. The finally always
             // does, so the outcome of a summon the user gave up on is still recorded.
+            val check = endpointer.report()
             Log.i(
                 TAG,
                 "capture done: source=$source reason=${stats.reason} frames=${stats.frames} " +
-                    "peak=${"%.4f".format(stats.peak)} speechDetected=${stats.speaking}",
+                    "peak=${"%.4f".format(stats.peak)} speechDetected=${stats.speaking} " +
+                    "voiceCheck=${check.active} stoppedBy=${check.stoppedBy} " +
+                    "armed=${check.armed} armedFrame=${check.armedFrame}" +
+                    (endpointer.failure?.let { " voiceCheckFailed=${it.message}" } ?: ""),
             )
             stopOnCancel.dispose()
             runCatching { record.stop() }
@@ -194,6 +202,7 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
                     stats.highBandLevels.toFloatArray(),
                     stats.reason,
                     source,
+                    check,
                 ),
             )
         }
@@ -220,11 +229,14 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
     /** Reads frames until the endpointer stops it, the source proves silent, or it is cancelled. */
     private suspend fun ProducerScope<CaptureEvent>.pump(
         record: AudioRecord,
-        endpointer: Endpointer,
+        endpointer: VoiceCheckLayer,
         stats: CaptureStats,
     ): PumpResult {
         val collected = stats.samples
         val buffer = ShortArray(FRAME_SAMPLES)
+
+        // The frame as float, for the voice check; one array for the whole capture.
+        val frame = FloatArray(FRAME_SAMPLES)
         var framesSinceSnapshot = 0
 
         var barrenReads = 0
@@ -246,7 +258,7 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
             // The meter and the dead-source check read the level as recorded; the endpointer
             // reads it above 400 Hz and above 1.5 kHz, where a vent's rumble is mostly gone.
             val meter = stats.meter
-            meter.measure(buffer, read, collected)
+            meter.measure(buffer, read, collected, frame)
             val rms = meter.raw
             stats.levels.add(meter.voiceBand)
             stats.highBandLevels.add(meter.highBand)
@@ -272,7 +284,7 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
                 trySend(CaptureEvent.Snapshot(collected.toFloatArray()))
             }
 
-            when (val verdict = endpointer.accept(meter.voiceBand, meter.highBand)) {
+            when (val verdict = endpointer.accept(meter.voiceBand, meter.highBand, frame, read)) {
                 FrameVerdict.Continue -> Unit
 
                 FrameVerdict.SpeechBegan -> {

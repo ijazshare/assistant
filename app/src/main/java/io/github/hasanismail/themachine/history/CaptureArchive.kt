@@ -46,6 +46,12 @@ data class CaptureRecord(
     val highBandLevels: List<Float> = emptyList(),
     /** How [levels] and [highBandLevels] were measured ([FrameMeter.FRONT_END] for new records). */
     val levelsFrontEnd: String = CaptureArchive.RAW_LEVELS,
+    /** Whether the voice check ran to the end of the capture: its model was present and never failed. */
+    val voiceCheck: Boolean = false,
+    /** What ended the capture: "energy" or "voice"; empty if nothing did (a dismissal). */
+    val stoppedBy: String = "",
+    /** Whether the voice check heard a voice for certain, and the frame (from 1) it did on; 0 if never. */
+    val armedFrame: Int = 0,
 )
 
 /**
@@ -85,6 +91,9 @@ class CaptureArchive(private val dir: File, val enabled: Boolean, private val ke
                 levels = capture.levels.toList(),
                 highBandLevels = capture.highBandLevels.toList(),
                 levelsFrontEnd = FrameMeter.FRONT_END,
+                voiceCheck = capture.voiceCheck.active,
+                stoppedBy = capture.voiceCheck.stoppedBy?.name?.lowercase().orEmpty(),
+                armedFrame = capture.voiceCheck.armedFrame,
             )
             File(dir, INDEX).appendText(json.encodeToString(record) + "\n")
             prune()

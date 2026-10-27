@@ -25,6 +25,12 @@ enum class ModelRole(val required: Boolean = true) {
 
     /** Reading text out of pixels, for screens the accessibility tree cannot describe. */
     OCR(required = false),
+
+    /**
+     * Hearing that the speaker has stopped when noise keeps the energy endpointer waiting. Without it
+     * the microphone just closes later in a noisy place, so it is not needed to begin.
+     */
+    VAD(required = false),
 }
 
 /** Assets that arrive compressed and have to be unpacked after verification. */

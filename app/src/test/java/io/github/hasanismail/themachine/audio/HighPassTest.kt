@@ -12,10 +12,12 @@ package io.github.hasanismail.themachine.audio
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** The two bands the endpointer listens in. */
+/** The two bands the endpointer listens in, and the voice check's own filter. */
 class HighPassTest {
 
     /** The filter's gain at [hz]: the RMS ratio over the second half of a one-second tone. */
@@ -39,6 +41,38 @@ class HighPassTest {
         assertThat(gain(HighPass.voiceBand(), 100.0)).isLessThan(0.01) // -48 dB
         assertThat(gain(HighPass.voiceBand(), 400.0)).isWithin(0.01).of(sqrt(0.5)) // -3 dB at the cutoff
         assertThat(gain(HighPass.voiceBand(), 1_000.0)).isWithin(0.01).of(1.0)
+    }
+
+    @Test
+    fun `the voice check's filter is the 2nd order 300 Hz Butterworth, apart from the endpointer's`() {
+        assertThat(gain(HighPass.voiceCheck(), 100.0)).isWithin(0.003).of(10.0.pow(-19.1 / 20)) // -19.1 dB
+        assertThat(gain(HighPass.voiceCheck(), 300.0)).isWithin(0.005).of(sqrt(0.5))
+        assertThat(gain(HighPass.voiceCheck(), 1_000.0)).isWithin(0.01).of(1.0)
+        // Gentler than the 4th-order 400 Hz band: that one is -48 dB at 100 Hz.
+        assertThat(gain(HighPass.voiceCheck(), 100.0)).isGreaterThan(10 * gain(HighPass.voiceBand(), 100.0))
+    }
+
+    @Test
+    fun `the voice check's coefficients are the RBJ high-pass at 300 Hz`() {
+        // Independent of the constants in HighPass: the cookbook formula, run per sample.
+        val w0 = 2 * PI * 300.0 / 16_000.0
+        val alpha = sin(w0) / (2 * sqrt(0.5))
+        val a0 = 1 + alpha
+        val b0 = (1 + cos(w0)) / 2 / a0
+        val b1 = -(1 + cos(w0)) / a0
+        val a1 = -2 * cos(w0) / a0
+        val a2 = (1 - alpha) / a0
+        var s1 = 0.0
+        var s2 = 0.0
+        val filter = HighPass.voiceCheck()
+        val random = java.util.Random(4)
+        repeat(3_200) {
+            val x = (random.nextGaussian() * 0.05).toFloat()
+            val y = b0 * x + s1
+            s1 = b1 * x - a1 * y + s2
+            s2 = b0 * x - a2 * y
+            assertThat(filter.process(x).toDouble()).isWithin(1e-6).of(y)
+        }
     }
 
     @Test

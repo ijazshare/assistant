@@ -39,15 +39,17 @@ class FrameMeter {
 
     /**
      * Converts the first [read] samples of [buffer] to float, appends them to [into] unfiltered
-     * (Whisper hears the audio as recorded), and measures them.
+     * (Whisper hears the audio as recorded), and measures them. The same samples go into
+     * [frame], if given, for the voice check.
      */
-    fun measure(buffer: ShortArray, read: Int, into: MutableList<Float>) {
+    fun measure(buffer: ShortArray, read: Int, into: MutableList<Float>, frame: FloatArray? = null) {
         var rawSquares = 0.0
         var voiceSquares = 0.0
         var highSquares = 0.0
         for (i in 0 until read) {
             val sample = buffer[i] / Short.MAX_VALUE.toFloat()
             into.add(sample)
+            if (frame != null) frame[i] = sample
             rawSquares += (sample * sample).toDouble()
             val voice = voiceFilter.process(sample)
             voiceSquares += (voice * voice).toDouble()

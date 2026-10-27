@@ -57,6 +57,15 @@ class FrameMeterTest {
     }
 
     @Test
+    fun `the frame handed to the voice check is the recording, unfiltered, and only what was read`() {
+        val samples = tone(100.0, 1)
+        val voiceCheckFrame = FloatArray(frame) { Float.NaN }
+        FrameMeter().measure(samples, frame - 20, ArrayList(), voiceCheckFrame)
+        for (i in 0 until frame - 20) assertThat(voiceCheckFrame[i]).isEqualTo(samples[i] / Short.MAX_VALUE.toFloat())
+        assertThat(voiceCheckFrame[frame - 20].isNaN()).isTrue()
+    }
+
+    @Test
     fun `a vent's rumble shows on the meter but barely reaches the endpointer`() {
         // 100 Hz at speaking volume, after the filters have settled.
         val rumble = measured(tone(100.0, 10))
