@@ -142,6 +142,49 @@ class CaptureArchiveTest {
     }
 
     @Test
+    fun `pruning follows the index time, not the file names`() {
+        // After the clocks go back, the newer capture has the smaller local-time name.
+        val archive = CaptureArchive(folder.root, enabled = true, keep = 2)
+        val older = "20261101-013000-000-endpoint.wav"
+        val newer = "20261101-010000-000-endpoint.wav"
+        fun line(at: Long, name: String) = Json.encodeToString(
+            CaptureRecord.serializer(),
+            CaptureRecord(at, "ENDPOINT", 6, 20L, name, listOf(0f)),
+        )
+        File(folder.root, older).writeBytes(ByteArray(1))
+        File(folder.root, newer).writeBytes(ByteArray(1))
+        File(folder.root, CaptureArchive.INDEX).writeText(line(1_000L, older) + "\n" + line(2_000L, newer) + "\n")
+
+        archive.save(3_000L, captured(floatArrayOf(0f), floatArrayOf(0f)))
+
+        assertThat(index().map { it.atEpochMillis }).containsExactly(2_000L, 3_000L).inOrder()
+        assertThat(File(folder.root, older).exists()).isFalse()
+        assertThat(File(folder.root, newer).exists()).isTrue()
+        assertThat(wavs()).hasSize(2)
+    }
+
+    @Test
+    fun `rewriting the index leaves no temporary file behind`() {
+        val archive = CaptureArchive(folder.root, enabled = true, keep = 1)
+        archive.save(1_000L, captured(floatArrayOf(0f), floatArrayOf(0f)))
+        archive.save(2_000L, captured(floatArrayOf(0f), floatArrayOf(0f)))
+
+        assertThat(folder.root.list()!!.filter { it.endsWith(".tmp") }).isEmpty()
+        assertThat(index().map { it.atEpochMillis }).containsExactly(2_000L)
+    }
+
+    @Test
+    fun `clearing deletes the recordings and the index`() {
+        val archive = CaptureArchive(folder.root, enabled = true)
+        archive.save(1_000L, captured(floatArrayOf(0f), floatArrayOf(0f)))
+        archive.save(2_000L, captured(floatArrayOf(0f), floatArrayOf(0f)))
+
+        archive.clear()
+
+        assertThat(folder.root.listFiles()).isEmpty()
+    }
+
+    @Test
     fun `the wav is 16-bit mono PCM at 16 kHz, clipped to full scale`() {
         val bytes = ByteBuffer.wrap(CaptureArchive.wav(floatArrayOf(1.5f, -1f, 0f))).order(ByteOrder.LITTLE_ENDIAN)
 

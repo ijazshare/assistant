@@ -20,6 +20,8 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -100,15 +102,42 @@ class CaptureArchive(private val dir: File, val enabled: Boolean, private val ke
         }.onFailure { Log.w(TAG, "captures: could not save", it) }
     }
 
-    /** Keeps the newest [keep] recordings and index lines. Names start with the time, so they sort oldest first. */
+    /** Deletes every recording and the index, for CLEAR HISTORY. */
+    @Synchronized
+    fun clear() {
+        runCatching {
+            dir.listFiles { file -> file.name.endsWith(".wav") || file.name.endsWith(".tmp") }.orEmpty()
+                .forEach { it.delete() }
+            File(dir, INDEX).delete()
+        }.onFailure { Log.w(TAG, "captures: could not clear", it) }
+    }
+
+    /**
+     * Keeps the newest [keep] recordings and index lines. Newest by the index's own time, not
+     * by file name: names are local time, which runs backwards when the clocks go back.
+     */
     private fun prune() {
-        dir.listFiles { file -> file.name.endsWith(".wav") }.orEmpty()
-            .sortedBy { it.name }
-            .dropLast(keep)
-            .forEach { it.delete() }
         val index = File(dir, INDEX)
-        val lines = index.readLines()
-        if (lines.size > keep) index.writeText(lines.takeLast(keep).joinToString("\n", postfix = "\n"))
+        val lines = index.readLines().filter { it.isNotBlank() }
+        val newest = lines.map { line ->
+            line to runCatching { json.decodeFromString<CaptureRecord>(line) }.getOrNull()
+        }
+            .sortedBy { it.second?.atEpochMillis ?: Long.MIN_VALUE }
+            .takeLast(keep)
+        val kept = newest.mapNotNull { it.second?.recording }.toSet()
+        dir.listFiles { file -> file.name.endsWith(".wav") }.orEmpty()
+            .filter { it.name !in kept }
+            .forEach { it.delete() }
+        if (lines.size > keep) {
+            val temp = File(dir, "$INDEX.tmp")
+            temp.writeText(newest.joinToString("") { it.first + "\n" })
+            Files.move(
+                temp.toPath(),
+                index.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE,
+            )
+        }
     }
 
     companion object {

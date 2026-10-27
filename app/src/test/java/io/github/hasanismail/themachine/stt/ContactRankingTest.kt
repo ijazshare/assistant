@@ -86,18 +86,58 @@ class ContactRankingTest {
     @Test
     fun includesStarredContacts() {
         assertThat(rank(emptyList(), starred = listOf("Lena Ortiz"))).containsExactly("Lena Ortiz")
+    }
 
-        // A star counts as one exchange today: above someone reached once a month ago, below
-        // someone reached twice this week.
+    @Test
+    fun aStarIsOnlyALightBoost() {
+        // A star never lifts a contact above someone reached a couple of months ago...
         val names = rank(
-            listOf(
-                reached("+12125550101", 30.0),
-                reached("+12125550102", 2.0),
-                reached("+12125550102", 3.0),
-            ),
+            listOf(reached("+12125550101", 60.0), reached("+12125550102", 2.0)),
             starred = listOf("Lena Ortiz"),
+            limit = 2,
         )
-        assertThat(names).containsExactly("Tomas Reyes", "Lena Ortiz", "Ines Calder").inOrder()
+        assertThat(names).containsExactly("Tomas Reyes", "Ines Calder").inOrder()
+
+        // ...but it does settle a tie between two people reached equally.
+        val tied = rank(
+            listOf(reached("+12125550101", 5.0), reached("+12125550102", 5.0)),
+            starred = listOf("Tomas Reyes"),
+        )
+        assertThat(tied).containsExactly("Tomas Reyes", "Ines Calder").inOrder()
+    }
+
+    @Test
+    fun moreFavouritesThanPlacesNamesNoneOfThem() {
+        val favourites = (1..40).map { "Favourite ${'A' + it % 26}${'a' + it / 26}" }
+        assertThat(rank(emptyList(), starred = favourites, limit = 2)).isEmpty()
+
+        val names = rank(
+            listOf(reached("+12125550101", 3.0), reached("+12125550102", 60.0)),
+            starred = favourites,
+            limit = 2,
+        )
+        assertThat(names).containsExactly("Ines Calder", "Tomas Reyes").inOrder()
+    }
+
+    @Test
+    fun aFewFavouritesFillThePlacesPeopleLeaveFree() {
+        val names = rank(
+            listOf(reached("+12125550101", 3.0)),
+            starred = listOf("Lena Ortiz"),
+            limit = 2,
+        )
+        assertThat(names).containsExactly("Ines Calder", "Lena Ortiz").inOrder()
+    }
+
+    @Test
+    fun equalScoresGoToWhoeverWasReachedLast() {
+        // Dates in the future all count as today, so both score exactly 1.0; alphabetical
+        // order would pick Ines Calder.
+        val names = rank(
+            listOf(Exchange("+12125550101", now + day), Exchange("+12125550102", now + 2 * day)),
+            limit = 1,
+        )
+        assertThat(names).containsExactly("Tomas Reyes")
     }
 
     @Test
