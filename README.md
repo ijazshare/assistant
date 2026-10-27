@@ -10,7 +10,8 @@ people actually use an assistant for — alarms, timers, reminders and tasks —
 whole job on the phone: speech recognition, intent parsing and speech synthesis all run
 locally.
 
-The network is touched exactly once, to download the models after install. After that,
+There is no network use outside model downloads: the models after install, and later any
+new optional model (the voice check that helps end-of-speech detection is one). Otherwise
 airplane mode changes nothing.
 
 > **Status: in development.** Phase P0 (repo and toolchain) is complete. The voice pipeline
@@ -105,8 +106,13 @@ These are enforced, not just promised:
   a URL, key and model, and it only ever receives the transcript text of a question.
 - Audio is never transmitted, with or without the remote model. Release builds process it
   in memory only. Debug builds, for now, also keep the last 500 recordings on the device
-  (`history/captures/` in the app's storage) to diagnose end-of-speech detection; that goes,
-  or becomes a setting, once detection works.
+  (`history/captures/` in the app's external files folder, `Android/data/<package>/files`,
+  readable over adb) to diagnose end-of-speech detection; that goes, or becomes a setting,
+  once detection works. They are excluded from Android backup and device transfer, and
+  CLEAR HISTORY deletes them.
+- Android cloud backup excludes everything you said or wrote: the query log, recordings,
+  notes, reminders, learned phrases, settings (which can hold the remote model's key) and
+  the models.
 
 ## Building
 

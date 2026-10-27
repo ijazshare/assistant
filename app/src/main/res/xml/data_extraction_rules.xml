@@ -10,8 +10,9 @@
     external crash/ and command-cache.json   reports and learned phrases
     file datastore/     settings, which can hold a remote-model API key
     external models/ and file prompt-cache/   large and re-downloadable
+    database            reminders, whose text is the user's own words
   Screenshots are saved through MediaStore, outside the app's own storage, so no backup
-  rule reaches them. Reminders (the database domain) are not excluded.
+  rule reaches them.
 
   Device transfer is phone to phone over a cable or local link, so settings and notes
   come along, but recordings, the query log and the models do not.
@@ -25,6 +26,7 @@
         <exclude domain="external" path="models/" />
         <exclude domain="file" path="datastore/" />
         <exclude domain="file" path="prompt-cache/" />
+        <exclude domain="database" path="." />
     </cloud-backup>
     <device-transfer>
         <exclude domain="external" path="history/" />

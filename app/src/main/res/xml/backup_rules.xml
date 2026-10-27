@@ -11,4 +11,5 @@
     <exclude domain="external" path="models/" />
     <exclude domain="file" path="datastore/" />
     <exclude domain="file" path="prompt-cache/" />
+    <exclude domain="database" path="." />
 </full-backup-content>

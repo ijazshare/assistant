@@ -37,7 +37,7 @@ Assistant is a fully offline Android voice assistant that replaces Google Assist
 ```
 app/
   assistant/     VoiceInteractionService, SessionService, VoiceInteractionSession, session state machine
-  audio/         AudioRecord capture (16 kHz mono PCM), energy-based endpointing (VAD)
+  audio/         AudioRecord capture (16 kHz mono PCM), energy-based endpointing (VAD), plus an optional Silero voice check that can only end a capture sooner
   stt/           WhisperEngine (JNI wrapper)
   llm/           LlamaEngine (JNI wrapper), grammar/schema, prompt builder, prompt-cache handling
   tts/           PiperEngine (sherpa-onnx)
@@ -54,7 +54,7 @@ app/
 
 ```
 side button → VoiceInteractionSession opens (overlay over current app)
-→ record until ~800 ms trailing silence (cap 15 s), live waveform + partial UI
+→ record until 860 ms of trailing quiet, 2.6 s with nothing well above the room, or 2 s with nothing near the speaker's own level (cap 20 s; levels from a 400 Hz high-pass, and sounds almost entirely above 1.5 kHz never count as the speaker; an optional Silero voice check can only end a capture sooner; see audio/Endpointer.kt for known limits), live waveform + partial UI
 → whisper transcribe → show transcript
 → llama parse (grammar-constrained JSON) → Intent
 → if clarify: TTS asks, re-listen, merge slots (≤2 rounds)
