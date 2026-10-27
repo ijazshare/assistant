@@ -11,6 +11,9 @@ package io.github.hasanismail.themachine.audio
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -262,6 +265,31 @@ class EndpointerTest {
         assertThat(outcome.began).isEqualTo(settled + 1)
         assertThat(outcome.reason).isEqualTo(StopReason.ENDPOINT)
         assertThat(outcome.stopped).isEqualTo(lastSyllable + 43)
+    }
+
+    @Test
+    fun `a long command begun during calibration is not cut short`() {
+        // A loud first word, then three seconds more at about half its level, rising and falling
+        // five times a second. Begun 0.4 s after the microphone opens, inside calibration, the
+        // onset comes mid-word and the speaker's level was seeded on it: the rest of the sentence
+        // was never near it, and the capture stopped a second before the user did. Begun a
+        // second later, the same command was always let go on the trailing quiet.
+        fun command(startFrame: Int): Pair<FloatArray, Int> {
+            val first = FloatArray(15) { 0.06f }
+            val rest = FloatArray(150) { (0.03 * (0.55 + 0.45 * abs(sin(it * PI / 10)))).toFloat() }
+            return floatArrayOf(*room(startFrame, 0.002f), *first, *rest, *room(300, 0.002f)) to
+                startFrame + first.size + rest.size
+        }
+
+        val (early, earlyEnd) = command(startFrame = 20)
+        val (late, lateEnd) = command(startFrame = 50)
+        val begunEarly = listen(early)
+        val begunLate = listen(late)
+
+        assertThat(begunEarly.began).isEqualTo(settled + 1)
+        assertThat(begunEarly.reason).isEqualTo(StopReason.ENDPOINT)
+        assertThat(begunEarly.stopped).isGreaterThan(earlyEnd)
+        assertThat(begunEarly.stopped!! - earlyEnd).isEqualTo(begunLate.stopped!! - lateEnd)
     }
 
     @Test
