@@ -31,7 +31,7 @@ signing.properties
 
 # ---- Models (downloaded at runtime, never vendored) ----
 # NOT "models/" — that pattern is unanchored and matches any directory of that name
-# at any depth, which silently swallowed the entire io.github...themachine.models
+# at any depth, which silently swallowed the entire io.github...assistant.models
 # source package, its UI package and its tests. They built locally, where the files
 # exist on disk, and only failed in CI. Match the downloaded artefacts by extension
 # instead; the runtime model directory lives in app-private storage on the device

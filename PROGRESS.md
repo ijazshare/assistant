@@ -45,8 +45,8 @@ whole pipeline and one that says a sentence out loud.
 
 ### What exists
 
-- Single-module Gradle build (`:app`), package `io.github.hasanismail.themachine`.
-- Compose + Material 3 shell: `TheMachineApplication` (Hilt), `MainActivity`, theme, adaptive
+- Single-module Gradle build (`:app`), package `io.github.ijazshare.assistant`.
+- Compose + Material 3 shell: `AssistantApplication` (Hilt), `MainActivity`, theme, adaptive
   launcher icon with a themed monochrome layer.
 - Version catalog, Spotless (ktlint), detekt, Android lint with `warningsAsErrors`.
 - `ci.yml` (build/lint/test + a privacy-invariant check) and `release.yml` (signed APK on a
@@ -82,7 +82,7 @@ Wireless ADB, paired and connected:
 adb pair 192.168.4.131:<pairing-port> <code>   # pairing port + code from the pairing dialog
 adb connect 192.168.4.131:44983                # connect port from the main screen — a different port
 adb install -r -d app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n io.github.hasanismail.themachine.debug/io.github.hasanismail.themachine.ui.MainActivity
+adb shell am start -n io.github.ijazshare.assistant.debug/io.github.ijazshare.assistant.ui.MainActivity
 ```
 
 The wireless-debugging port changes whenever debugging is toggled or the phone reconnects to
@@ -214,7 +214,7 @@ GitHub Actions — every tag confirmed against the GitHub Releases API, not assu
   as submodules under `app/src/main/cpp/`. Both commit hashes were confirmed against the
   upstream tags rather than taken on trust.
 - `app/src/main/cpp/CMakeLists.txt` builds both engines with ARM runtime feature dispatch,
-  plus `libthemachine.so`, a thin JNI bridge.
+  plus `libassistant.so`, a thin JNI bridge.
 - `NativeBridge.kt` loads the library and registers ggml's backends once, process-wide.
 - A debug-only `DebugActivity` (in the `debug` source set, so it cannot ship in release)
   printing versions, backend registry, CPU features and page size.
@@ -377,7 +377,7 @@ Both under `https://github.com/k2-fsa/sherpa-onnx`. URLs re-verified HTTP 200 wi
 
 ### What exists
 
-- 14 tools in `tools/MachineTools.kt`, dispatched through a table in `ToolExecutor`.
+- 14 tools in `tools/AssistantTools.kt`, dispatched through a table in `ToolExecutor`.
   Output is constrained by GBNF generated in `ToolGrammar`, so a reply is a valid call
   by construction. Integer arguments carry ranges compiled into the grammar.
 - `TimeResolver` does every calculation the model is not asked to do. Heavily unit tested.
@@ -407,7 +407,7 @@ Both under `https://github.com/k2-fsa/sherpa-onnx`. URLs re-verified HTTP 200 wi
 - **`n_ubatch` costs about a megabyte of compute buffer per step** at this vocabulary
   size. 512 asked for 518 MiB and the process was killed reserving it.
 - **A ~620 token prompt makes Gemma 3 1B stop discriminating** and start reproducing the
-  first worked example whatever it was asked. Keep it under ~450; `MachineToolsTest`
+  first worked example whatever it was asked. Keep it under ~450; `AssistantToolsTest`
   guards this.
 - **Do not ask a 1B model to do arithmetic.** It answered "ten minute timer" with 180,
   copied from the nearest example.

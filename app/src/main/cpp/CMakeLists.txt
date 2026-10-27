@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22.1)
 
-project(themachine C CXX)
+project(assistant C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -71,11 +71,11 @@ add_subdirectory(whisper.cpp EXCLUDE_FROM_ALL)
 # ---------------------------------------------------------------------------
 # The JNI bridge itself: one small .so that Kotlin loads by name.
 # ---------------------------------------------------------------------------
-add_library(themachine SHARED
-    machine_jni.cpp
+add_library(assistant SHARED
+    assistant_jni.cpp
 )
 
-target_link_libraries(themachine PRIVATE
+target_link_libraries(assistant PRIVATE
     whisper
     llama
     # Named llama-common, not common. It carries json_schema_to_grammar, which P4
@@ -86,16 +86,16 @@ target_link_libraries(themachine PRIVATE
     log
 )
 
-target_compile_options(themachine PRIVATE -Wall -Wextra -Wno-unused-parameter)
+target_compile_options(assistant PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 # Keep JNI_OnLoad and the Java_* entry points; everything else stays internal so
 # the bridge does not re-export whisper/llama symbols into the global namespace.
-target_link_options(themachine PRIVATE -Wl,--exclude-libs,ALL)
+target_link_options(assistant PRIVATE -Wl,--exclude-libs,ALL)
 
 # 16 KB page alignment. NDK r28+ emits this by default, but Android 15+ devices
 # refuse to load an unaligned library at all, so it is stated explicitly rather
 # than inherited — a future NDK downgrade would otherwise break it silently.
-target_link_options(themachine PRIVATE
+target_link_options(assistant PRIVATE
     -Wl,-z,max-page-size=16384
     -Wl,-z,common-page-size=16384
 )

@@ -71,7 +71,7 @@ body:
     id: logs
     attributes:
       label: Logcat (optional)
-      description: "`adb logcat -d -s TheMachine:V AndroidRuntime:E` — review before pasting."
+      description: "`adb logcat -d -s Assistant:V AndroidRuntime:E` — review before pasting."
       render: shell
   - type: checkboxes
     id: checks

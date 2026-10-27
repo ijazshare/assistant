@@ -10,8 +10,8 @@
 -->
 <voice-interaction-service
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:recognitionService="io.github.hasanismail.themachine.assistant.MachineRecognitionService"
-    android:sessionService="io.github.hasanismail.themachine.assistant.MachineVoiceInteractionSessionService"
+    android:recognitionService="io.github.ijazshare.assistant.assistant.AssistantRecognitionService"
+    android:sessionService="io.github.ijazshare.assistant.assistant.AssistantVoiceInteractionSessionService"
     android:supportsAssist="true"
     android:supportsLaunchVoiceAssistFromKeyguard="false"
     android:supportsLocalInteraction="true" />

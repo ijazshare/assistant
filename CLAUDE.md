@@ -32,7 +32,7 @@ Assistant is a fully offline Android voice assistant that replaces Google Assist
 
 ## Architecture
 
-### Package layout (`io.github.hasanismail.themachine`)
+### Package layout (`io.github.ijazshare.assistant`)
 
 ```
 app/
@@ -46,7 +46,7 @@ app/
   models/        ModelRegistry, ModelDownloadManager (WorkManager + foreground service), storage
   settings/      DataStore-backed settings + Compose screens
   ui/            Main activity (task list, model manager, settings, onboarding), assistant overlay composables
-  services/      MachineAccessibilityService (stub), MachineNotificationListener (stub)
+  services/      AssistantAccessibilityService (stub), AssistantNotificationListener (stub)
   cpp/           CMakeLists, whisper.cpp + llama.cpp submodules, thin JNI bridges
 ```
 

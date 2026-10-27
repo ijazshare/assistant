@@ -28,5 +28,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TheMachine"
+rootProject.name = "Assistant"
 include(":app")

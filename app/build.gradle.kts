@@ -42,14 +42,14 @@ val hasReleaseSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "io.github.hasanismail.themachine"
+    namespace = "io.github.ijazshare.assistant"
     compileSdk = libs.versions.compileSdk.get().toInt()
     buildToolsVersion = libs.versions.buildTools.get()
     // Pinned so a machine with several NDKs installed always builds the same binaries.
     ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
-        applicationId = "io.github.hasanismail.themachine"
+        applicationId = "io.github.ijazshare.assistant"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
@@ -272,7 +272,7 @@ tasks.register<AdbInstrumentationTest>("deviceTest") {
     adbExecutable.set(androidComponents.sdkComponents.adb)
     appApk.set(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
     testApk.set(layout.buildDirectory.file("outputs/apk/androidTest/debug/app-debug-androidTest.apk"))
-    instrumentation.set("io.github.hasanismail.themachine.debug.test/androidx.test.runner.AndroidJUnitRunner")
+    instrumentation.set("io.github.ijazshare.assistant.debug.test/androidx.test.runner.AndroidJUnitRunner")
     deviceSerial.set(providers.environmentVariable("ANDROID_SERIAL").orElse(""))
     report.set(layout.buildDirectory.file("reports/deviceTest/instrumentation.txt"))
 }

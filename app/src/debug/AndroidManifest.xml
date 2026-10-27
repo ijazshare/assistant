@@ -11,7 +11,7 @@
             android:name=".ui.debug.DebugActivity"
             android:exported="true"
             android:label="Assistant Debug"
-            android:theme="@style/Theme.TheMachine">
+            android:theme="@style/Theme.Assistant">
             <!--
               Its own launcher entry: reaching this from adb alone would mean typing a
               component name every time, and it needs to be usable on the phone.
