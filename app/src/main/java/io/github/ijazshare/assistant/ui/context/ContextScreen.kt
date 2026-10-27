@@ -9,6 +9,9 @@
  */
 package io.github.ijazshare.assistant.ui.context
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,6 +45,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.getSystemService
 import io.github.ijazshare.assistant.context.AssistantFile
 import io.github.ijazshare.assistant.context.AssistantFiles
 import io.github.ijazshare.assistant.settings.AssistantSettings
@@ -53,7 +57,9 @@ import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantDump
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
 import io.github.ijazshare.assistant.ui.theme.AssistantReadout
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -86,9 +92,15 @@ fun ContextScreen(modifier: Modifier = Modifier) {
     }
 
     val drafts = remember { mutableStateMapOf<String, String>() }
+    // What each file held when its draft was loaded or last saved.
+    val loaded = remember { mutableStateMapOf<String, String>() }
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            AssistantFiles.ALL.forEach { drafts[it.id] = files.read(it) }
+            AssistantFiles.ALL.forEach {
+                val text = files.read(it)
+                loaded[it.id] = text
+                drafts[it.id] = text
+            }
         }
     }
 
@@ -173,14 +185,38 @@ fun ContextScreen(modifier: Modifier = Modifier) {
             FileEditor(
                 spec = spec,
                 value = drafts[spec.id].orEmpty(),
-                // Saved when the field loses focus, not on every keystroke. Writing the
-                // whole file per character meant a task the assistant appended while the
-                // screen was open was overwritten by a draft that predated it — typing
-                // one letter erased the reminder just set.
+                // Saved when the field loses focus, and only if the file still holds what the
+                // draft started from. Saving regardless meant a task the assistant appended
+                // while the screen was open was overwritten by a draft that predated it.
                 onChange = { text -> drafts[spec.id] = text },
                 onCommit = {
-                    val text = drafts[spec.id].orEmpty()
-                    scope.launch(Dispatchers.IO) { files.write(spec, text) }
+                    val text = drafts[spec.id]
+                    val base = loaded[spec.id]
+                    // A field also reports losing focus when it first appears, before anything
+                    // has loaded. Nothing loaded or nothing typed means nothing to save.
+                    if (text != null && base != null && text != base) {
+                        // Started at once, and the write not cancellable: focus is also lost as
+                        // the screen closes, and a queued save would be cancelled with it.
+                        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                            val saved = withContext(Dispatchers.IO + NonCancellable) {
+                                files.writeIfUnchanged(spec, base, text)
+                            }
+                            val current = if (saved) text else withContext(Dispatchers.IO) { files.read(spec) }
+                            loaded[spec.id] = current
+                            if (!saved) {
+                                // What they typed exists nowhere else.
+                                context.getSystemService<ClipboardManager>()
+                                    ?.setPrimaryClip(ClipData.newPlainText(spec.title, text))
+                                drafts[spec.id] = current
+                                Toast.makeText(
+                                    context,
+                                    "${spec.title} changed while you were editing, so your edit was not saved. " +
+                                        "It is on the clipboard.",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    }
                 },
             )
         }

@@ -44,7 +44,7 @@ class ReminderReceiverTest {
 
     @After
     fun restoreThem() {
-        files.write(AssistantFiles.TASKS, saved)
+        files.file(AssistantFiles.TASKS).writeText(saved)
         notifications.cancelAll()
     }
 

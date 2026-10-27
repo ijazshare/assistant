@@ -48,7 +48,7 @@ class AssistantFilesTaskTest {
     @Test
     fun `a line the user wrote by hand still parses`() {
         val files = files()
-        files.write(AssistantFiles.TASKS, "# Tasks\n\n- [ ] water the plants\n- [x] pay rent\n")
+        files.file(AssistantFiles.TASKS).writeText("# Tasks\n\n- [ ] water the plants\n- [x] pay rent\n")
         val tasks = files.readTasks()
         assertThat(tasks.map { it.title }).containsExactly("water the plants", "pay rent").inOrder()
         assertThat(tasks.map { it.id }).containsExactly(null, null)
@@ -120,6 +120,20 @@ class AssistantFilesTaskTest {
         assertThat(task.title).contains("pay the invoice")
         assertThat(task.title).contains("Friday")
         assertThat(task.due).isEqualTo(due.plusMinutes(10))
+    }
+
+    @Test
+    fun `an editor save never erases a task added while the editor was open`() {
+        val files = files()
+        val loaded = files.read(AssistantFiles.TASKS)
+        files.appendTask("call Ali", due)
+        // The editor still holds what it loaded; saving that over the file would drop the task.
+        assertThat(files.writeIfUnchanged(AssistantFiles.TASKS, loaded, "$loaded\n- [ ] water the plants")).isFalse()
+        assertThat(files.readTasks().map { it.title }).containsExactly("call Ali")
+        // Reloaded first, the same edit goes through.
+        val fresh = files.read(AssistantFiles.TASKS)
+        assertThat(files.writeIfUnchanged(AssistantFiles.TASKS, fresh, "$fresh\n- [ ] water the plants")).isTrue()
+        assertThat(files.readTasks().map { it.title }).containsExactly("call Ali", "water the plants").inOrder()
     }
 
     @Test

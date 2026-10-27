@@ -11,6 +11,7 @@ package io.github.ijazshare.assistant.context
 
 import android.content.Context
 import java.io.File
+import java.io.FileOutputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -58,9 +59,17 @@ class AssistantFiles(private val root: File) {
         return target.readText()
     }
 
-    fun write(spec: AssistantFile, content: String) {
-        file(spec).writeText(content)
-    }
+    /**
+     * Saves an edit made to [loaded], unless the file has changed since: the assistant
+     * appended a task while the editor was open, or ticked one off. False means nothing was
+     * written, and the caller reloads rather than overwrite the newer file with an older draft.
+     */
+    fun writeIfUnchanged(spec: AssistantFile, loaded: String, content: String): Boolean =
+        synchronized(TASK_FILE_LOCK) {
+            if (read(spec) != loaded) return@synchronized false
+            file(spec).replaceText(content)
+            true
+        }
 
     /** True once the user has actually put something of their own in it. */
     fun isCustomised(spec: AssistantFile): Boolean =
@@ -161,8 +170,27 @@ class AssistantFiles(private val root: File) {
                 line
             }
         }
-        if (changed) target.writeText(lines.joinToString("\n"))
+        if (changed) target.replaceText(lines.joinToString("\n"))
         changed
+    }
+
+    /**
+     * Writes a temporary file and renames it over this one, so a write cut short (the
+     * process killed, the battery dead) leaves the old file whole instead of half of the new.
+     */
+    private fun File.replaceText(text: String) {
+        val temp = File(parentFile, "$name.tmp")
+        FileOutputStream(temp).use {
+            it.write(text.toByteArray())
+            // On the disk before the rename, or a power cut can leave the name with no data.
+            it.fd.sync()
+        }
+        // A rename replaces the file in one step. If one is ever refused, a plain write is
+        // no worse than what was here before.
+        if (!temp.renameTo(this)) {
+            writeText(text)
+            temp.delete()
+        }
     }
 
     /** Everything the model should be told, concatenated in a stable order. */
@@ -203,7 +231,8 @@ class AssistantFiles(private val root: File) {
             Regex("""\s*$DUE_MARKER \w{3} \d{1,2} \w{3}, \d{1,2}:\d{2} [AP]M""")
 
         /**
-         * Every read and write of the tasks file goes through this.
+         * Every read and write of the tasks file goes through this, and so does the
+         * editor's save of any file.
          *
          * Two reminders coming due in the same minute run two receiver threads, and
          * ticking both off meant two read-modify-write cycles over one file: whichever
