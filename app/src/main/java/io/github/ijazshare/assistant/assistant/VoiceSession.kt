@@ -170,6 +170,12 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     /** Where the current command came from, for the record. */
     private var source = QuerySource.VOICE
 
+    /**
+     * Counts every time the microphone was stopped on purpose, a dismissal, a switch to typing
+     * or a typed command alike, so a reply that would reopen it can tell it was told not to.
+     */
+    private var stops = 0
+
     /** The capture coroutine, kept so a typed command can stop the microphone. */
     private var listening: Job? = null
 
@@ -304,6 +310,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * voice still speaks the reply.
      */
     fun stopListening() {
+        stops++
         AssistantSounds.capturing = false
         // Cancelled but deliberately still referenced. Nulling it here threw away the only
         // handle on a recorder that had not finished releasing the microphone, so the next
@@ -313,6 +320,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         listening?.cancel()
         // A dismissal abandons a pending contact choice too: the held command is gone, so
         // a later tap on a stale selector must not send anything.
+        // A pending send is deliberately kept: this runs for every hide, and for a typed reply to
+        // "What should I say?", so it cannot say whether the owner walked away. See [pendingSend].
         pendingChoice = null
         // Give media back. A typed command re-takes focus in submitText, since it still
         // speaks a reply; a dismissal leaves it released, so the music resumes.
@@ -496,6 +505,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * condition.
      */
     private suspend fun act(transcript: String, sttMillis: Long) {
+        if (answeredPendingSend(transcript, sttMillis)) return
         if (answeredWithoutTheModel(transcript, sttMillis)) return
 
         if (!ensureLanguageModel()) {
@@ -636,6 +646,44 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     }
 
     /**
+     * If a send is waiting for its words, this transcript is them, or a change of mind.
+     *
+     * Ahead of the cache and the router: "I'll be there at six" is a message here, and
+     * would be a reminder anywhere else. Used once, expired or not, so the transcript after
+     * it is a command again.
+     */
+    private suspend fun answeredPendingSend(transcript: String, sttMillis: Long): Boolean {
+        val waiting = pendingSend ?: return false
+        pendingSend = null
+        if (waiting.expired(System.currentTimeMillis())) return false
+        val call = if (PendingSend.isCancel(transcript)) {
+            ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it."))
+        } else {
+            ToolCall(
+                AssistantTools.SEND_MESSAGE,
+                mapOf("recipient" to waiting.number, "display" to waiting.display, "body" to transcript.trim()),
+            )
+        }
+        // Resolution.CACHE: no model was involved, and nothing here is learned.
+        carryOut(transcript, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
+        return true
+    }
+
+    /**
+     * Notes who a "What should I say to X?" was asked for, if X is one person.
+     *
+     * An unknown name or one that matched several (the contact chooser has run by now, and
+     * what it picked arrives here as a number) gets no pending send: the next words are not
+     * obviously for anyone, so they are a command.
+     */
+    private suspend fun holdSendFor(call: ToolCall): Boolean {
+        val spoken = call.string("recipient") ?: return false
+        val number = withContext(Dispatchers.IO) { contacts.resolveNumber(spoken) } ?: return false
+        pendingSend = PendingSend(number, call.string("display") ?: spoken, System.currentTimeMillis())
+        return true
+    }
+
+    /**
      * The two ways a command is answered with no model at all.
      *
      * The clock first: the phone knows the time exactly, and the small model asked for it
@@ -698,6 +746,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         resolution: Resolution,
     ) {
         val ready = reconciled(transcript, call)
+        val stopsBefore = stops
 
         // Never pick among several matching contacts silently — "Hassan" matched both a
         // contact and "Dr Hassan ER Chicago", and a blind choice texted the wrong one. Hold
@@ -709,27 +758,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         }
 
         var result = executor.execute(ready)
+        // The executor asked for the words; remember who they are for.
+        val askedForWords = ready.tool == AssistantTools.SEND_MESSAGE && !result.success &&
+            ready.string("body") == null && holdSendFor(ready)
 
-        // A question about the screen is answered, not recited. read_screen hands back the
-        // full text as `detail`, and without this step the assistant reads the raw
-        // accessibility dump out loud — which is exactly what "read the screen and
-        // summarise it" produced: a minute of somebody else's chat log, unsummarised.
-        // Done here rather than in act() so it covers the cached path too, and in the
-        // session rather than the executor, which runs on the main thread and must never
-        // be the thing that loads three gigabytes of weights.
-        val question = ScreenQuestion.of(transcript, call.arguments["question"])
-        if (call.tool == AssistantTools.READ_SCREEN && question != null && result.success) {
-            val screen = result.detail.orEmpty().ifBlank { result.spoken }
-            llama.unload()
-            val answered = router.answerAbout(screen, question, settings.adminNameNow())
-            result = if (answered != null) {
-                result.copy(spoken = answered.text)
-            } else {
-                // The un-escalated result is still a real answer here, which is not true
-                // of any other escalation in the app, so it degrades rather than refuses.
-                result.copy(spoken = "I could not summarise that, so here is what it says. ${result.spoken}")
-            }
-        }
+        result = summarisedScreen(transcript, call, result)
 
         // Learning and recording both touch the disk, and neither is worth a frame of
         // the reply. Only a call the model produced and that then succeeded is learned:
@@ -785,6 +818,35 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // Said after the state is published, so the reply is on screen while it is being
         // spoken rather than after.
         piper.speak(result.spoken)
+
+        // Straight back to the microphone, so the owner can answer the question without summoning
+        // again. start() is the ordinary summon, and a stop since this command began (the overlay
+        // dismissed, a switch to typing) means they did not want it.
+        if (askedForWords && source == QuerySource.VOICE && stops == stopsBefore) start()
+    }
+
+    /**
+     * A question about the screen is answered, not recited. read_screen hands back the
+     * full text as `detail`, and without this step the assistant reads the raw
+     * accessibility dump out loud — which is exactly what "read the screen and
+     * summarise it" produced: a minute of somebody else's chat log, unsummarised.
+     * Done in carryOut rather than in act() so it covers the cached path too, and in the
+     * session rather than the executor, which runs on the main thread and must never
+     * be the thing that loads three gigabytes of weights.
+     */
+    private suspend fun summarisedScreen(transcript: String, call: ToolCall, result: ToolResult): ToolResult {
+        val question = ScreenQuestion.of(transcript, call.arguments["question"])
+        if (call.tool != AssistantTools.READ_SCREEN || question == null || !result.success) return result
+        val screen = result.detail.orEmpty().ifBlank { result.spoken }
+        llama.unload()
+        val answered = router.answerAbout(screen, question, settings.adminNameNow())
+        return if (answered != null) {
+            result.copy(spoken = answered.text)
+        } else {
+            // The un-escalated result is still a real answer here, which is not true
+            // of any other escalation in the app, so it degrades rather than refuses.
+            result.copy(spoken = "I could not summarise that, so here is what it says. ${result.spoken}")
+        }
     }
 
     /**
@@ -898,6 +960,17 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     private companion object {
         const val TAG = "Assistant"
+
+        /**
+         * The send waiting for its words, for [PendingSend.WINDOW_MILLIS].
+         *
+         * Held beside the session rather than in it: the window is hidden and the session can be
+         * rebuilt between the question and the answer. A hide cannot be told from a dismissal
+         * (the window never closes itself, and every hide reaches stopListening the same way),
+         * so only the expiry ends it, or the next transcript, whichever comes first.
+         */
+        @Volatile
+        var pendingSend: PendingSend? = null
 
         /** How long a new summon waits for the previous recorder to let go. */
         const val HANDOVER_MILLIS = 400L
