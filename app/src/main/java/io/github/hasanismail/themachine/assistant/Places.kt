@@ -242,7 +242,7 @@ class Places(private val dataVersion: String, private val zonesOf: (region: Stri
         /**
          * The first part of a zone ID that is followed by a city, rather than Etc/ or US/. Not
          * Antarctica: its research stations are named for people and other places, and Davis,
-         * California is not seven hours ahead.
+         * California does not keep Antarctic time.
          */
         private val AREAS = setOf(
             "Africa", "America", "Arctic", "Asia", "Atlantic", "Australia", "Europe", "Indian", "Pacific",

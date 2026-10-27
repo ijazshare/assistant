@@ -124,7 +124,18 @@ class LocalAnswersTest {
         // its own next time would reach the model with nothing to say what it answers.
         assertThat(asked("What time is it in Australia?"))
             .isEqualTo("Australia has more than one time zone. Ask me about a city there.")
-        assertThat(asked("Sydney.")).isNull()
+        // A city said on its own is no question, and still goes on to the model.
+        val replies = listOf(
+            "Sydney",
+            "Sydney.",
+            "Sydney, please.",
+            "Melbourne.",
+            "Sydney, Australia.",
+            "In Sydney.",
+            "What about Sydney?",
+            "Atlanta",
+        )
+        for (reply in replies) assertThat(asked(reply)).isNull()
         assertThat(asked("what time is it in the US"))
             .isEqualTo("The US has more than one time zone. Ask me about a city there.")
         assertThat(asked("What time is it in Texas?"))
@@ -263,7 +274,7 @@ class LocalAnswersTest {
     @Test
     fun `a name a remote zone shares is not given that zone's time`() {
         // Antarctic stations, uninhabited atolls and the Falklands' capital: other places are
-        // better known by these names. Declined, not seven hours ahead.
+        // better known by these names. Declined, not given the station's or the island's time.
         assertThat(asked("What time is it in Davis?")).isEqualTo("I don't know the time zone for Davis.")
         assertThat(asked("What time is it in Palmer?")).isEqualTo("I don't know the time zone for Palmer.")
         assertThat(asked("What time is it in Casey?")).isEqualTo("I don't know the time zone for Casey.")
@@ -383,6 +394,13 @@ class LocalAnswersTest {
         assertThat(asked("In London, what time is it?")).isEqualTo(london)
         assertThat(asked("In Tokyo what time is it")).isEqualTo(tokyo)
         assertThat(asked("What day of the week is it in Tokyo?")).isEqualTo("It is Tuesday, 27 October in Tokyo.")
+        // The same forms as the answers review listed them, all of Tokyo.
+        val forms = listOf(
+            "Current time in Tokyo", "Time in Tokyo", "Tokyo time", "Do you know what time it is in Tokyo?",
+            "Hey, what time is it in Tokyo?", "Okay, what time is it in Tokyo?", "So what time is it in Tokyo?",
+            "What time is it over in Tokyo?", "In Tokyo, what time is it?",
+        )
+        for (form in forms) assertThat(asked(form)).isEqualTo(tokyo)
         // Terse, but about nowhere: still nobody's world clock.
         assertThat(asked("Today in history")).isNull()
         assertThat(asked("Time in a bottle")).isNull()
@@ -499,6 +517,20 @@ class LocalAnswersTest {
             .isEqualTo("Spain has more than one time zone. Ask me about a city there.")
         assertThat(asked("What time is it in New Zealand?"))
             .isEqualTo("New Zealand has more than one time zone. Ask me about a city there.")
+        assertThat(asked("What time is it in Portugal?"))
+            .isEqualTo("Portugal has more than one time zone. Ask me about a city there.")
+        // US towns with no zone of their own, alone or in a state not all on one time, are
+        // declined rather than given a guess.
+        for (town in listOf(
+            "Austin, Texas",
+            "Orlando",
+            "Orlando, Florida",
+            "Nashville",
+            "St. Louis",
+            "Savannah, Georgia",
+        )) {
+            assertThat(asked("What time is it in $town?")).isEqualTo("I don't know the time zone for $town.")
+        }
     }
 
     @Test
@@ -511,6 +543,8 @@ class LocalAnswersTest {
             "What time is it in the game?", "Tell me the time in Tokyo every morning.",
         )
         for (question in questions) assertThat(asked(question)).isNull()
+        // A name the phone cannot tell from a place's is still told it has no time zone, which is true.
+        assertThat(asked("What time is it in Minecraft?")).isEqualTo("I don't know the time zone for Minecraft.")
     }
 
     private companion object {
@@ -570,6 +604,7 @@ class LocalAnswersTest {
             "NP" to listOf("Asia/Katmandu"),
             "NZ" to listOf("Pacific/Auckland", "Pacific/Chatham"),
             "PK" to listOf("Asia/Karachi"),
+            "PT" to listOf("Atlantic/Azores", "Atlantic/Madeira", "Europe/Lisbon"),
             "RU" to listOf("Europe/Kaliningrad", "Europe/Moscow", "Asia/Vladivostok"),
             "SA" to listOf("Asia/Riyadh"),
             "TT" to listOf("America/Port_of_Spain"),
