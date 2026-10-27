@@ -1,4 +1,4 @@
-# The Machine — R8 rules.
+# Assistant — R8 rules.
 #
 # The app has no reflection-heavy surface today; these rules exist for the pieces
 # that are inherently reflective or crossed by JNI.

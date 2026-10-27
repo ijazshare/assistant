@@ -1,8 +1,9 @@
 # Assistant
 
-> **Fork.** This is a personal fork of [hasan-ismail/themachine](https://github.com/hasan-ismail/themachine),
-> renamed and redesigned. Licensed under AGPL-3.0, same as upstream — see [LICENSE](LICENSE).
-> Changes here include a modern UI redesign and expanded on-device actions.
+> Assistant is developed independently. It started as a fork of
+> [Hasan Ismail's offline voice assistant](https://github.com/hasan-ismail/themachine) and has
+> been modified since September 2026. Like the original, it is licensed under AGPL-3.0 — see
+> [LICENSE](LICENSE).
 
 A fully offline voice assistant for Android. It replaces Google Assistant for the things
 people actually use an assistant for — alarms, timers, reminders and tasks — and does the
@@ -40,14 +41,14 @@ nothing read from the device leaves it.
 ## Why
 
 Every mainstream phone assistant streams your voice to a server. For "set a timer for ten
-minutes" that trade is absurd. The Machine does the same job with the microphone data never
+minutes" that trade is absurd. Assistant does the same job with the microphone data never
 leaving the device.
 
 ## Features
 
 Planned for v1, tracked in [PROGRESS.md](PROGRESS.md):
 
-- **Hold the side button, speak, done.** The Machine registers as Android's default digital
+- **Hold the side button, speak, done.** The app registers as Android's default digital
   assistant, so the existing assistant gesture wakes it.
 - **Alarms and timers** are delegated to your phone's own Clock app via standard `AlarmClock`
   intents — no second alarm engine to fight with, and no alarms trapped inside this app.
@@ -68,11 +69,11 @@ multilingual recognition, and automations.
 
 ## Install
 
-Download the APK from [Releases](https://github.com/hasan-ismail/themachine/releases) and
+Download the APK from [Releases](https://github.com/ijazshare/assistant/releases) and
 sideload it. Verify the download first:
 
 ```bash
-sha256sum -c the-machine-v0.1.0.apk.sha256
+sha256sum -c assistant-<tag>.apk.sha256
 ```
 
 There is no Play Store build. On first launch the app walks you through the permissions it
@@ -112,8 +113,8 @@ These are enforced, not just promised:
 You need JDK 21 and the Android SDK. Everything else the build fetches itself.
 
 ```bash
-git clone --recurse-submodules https://github.com/hasan-ismail/themachine.git
-cd themachine
+git clone --recurse-submodules https://github.com/ijazshare/assistant.git
+cd assistant
 ./gradlew assembleDebug
 ```
 
@@ -142,7 +143,7 @@ Releases are built by [`.github/workflows/release.yml`](.github/workflows/releas
 # 1. Create a keystore (keep the .jks and these passwords somewhere safe and offline —
 #    losing them means you can never ship an update that upgrades an installed copy).
 keytool -genkeypair -v \
-  -keystore release.jks -alias themachine \
+  -keystore release.jks -alias assistant \
   -keyalg RSA -keysize 4096 -validity 10000
 
 # 2. Base64-encode it for the secret.
@@ -155,7 +156,7 @@ Then add, under *Settings → Secrets and variables → Actions*:
 |---|---|
 | `SIGNING_KEYSTORE_B64` | contents of `release.jks.b64` |
 | `SIGNING_KEYSTORE_PASSWORD` | the keystore password |
-| `SIGNING_KEY_ALIAS` | `themachine` |
+| `SIGNING_KEY_ALIAS` | `assistant` |
 | `SIGNING_KEY_PASSWORD` | the key password |
 
 Delete `release.jks.b64` afterwards. The workflow refuses to run if any secret is missing —
@@ -167,7 +168,7 @@ and `*.jks` are gitignored.
 
 ## Licence and attribution
 
-The Machine is licensed under the **GNU Affero General Public License v3.0** — see
+Assistant is licensed under the **GNU Affero General Public License v3.0** — see
 [LICENSE](LICENSE).
 
 It builds on work by others, each under its own licence:

@@ -1,5 +1,5 @@
 /*
- * The Machine — an offline voice assistant for Android.
+ * Assistant — an offline voice assistant for Android.
  * Copyright (C) 2026 Hasan Ismail
  *
  * This program is free software: you can redistribute it and/or modify it under
@@ -27,7 +27,7 @@ class ModelStorageTest {
 
     private lateinit var storage: ModelStorage
 
-    private val payload = "the machine".toByteArray()
+    private val payload = "model bytes".toByteArray()
     private val payloadSha = MessageDigest.getInstance("SHA-256")
         .digest(payload)
         .joinToString("") { "%02x".format(it) }

@@ -1,12 +1,12 @@
 name: Bug report
-description: Something in The Machine misbehaves on device.
+description: Something in the app misbehaves on device.
 title: "bug: "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for filing. The Machine is fully offline — please **never paste audio, transcripts, or personal task content** you would not want public.
+        Thanks for filing. Assistant is fully offline — please **never paste audio, transcripts, or personal task content** you would not want public.
   - type: textarea
     id: what-happened
     attributes:

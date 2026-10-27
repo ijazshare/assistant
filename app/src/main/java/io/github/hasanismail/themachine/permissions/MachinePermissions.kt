@@ -1,5 +1,5 @@
 /*
- * The Machine — an offline voice assistant for Android.
+ * Assistant — an offline voice assistant for Android.
  * Copyright (C) 2026 Hasan Ismail
  *
  * This program is free software: you can redistribute it and/or modify it under
@@ -113,7 +113,7 @@ object MachinePermissions {
         MachinePermission(
             id = ASSISTANT_ROLE,
             title = "Default assistant",
-            rationale = "So holding the side button wakes The Machine instead of Google Assistant.",
+            rationale = "So holding the side button wakes this app instead of Google Assistant.",
             tier = PermissionTier.CORE,
             mechanism = GrantMechanism.SPECIAL_SETTINGS,
             optional = false,

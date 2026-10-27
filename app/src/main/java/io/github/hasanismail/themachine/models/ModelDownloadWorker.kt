@@ -1,5 +1,5 @@
 /*
- * The Machine — an offline voice assistant for Android.
+ * Assistant — an offline voice assistant for Android.
  * Copyright (C) 2026 Hasan Ismail
  *
  * This program is free software: you can redistribute it and/or modify it under
@@ -112,7 +112,7 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
             CHANNEL_ID,
             "Model downloads",
             NotificationManager.IMPORTANCE_LOW,
-        ).apply { description = "Progress while The Machine downloads its speech and language models." }
+        ).apply { description = "Progress while the app downloads its speech and language models." }
         manager.createNotificationChannel(channel)
     }
 

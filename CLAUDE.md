@@ -1,9 +1,9 @@
-# CLAUDE.md — The Machine
+# CLAUDE.md — Assistant
 
-The Machine is a fully offline Android voice assistant that replaces Google Assistant for basic tasks: alarms, timers, reminders, and tasks. Voice in (Whisper), intent parsing (on-device LLM), voice out (Piper). Triggered by the phone's side button / assistant gesture by holding Android's default-assistant role. No telemetry, no cloud — the network is touched exactly once, to download models after install.
+Assistant is a fully offline Android voice assistant that replaces Google Assistant for basic tasks: alarms, timers, reminders, and tasks. Voice in (Whisper), intent parsing (on-device LLM), voice out (Piper). Triggered by the phone's side button / assistant gesture by holding Android's default-assistant role. No telemetry, no cloud — the network is touched exactly once, to download models after install.
 
-- Repo: `hasan-ismail/themachine` · App display name: "The Machine" · License: **AGPL-3.0** · Distribution: GitHub Releases (no Play Store constraints)
-- Owner: Hasan. Ask before deviating from anything in **Locked decisions**.
+- Repo: `ijazshare/assistant` · App display name: "Assistant" · License: **AGPL-3.0** · Distribution: GitHub Releases (no Play Store constraints)
+- Owner: ijazshare. Ask before deviating from anything in **Locked decisions**.
 
 ## Locked decisions (do not revisit silently)
 
@@ -107,7 +107,7 @@ LLM must emit exactly one JSON object matching this schema. Use llama.cpp's JSON
 
 ## Android integration
 
-- **Assistant role:** implement `VoiceInteractionService` (+ `VoiceInteractionSessionService`, `VoiceInteractionSession`) with the `android.voice_interaction` metadata/XML so The Machine appears under *Default digital assistant app*. Onboarding must deep-link there (`Settings.ACTION_VOICE_INPUT_SETTINGS` or manage-default-apps) and, for One UI, show a hint: *Settings → Advanced features → Side button → Press and hold → Wake digital assistant*.
+- **Assistant role:** implement `VoiceInteractionService` (+ `VoiceInteractionSessionService`, `VoiceInteractionSession`) with the `android.voice_interaction` metadata/XML so the app appears under *Default digital assistant app*. Onboarding must deep-link there (`Settings.ACTION_VOICE_INPUT_SETTINGS` or manage-default-apps) and, for One UI, show a hint: *Settings → Advanced features → Side button → Press and hold → Wake digital assistant*.
 - **Permissions (revised 2026-09-01 — see Locked decision 9).** The original list was marked
   "exhaustive for v1"; it no longer is. Three tiers, because they are granted in three different ways
   and onboarding has to treat them differently:

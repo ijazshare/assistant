@@ -10,7 +10,7 @@
         <activity
             android:name=".ui.debug.DebugActivity"
             android:exported="true"
-            android:label="Machine Debug"
+            android:label="Assistant Debug"
             android:theme="@style/Theme.TheMachine">
             <!--
               Its own launcher entry: reaching this from adb alone would mean typing a
