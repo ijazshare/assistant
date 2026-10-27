@@ -3,7 +3,50 @@
 Running record of the build. Written so a future session can resume cold: what is done, what
 was decided and why, and which facts were verified against a live source rather than assumed.
 
-**Last updated:** 2026-09-02 (second session)
+**Last updated:** 2026-10-27
+
+Everything below the "Since September" section is the log as written; numbers and decisions
+in it are dated and some have since been superseded (the tool count is 15, not 14; the router
+and answer models changed; the project was renamed). The code is the source of truth.
+
+## Since September
+
+Summarised from `git log --since=2026-09-03`.
+
+- **Routing and answers (4 Sep).** Misrouted questions fixed with an answer few-shot; the
+  answerer stopped fabricating (an honesty benchmark, `AnswerHonestyTest`); the admin name and
+  user context were kept out of the routing prompt, which was the real "text me becomes an
+  alarm" bug. Routing reached about 90% on the typed benchmark (`RoutingBenchmarkTest`, 57 cases now).
+- **Models (26 Oct).** Gemma 3 1B and 4B pinned to ggml-org's GGUF conversions, after the
+  earlier mirror's files turned out not to tokenise the turn markers.
+- **Opt-in remote answer model (5 Sep).** Questions can go to an OpenAI-compatible endpoint
+  the owner configures; off until URL, key and model are all set. Since 27 Oct it
+  is sent only the question text, fixed instructions and the time, not the owner's name or notes.
+- **Acting on the phone (4 Sep).** Real SMS and calls (calls through the telecom service), a
+  "your number" setting so "text me" has somewhere to go, whole-word contact matching, a contact
+  selector ordered by recent texts and calls, and speech recognition biased toward the owner's contacts.
+- **Messaging safety (Sep to Oct).** Never send an invented body or the request itself as the
+  message; the next dictation after "What should I say to X?" is the message; a reply that opens
+  like an order is read back for a yes; dismissing the overlay abandons a pending send.
+- **Time worked out in code (Sep to Oct).** "In N minutes" and clock minutes are computed rather than
+  taken from the model; stated-time rules for a number range, "half 7 pm", and a time said with
+  no day; no alarm or reminder for the current minute; the time and date in other places answered
+  from the clock.
+- **Microphone and end of speech (Sep to Oct).** The microphone fixed with a foreground service,
+  retry with backoff and a fallback source; endpointing rewritten to end on the speaker stopping,
+  with an optional Silero voice check; every capture kept on debug builds to diagnose it.
+- **Media and replies.** Other apps' media pauses while the assistant is active; a reply is
+  stopped before a new summon opens the microphone.
+- **Privacy and backup (27 Oct).** Android cloud backup now excludes the query log, recordings,
+  notes, learned phrases, settings (which can hold the remote model's key) and the models;
+  device transfer also leaves out recordings, the query log and the models.
+- **Identity.** A Halo-style restyle (4 Sep); renamed to Assistant, with the package and native
+  library renamed (26-27 Oct); the project is developed independently and its links point at
+  ijazshare/assistant.
+- **Review follow-ups (27 Oct).** The remote model is sent only the question. The Context
+  editor saves only real edits and never over a newer file (opening the screen used to save
+  the boxes before they had loaded, which could blank the files). The overlay keeps the screen
+  on while it is up. CLAUDE.md, README.md and this file were brought in line with the code.
 
 ## Phase status
 
@@ -11,13 +54,13 @@ was decided and why, and which facts were verified against a live source rather 
 |---|---|---|
 | P0 | Repo + toolchain | **Complete** — gate green locally and in CI; APK verified on device |
 | P1 | Native bridge (whisper.cpp + llama.cpp submodules, JNI) | **Complete** — both engines build, link and report on device |
-| P2 | Model manager (registry, resumable verified downloads) | **Complete** — three assets download, verify and load on device |
+| P2 | Model manager (registry, resumable verified downloads) | **Complete** — the registry now holds eight assets (Whisper x2, three LLMs, Piper, OCR data, Silero); each downloads, verifies and loads |
 | P3 | STT (AudioRecord, endpointing, Whisper) | **Complete** — plus live partial transcripts while speaking |
-| P4 | LLM parsing (GBNF grammar, TimeResolver, tool calls) | **Complete** — 14 tools, grammar-constrained, verified on device |
+| P4 | LLM parsing (GBNF grammar, TimeResolver, tool calls) | **Complete** — 15 tools (14 when this was written), grammar-constrained, verified on device |
 | P5 | TTS (sherpa-onnx + Piper) | **Complete** — replies and problems are spoken |
-| P6 | Executors + task store | **Mostly done** — all 14 tools dispatch; tasks persist as markdown, not Room (see below) |
+| P6 | Executors + task store | **Mostly done** — all 15 tools dispatch; tasks persist as markdown (`tasks.md`), not Room; that is the decision |
 | P7 | Assistant session + onboarding | **Mostly done** — side button opens a full session end to end |
-| P8 | Settings + release | Partly — settings screens exist; signed release flow untested |
+| P8 | Settings + release | Partly — settings screens exist. `release.yml` ran successfully for v0.1.0 on the upstream repo on 2026-09-03; this repo (ijazshare/assistant) has no signing secrets and no release yet |
 
 ### What the assistant does now
 
@@ -28,7 +71,7 @@ Reminders fire, survive reboots and clock changes, and answer Done and Snooze. T
 is read from the accessibility tree, or from pixels when the tree is empty. Every command
 is recorded, on the device, in a file the user can read.
 
-### Measured on the reference device (Galaxy Z Flip8, SM8850, thermally throttled)
+### Measured on the reference device, 2026-09-02 (dated history; Galaxy Z Flip8, SM8850, thermally throttled)
 
 | | Before | Now |
 |---|---|---|
@@ -36,7 +79,7 @@ is recorded, on the device, in a file the user can read.
 | Reply, later commands | ~13000 ms | **600–1900 ms** |
 | Prompt prefill | ~13000 ms | ~450 ms reused, ~0 from disk cache |
 
-27 instrumented tests pass, including three that run synthesised speech through the
+As of 2026-09-02, 27 instrumented tests passed, including three that run synthesised speech through the
 whole pipeline and one that says a sentence out loud.
 
 ---
@@ -356,7 +399,7 @@ Both under `https://github.com/k2-fsa/sherpa-onnx`. URLs re-verified HTTP 200 wi
   Separately, Android 15+ blocks `BOOT_COMPLETED` receivers from starting `dataSync` foreground
   services — the boot receiver must only set `AlarmManager` alarms.
 
-### Open questions for Hasan
+### Open questions
 
 - **Piper voice licence.** The `en_US-amy-medium` MODEL_CARD points its dataset at
   `MycroftAI/mimic3-voices` with the licence field given only as "See URL", and Mycroft AI is
@@ -418,19 +461,19 @@ Both under `https://github.com/k2-fsa/sherpa-onnx`. URLs re-verified HTTP 200 wi
 - **Git Bash rewrites `/sdcard/...` into a Windows path.** `adb push` reports success and
   the file lands nowhere useful. Set `MSYS_NO_PATHCONV=1` and give the source as `C:/...`.
 
-### Needs Hasan's decision
+### Decided: tasks are Markdown, not Room
 
-Locked decision 7 says tasks are stored in Room. They are not: `ReminderStore` writes
-them to the same markdown files the user can open and edit, which is what makes the
+Locked decision 7 originally said tasks are stored in Room. They are not: `ReminderStore`
+writes them to the same markdown files the user can open and edit, which is what makes the
 context files a second brain rather than a separate list the assistant keeps to itself.
-It persists correctly and is scheduled with exact alarms as specified. Worth confirming
-before it becomes expensive to change.
+It persists correctly and is scheduled with exact alarms as specified. The decision is
+Markdown (`tasks.md`); CLAUDE.md decision 7 now says so.
 
 ### The wake word was built and then removed
 
 "Hey root" worked — sherpa-onnx, already pinned for the voice, contains a keyword spotter,
-and the phrase spotted in 252 ms without firing on other speech. It was removed anyway, at
-Hasan's call, because always-on listening costs a permanent notification, a microphone
+and the phrase spotted in 252 ms without firing on other speech. It was removed upstream
+anyway, because always-on listening costs a permanent notification, a microphone
 indicator and real battery, and the platform gives a sideloaded app no cheaper option: the
 low-power hotword APIs need a permission whose protection level is `internal|preinstalled`,
 so the app would have to be part of the system image. Holding the assistant role does not
@@ -609,7 +652,7 @@ it has answered. Both keep a prompt cache on disk, so the reload is a second or 
   | free memory | 200 MB | 745 MB |
   | app swapped | 1.2 GB | 287 MB |
   | command after a question | 21-31 s | 0 ms from cache |
-  | question | 39 s | 9.8 s |
+  | question (2026-09-02 measurement) | 39 s | 9.8 s |
 
 The reference device is also thermally throttled to status 4 after a long session of this
 work, so every number here is a floor rather than the phone at its best.
@@ -640,5 +683,5 @@ Patterns worth remembering, all of which bit here:
   engine teardown all sat in front of the reply.
 
 ### Not done
-- Wake word "hey root" — deferred by Hasan.
-- Signed release build has never been exercised.
+- Wake word "hey root" — removed upstream (see above); any wake word is the owner's call for v2 (CLAUDE.md decision 11).
+- Signed release on this repo: `release.yml` ran for v0.1.0 on the upstream repo on 2026-09-03, but this repo has no signing secrets and no release yet.

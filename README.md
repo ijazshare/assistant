@@ -6,16 +6,18 @@
 > [LICENSE](LICENSE).
 
 A fully offline voice assistant for Android. It replaces Google Assistant for the things
-people actually use an assistant for — alarms, timers, reminders and tasks — and does the
-whole job on the phone: speech recognition, intent parsing and speech synthesis all run
-locally.
+people actually use an assistant for — alarms, timers, reminders, questions, and acting on the
+phone — and does the whole job on the phone: speech recognition, choosing what to do, and
+speech synthesis all run locally.
 
-There is no network use outside model downloads: the models after install, and later any
-new optional model (the voice check that helps end-of-speech detection is one). Otherwise
+There is no network use outside model downloads (the models after install, and any new
+optional model such as the voice check that helps end-of-speech detection) and one opt-in
+exception, a remote model for answering questions, described under Privacy. Otherwise
 airplane mode changes nothing.
 
-> **Status: in development.** Phase P0 (repo and toolchain) is complete. The voice pipeline
-> lands over phases P1–P8; see [PROGRESS.md](PROGRESS.md) for what works today.
+> **Status: a working build, developed and tested on the owner's phone. No release has been
+> published on this repo yet** — build it from source (see Building). [PROGRESS.md](PROGRESS.md) is the
+> running log of what was built and verified.
 
 ## What this fork changes
 
@@ -31,13 +33,14 @@ airplane mode changes nothing.
   sentence; live data (weather, prices, scores, counts) gets a plain "I can't know that
   offline". An answer never claims to have sent, called or set anything.
 - **Everything is testable over adb without speaking.** Instrumented probes drive the real
-  models and log to logcat: `RoutingBenchmarkTest` (tag `BENCH`, 54 typed commands),
+  models and log to logcat: `RoutingBenchmarkTest` (tag `BENCH`, 57 typed commands),
   `AnswerHonestyTest` (`HONEST`), and `PipelineProbeTest` (`PIPE`) with `-e runcmd "<text>"`,
   `-e resolve "<name>|<name>"`, `-e setown <number>`, and `-e live true` to actually execute.
   Without `-e live true` nothing is sent.
 
-The privacy invariants are unchanged: no telemetry, no network outside model downloads, and
-nothing read from the device leaves it.
+The privacy invariants are unchanged: no telemetry, no network outside model downloads and
+the opt-in remote answer model (which receives only the question text, fixed instructions and
+the current time), and nothing read from the device leaves it.
 
 ## Why
 
@@ -47,52 +50,60 @@ leaving the device.
 
 ## Features
 
-Planned for v1, tracked in [PROGRESS.md](PROGRESS.md):
+What it does today:
 
 - **Hold the side button, speak, done.** The app registers as Android's default digital
-  assistant, so the existing assistant gesture wakes it.
+  assistant, so the existing assistant gesture wakes it. You can also type a command.
 - **Alarms and timers** are delegated to your phone's own Clock app via standard `AlarmClock`
   intents — no second alarm engine to fight with, and no alarms trapped inside this app.
-- **Tasks and reminders** are one idea: a task with an optional due time. Tasks with a due
-  time fire an exact-alarm notification with *Done* and *Snooze 10 min* actions, and survive
-  a reboot.
-- **Follow-up questions.** If a command is missing something, it asks — up to two rounds.
+- **Tasks and reminders** live in `tasks.md`, a Markdown checklist you can open and edit on
+  the Context screen. A task with a due time fires an exact-alarm notification with *Done*
+  and *Snooze 10 min* actions, and survives a reboot.
+- **Messages, calls and apps.** Text or call a contact, open an app. A name that matches
+  several contacts shows a selector. "Text Sam" with no message asks "What should I say to
+  Sam?" and your next dictation is the message.
+- **Screen and notifications.** Read what is on screen (from the accessibility tree, or by
+  OCR when it has little or no text), tap, scroll, go back, take a screenshot, and read your
+  notifications.
+- **Questions.** The small model decides a request is a question; a larger on-device model
+  (or a remote one you configure) answers in a sentence.
+- **Learned phrases.** A phrase whose meaning is fixed is learned on first success and runs
+  without the model afterwards.
 - **No telemetry.** No analytics, no crash reporting, no ad SDK, no account.
 
-Out of scope for v1 (and not accidentally, see `CLAUDE.md`): wake word, general chat,
-multilingual recognition, and automations.
+Out of scope for now (and not accidentally, see `CLAUDE.md`): wake word, multi-turn chat,
+multilingual recognition, and user-defined automations.
 
 ## Requirements
 
 - Android 13 (API 33) or newer, `arm64-v8a`
-- ~1.1 GB free storage for the default models (~2.8 GB if you pick the larger language model)
-- Tested against a Galaxy S26 Ultra; tuned for high-end hardware rather than the low end
+- ~1 GB free storage for the default models (about 3.5 GB with the larger 4B model)
+- Developed and tested on the owner's Samsung foldable (Snapdragon SM8850, about 11 GB RAM, Android 17); tuned for high-end hardware rather than the low end
 
 ## Install
 
-Download the APK from [Releases](https://github.com/ijazshare/assistant/releases) and
-sideload it. Verify the download first:
-
-```bash
-sha256sum -c assistant-<tag>.apk.sha256
-```
-
-There is no Play Store build. On first launch the app walks you through the permissions it
-needs and downloads the models.
+This repo has no Releases yet, so build it from source (see Building) and install the debug
+APK with `adb install`. There is no Play Store build. Open the Permissions screen to grant
+what the assistant needs and set it as your default assistant, then download the models from
+the Models screen.
 
 ## Models
 
-The APK ships without models — they are downloaded on first run, verified by SHA-256, and
-resumable if the download is interrupted. You can also import a GGUF file from storage.
+The APK ships without models. They are downloaded from the Models screen, verified by
+SHA-256, and resumable if the download is interrupted. Sources are Hugging Face (Whisper,
+Gemma) and GitHub (the Piper voice, the OCR data, the voice check).
 
 | Role | Default | Alternative |
 |---|---|---|
 | Speech recognition | Whisper `tiny.en` (Q5\_1) | `base.en` (Q5\_1), slower but more accurate |
-| Intent parsing | Gemma 3 1B IT (QAT Q4\_0) | Gemma 3 4B IT (QAT Q4\_0) |
-| Speech synthesis | Piper `en_US-amy-medium` | — (v1 ships one voice) |
+| Choosing what to do | Gemma 3 1B IT (QAT Q4\_0) | — |
+| Answering questions | the largest installed Gemma, normally Gemma 3 4B IT (QAT Q4\_0) | a remote model you configure (opt-in) |
+| Speech synthesis | Piper `en_US-amy-medium` | — (one voice for now) |
+| Screen OCR | Tesseract English (fast) | — |
+| End-of-speech voice check | Silero VAD v5 (optional) | — |
 
-Exact files, sizes, sources and checksums are recorded in the model registry and reproduced
-in [PROGRESS.md](PROGRESS.md) as each is verified.
+Exact files, sizes, sources and checksums are recorded in the model registry,
+`app/src/main/assets/models/registry-v1.json`.
 
 ## Privacy
 
@@ -103,7 +114,8 @@ These are enforced, not just promised:
 - Network access is model downloading, plus one strictly opt-in exception: a remote
   language model for general-knowledge answers, which you point at any OpenAI-compatible
   endpoint (OpenRouter, or your own llama.cpp server at home). It is off until you enter
-  a URL, key and model, and it only ever receives the transcript text of a question.
+  a URL, key and model, and it only ever receives the transcript text of a question, fixed instructions and the
+  current time — never your name or your notes.
 - Audio is never transmitted, with or without the remote model. Release builds process it
   in memory only. Debug builds, for now, also keep the last 500 recordings on the device
   (`history/captures/` in the app's external files folder, `Android/data/<package>/files`,
@@ -143,7 +155,9 @@ bytecode target for Android.
 ### Release signing
 
 Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml) when a
-`v*` tag is pushed. It expects four repository secrets. To set them up once:
+`v*` tag is pushed. It ran successfully for v0.1.0 on the upstream repo; this repo has no
+signing secrets yet and has published no release. The workflow expects four repository
+secrets. To set them up once:
 
 ```bash
 # 1. Create a keystore (keep the .jks and these passwords somewhere safe and offline —
