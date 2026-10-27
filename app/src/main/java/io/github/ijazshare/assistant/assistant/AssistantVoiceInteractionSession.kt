@@ -81,6 +81,11 @@ class AssistantVoiceInteractionSession(context: Context) :
         // adjustPan, scrolls the whole full-screen window. adjustNothing leaves layout to
         // Compose, which pads the panel up above the keyboard itself.
         window.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        // A back and forth driven from the side button never touches the screen, so nothing
+        // resets the screen timeout, and a tap to keep it awake lands outside the panel and
+        // dismisses it. The screen stays on for as long as the overlay is up.
+        // ponytail: no idle limit; add one if the overlay is ever left open by mistake.
+        window.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val view = ComposeView(context).apply {
             setViewTreeLifecycleOwner(this@AssistantVoiceInteractionSession)
