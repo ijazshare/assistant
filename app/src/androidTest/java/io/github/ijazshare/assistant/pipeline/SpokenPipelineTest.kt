@@ -14,7 +14,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import io.github.ijazshare.assistant.llm.LlamaEngine
-import io.github.ijazshare.assistant.llm.PromptDialect
+import io.github.ijazshare.assistant.llm.PromptBuilder
+import io.github.ijazshare.assistant.llm.ToolCallParser
 import io.github.ijazshare.assistant.models.ModelRegistry
 import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
@@ -22,6 +23,7 @@ import io.github.ijazshare.assistant.models.ModelStorage
 import io.github.ijazshare.assistant.stt.WhisperEngine
 import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.TimeResolver
+import io.github.ijazshare.assistant.tools.ToolGrammar
 import kotlinx.coroutines.runBlocking
 import org.junit.AfterClass
 import org.junit.Assume.assumeTrue
@@ -48,7 +50,6 @@ class SpokenPipelineTest {
         private lateinit var whisper: WhisperEngine
         private lateinit var llama: LlamaEngine
         private var ready = false
-        private var modelName = ""
 
         @BeforeClass
         @JvmStatic
@@ -63,7 +64,6 @@ class SpokenPipelineTest {
 
             val stt = installed(ModelRole.STT) ?: return
             val llm = installed(ModelRole.LLM) ?: return
-            modelName = llm.fileName
             whisper = WhisperEngine(context)
             llama = LlamaEngine(context)
             ready = runBlocking {
@@ -109,14 +109,13 @@ class SpokenPipelineTest {
     }
 
     private fun toolFor(transcript: String): Pair<String, Map<String, String>> {
-        val dialect = PromptDialect.forModel(modelName)
         val completion = runBlocking {
             llama.generate(
-                dialect.buildPrompt(transcript, AssistantTools.all, "Hasan", ""),
-                dialect.grammar(AssistantTools.all),
+                PromptBuilder.build(transcript, AssistantTools.all),
+                ToolGrammar.build(AssistantTools.all),
             )
         }
-        val call = requireNotNull(dialect.parse(completion.text)) { completion.text }
+        val call = requireNotNull(ToolCallParser.parse(completion.text)) { completion.text }
         return call.tool to call.arguments
     }
 

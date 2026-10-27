@@ -10,16 +10,16 @@
 package io.github.ijazshare.assistant.ui.debug
 
 import android.content.Context
-import io.github.ijazshare.assistant.context.AssistantFiles
 import io.github.ijazshare.assistant.llm.LlamaEngine
-import io.github.ijazshare.assistant.llm.PromptDialect
+import io.github.ijazshare.assistant.llm.PromptBuilder
+import io.github.ijazshare.assistant.llm.ToolCallParser
 import io.github.ijazshare.assistant.models.ModelRegistry
 import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
-import io.github.ijazshare.assistant.settings.AssistantSettings
 import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.ToolCall
+import io.github.ijazshare.assistant.tools.ToolGrammar
 
 /** One probe run: what the model emitted and what it parsed to. */
 data class ProbeResult(
@@ -42,11 +42,8 @@ data class ProbeResult(
 class LlmProbe(private val context: Context) {
 
     private val engine = LlamaEngine(context)
-    private var modelName = ""
     private val storage = ModelStorage(context)
     private val registry = ModelRegistry(context)
-    private val settings = AssistantSettings(context)
-    private val files = AssistantFiles(context)
 
     suspend fun run(input: String): ProbeResult {
         if (!engine.isLoaded) {
@@ -54,24 +51,19 @@ class LlmProbe(private val context: Context) {
                 .filter { storage.quickState(it) == ModelState.Ready }
             val asset = (ready.firstOrNull { it.isDefault } ?: ready.firstOrNull())
                 ?: return ProbeResult(input, "", null, 0, "No language model installed.")
-            modelName = asset.fileName
             if (!engine.load(storage.target(asset))) {
                 return ProbeResult(input, "", null, 0, "Model failed to load.")
             }
         }
-
-        val dialect = PromptDialect.forModel(modelName)
-        val prompt = dialect.buildPrompt(
+        val prompt = PromptBuilder.build(
             transcript = input,
             tools = AssistantTools.all,
-            adminName = settings.adminNameNow(),
-            userContext = files.contextForPrompt(),
         )
-        val completion = engine.generate(prompt, dialect.grammar(AssistantTools.all))
+        val completion = engine.generate(prompt, ToolGrammar.build(AssistantTools.all))
         return ProbeResult(
             input = input,
             raw = completion.text,
-            call = dialect.parse(completion.text),
+            call = ToolCallParser.parse(completion.text),
             millis = completion.millis,
         )
     }

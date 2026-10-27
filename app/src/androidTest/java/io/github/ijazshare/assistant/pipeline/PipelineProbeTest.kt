@@ -15,7 +15,8 @@ import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.ijazshare.assistant.llm.LlamaEngine
-import io.github.ijazshare.assistant.llm.PromptDialect
+import io.github.ijazshare.assistant.llm.PromptBuilder
+import io.github.ijazshare.assistant.llm.ToolCallParser
 import io.github.ijazshare.assistant.models.ModelRegistry
 import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
@@ -29,6 +30,7 @@ import io.github.ijazshare.assistant.tools.MessageBody
 import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
+import io.github.ijazshare.assistant.tools.ToolGrammar
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -121,20 +123,18 @@ class PipelineProbeTest {
     }
 
     private fun parse(command: String): ToolCall? {
-        val dialect = PromptDialect.forModel(modelName)
-        val prompt = dialect.buildPrompt(command, AssistantTools.all, adminName = "Admin", userContext = "")
+        val prompt = PromptBuilder.build(command, AssistantTools.all)
         val completion = runBlocking {
-            engine.generate(prompt, dialect.grammar(AssistantTools.all), stopAt = dialect.answerMarker)
+            engine.generate(prompt, ToolGrammar.build(AssistantTools.all), stopAt = PromptBuilder.ANSWER_MARKER)
         }
         Log.i(PIPE, "raw=${completion.text}")
-        return dialect.parse(completion.text)
+        return ToolCallParser.parse(completion.text)
     }
 
     companion object {
         private const val PIPE = "PIPE"
         private lateinit var engine: LlamaEngine
         private var available = false
-        private var modelName = ""
 
         @org.junit.BeforeClass
         @JvmStatic
@@ -145,7 +145,6 @@ class PipelineProbeTest {
                 .filter { storage.quickState(it) == ModelState.Ready }
                 .let { ready -> ready.firstOrNull { it.isDefault } ?: ready.firstOrNull() }
                 ?: return
-            modelName = asset.fileName
             engine = LlamaEngine(context)
             available = runBlocking { engine.load(storage.target(asset)) }
         }

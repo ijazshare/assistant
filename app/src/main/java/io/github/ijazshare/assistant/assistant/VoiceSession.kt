@@ -32,7 +32,8 @@ import io.github.ijazshare.assistant.history.QuerySource
 import io.github.ijazshare.assistant.history.Resolution
 import io.github.ijazshare.assistant.llm.LlamaEngine
 import io.github.ijazshare.assistant.llm.ModelRouter
-import io.github.ijazshare.assistant.llm.PromptDialect
+import io.github.ijazshare.assistant.llm.PromptBuilder
+import io.github.ijazshare.assistant.llm.ToolCallParser
 import io.github.ijazshare.assistant.models.ModelArchive
 import io.github.ijazshare.assistant.models.ModelAsset
 import io.github.ijazshare.assistant.models.ModelRegistry
@@ -54,6 +55,7 @@ import io.github.ijazshare.assistant.tools.StatedTime
 import io.github.ijazshare.assistant.tools.TimeResolver
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
+import io.github.ijazshare.assistant.tools.ToolGrammar
 import io.github.ijazshare.assistant.tools.ToolResult
 import io.github.ijazshare.assistant.tts.PiperEngine
 import kotlinx.coroutines.CoroutineScope
@@ -216,9 +218,6 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * than queued; the final pass waits, because its result is the one that matters.
      */
     private val transcriber = Mutex()
-
-    /** File name of whatever language model is loaded, for dialect selection. */
-    private var loadedModelName: String = ""
 
     /** Whether this session has already written its prompt cache. */
     private var cacheWritten = false
@@ -544,21 +543,17 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             return
         }
 
-        // The dialect owns the prompt, the grammar and the parser together, because a
-        // fine-tuned model only behaves if all three match the form it was trained on.
-        val dialect = PromptDialect.forModel(loadedModelName)
-        val prompt = dialect.buildPrompt(
-            transcript = transcript,
-            tools = AssistantTools.all,
-            adminName = settings.adminNameNow(),
-            userContext = files.contextForPrompt(),
-        )
+        val prompt = PromptBuilder.build(transcript, AssistantTools.all)
         // Stop the moment the tool turns out to be a question: what the small model would
         // write next is exactly the part that gets replaced.
-        val completion = llama.generate(prompt, dialect.grammar(AssistantTools.all), stopAt = dialect.answerMarker)
+        val completion = llama.generate(
+            prompt,
+            ToolGrammar.build(AssistantTools.all),
+            stopAt = PromptBuilder.ANSWER_MARKER,
+        )
         Log.i(TAG, "model returned ${completion.text} in ${completion.millis} ms")
 
-        var call = dialect.parse(completion.text)
+        var call = ToolCallParser.parse(completion.text)
         if (call == null) {
             failCommand(transcript, "I could not work out what to do with that.")
             return
@@ -934,7 +929,6 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private suspend fun ensureLanguageModel(): Boolean = modelLoading.withLock {
         if (llama.isLoaded) return@withLock true
         val asset = installed(ModelRole.LLM) ?: return@withLock false
-        loadedModelName = asset.fileName
         llama.load(storage.target(asset))
     }
 

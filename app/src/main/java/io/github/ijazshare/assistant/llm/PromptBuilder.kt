@@ -35,12 +35,19 @@ object PromptBuilder {
     private const val TURN_START = "<start_of_turn>"
     private const val TURN_END = "<end_of_turn>"
 
-    @Suppress("UnusedParameter") // adminName kept for the dialect contract; not used in routing
+    /**
+     * Text that, once emitted, means the call is an `answer`. Generation stops there: the
+     * words the small model would write next are replaced by the larger model's.
+     */
+    // Plain escapes, not a raw string: as a raw string this held a literal backslash,
+    // so it never matched anything the model wrote and the early stop never fired. The
+    // 1B then wrote out a whole answer, blew the token cap, and the question came back
+    // as "I could not work out what to do with that".
+    const val ANSWER_MARKER: String = "\"tool\":\"answer\""
+
     fun build(
         transcript: String,
         tools: List<Tool>,
-        adminName: String,
-        userContext: String,
         now: LocalDateTime = LocalDateTime.now(),
     ): String = buildString {
         append(TURN_START).appendLine("user")

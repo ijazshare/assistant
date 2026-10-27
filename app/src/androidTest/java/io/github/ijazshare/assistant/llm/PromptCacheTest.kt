@@ -18,6 +18,7 @@ import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
 import io.github.ijazshare.assistant.tools.AssistantTools
+import io.github.ijazshare.assistant.tools.ToolGrammar
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -39,14 +40,13 @@ class PromptCacheTest {
         .let { ready -> ready.firstOrNull { it.isDefault } ?: ready.firstOrNull() }
 
     private fun ask(engine: LlamaEngine, utterance: String): Long {
-        val dialect = PromptDialect.forModel(model()!!.fileName)
         val completion = runBlocking {
             engine.generate(
-                dialect.buildPrompt(utterance, AssistantTools.all, "Hasan", ""),
-                dialect.grammar(AssistantTools.all),
+                PromptBuilder.build(utterance, AssistantTools.all),
+                ToolGrammar.build(AssistantTools.all),
             )
         }
-        assertThat(dialect.parse(completion.text)).isNotNull()
+        assertThat(ToolCallParser.parse(completion.text)).isNotNull()
         return completion.millis
     }
 

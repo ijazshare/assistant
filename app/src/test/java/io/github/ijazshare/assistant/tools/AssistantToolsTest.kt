@@ -29,8 +29,6 @@ class AssistantToolsTest {
         val prompt = io.github.ijazshare.assistant.llm.PromptBuilder.build(
             transcript = "set a timer for ten minutes",
             tools = AssistantTools.all,
-            adminName = "Hasan",
-            userContext = "",
         )
         assertThat(prompt.split(Regex("""\s+""")).size).isLessThan(300)
     }

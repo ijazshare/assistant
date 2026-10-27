@@ -19,6 +19,7 @@ import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
 import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.TimeResolver
+import io.github.ijazshare.assistant.tools.ToolGrammar
 import kotlinx.coroutines.runBlocking
 import org.junit.AfterClass
 import org.junit.Assume.assumeTrue
@@ -41,7 +42,6 @@ class ToolCallOnDeviceTest {
         private const val TAG = "Assistant"
         private lateinit var engine: LlamaEngine
         private var available = false
-        private var modelName = ""
 
         @BeforeClass
         @JvmStatic
@@ -52,7 +52,6 @@ class ToolCallOnDeviceTest {
                 .filter { storage.quickState(it) == ModelState.Ready }
                 .let { ready -> ready.firstOrNull { it.isDefault } ?: ready.firstOrNull() }
                 ?: return
-            modelName = asset.fileName
             engine = LlamaEngine(context)
             // Loading once for the whole class: it is the dominant cost, and each test
             // clears the model's state anyway.
@@ -68,17 +67,14 @@ class ToolCallOnDeviceTest {
 
     private fun parse(utterance: String): Pair<String, Map<String, String>> {
         assumeTrue("No language model installed on this device", available)
-        val dialect = PromptDialect.forModel(modelName)
-        val prompt = dialect.buildPrompt(
+        val prompt = PromptBuilder.build(
             transcript = utterance,
             tools = AssistantTools.all,
-            adminName = "Hasan",
-            userContext = "- Osman is my brother.",
         )
-        val completion = runBlocking { engine.generate(prompt, dialect.grammar(AssistantTools.all)) }
+        val completion = runBlocking { engine.generate(prompt, ToolGrammar.build(AssistantTools.all)) }
         Log.i(TAG, "[$utterance] -> ${completion.text}  (${completion.millis} ms)")
 
-        val call = dialect.parse(completion.text)
+        val call = ToolCallParser.parse(completion.text)
         assertThat(call).isNotNull()
         return call!!.tool to call.arguments
     }

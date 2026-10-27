@@ -57,7 +57,7 @@ class ModelRouter(private val context: Context) {
             val ready = registry.byRole(ModelRole.LLM).filter { storage.quickState(it) == ModelState.Ready }
             val fast = ready.firstOrNull { it.isDefault } ?: ready.firstOrNull() ?: return null
             // The biggest installed model, which may be the one already answering
-            // commands. "Biggest that is not the default" picked a 270M experiment over
+            // commands. "Biggest that is not the default" picked a smaller model over
             // the 1B when both were installed, and left a lone 4B unable to answer at all.
             return ready.maxByOrNull { it.byteSize }?.takeIf { it.byteSize >= fast.byteSize }
         }

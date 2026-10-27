@@ -18,6 +18,7 @@ import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
 import io.github.ijazshare.assistant.tools.AssistantTools
+import io.github.ijazshare.assistant.tools.ToolGrammar
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -146,21 +147,14 @@ class RoutingBenchmarkTest {
     }
 
     private fun parseTool(utterance: String): String {
-        val dialect = PromptDialect.forModel(modelName)
-        val prompt = dialect.buildPrompt(
+        val prompt = PromptBuilder.build(
             transcript = utterance,
             tools = AssistantTools.all,
-            // Regression guard reproducing the exact real-app inputs that used to collapse
-            // "text me ..." to set_alarm: the default admin name and the tasks context, both
-            // of which the routing prompt now ignores, plus the voice path's stop marker.
-            // Keep them here so neither can silently creep back into tool selection.
-            adminName = "Admin",
-            userContext = "## Tasks\n# Tasks",
         )
         val completion = runBlocking {
-            engine.generate(prompt, dialect.grammar(AssistantTools.all), stopAt = dialect.answerMarker)
+            engine.generate(prompt, ToolGrammar.build(AssistantTools.all), stopAt = PromptBuilder.ANSWER_MARKER)
         }
-        val call = dialect.parse(completion.text)
+        val call = ToolCallParser.parse(completion.text)
         return call?.tool ?: "PARSE_FAIL"
     }
 
@@ -177,8 +171,8 @@ class RoutingBenchmarkTest {
             val storage = ModelStorage(context)
             val ready = ModelRegistry(context).byRole(ModelRole.LLM)
                 .filter { storage.quickState(it) == ModelState.Ready }
-            // Pass `-e model functiongemma` to benchmark a specific model; otherwise the
-            // default router model. Lets one harness compare 1B against the 270M.
+            // Pass `-e model <file-name fragment>` to benchmark a specific model; otherwise
+            // the default router model.
             val wanted = InstrumentationRegistry.getArguments().getString("model")
             val asset = when {
                 wanted != null -> ready.firstOrNull { it.fileName.contains(wanted, ignoreCase = true) }

@@ -18,6 +18,7 @@ import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
 import io.github.ijazshare.assistant.tools.AssistantTools
+import io.github.ijazshare.assistant.tools.ToolGrammar
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -76,8 +77,6 @@ class GrammarBisectTest {
             val prompt = PromptBuilder.build(
                 transcript = utterance,
                 tools = AssistantTools.all,
-                adminName = "Hasan",
-                userContext = "",
             )
             val free = runBlocking { engine.generate(prompt, grammar = "") }
             Log.i("Assistant", "FREE [$utterance] -> ${free.text.take(160)}")
@@ -177,26 +176,14 @@ class GrammarBisectTest {
             accepts("integer rule", "root ::= integer\n" + """integer ::= "-"? ("0" | [1-9] [0-9]{0,9})"""),
         ).isTrue()
 
-        // FunctionGemma's format is built from <angle-bracket> markers and GBNF gives
-        // '<' its own meaning, so this isolates whether such a literal is usable at all.
-        accepts("angle literal", "root ::= \"<abc>\"")
-
         // Then each tool on its own, so a single bad tool is named.
         for (tool in AssistantTools.all) {
             val single = io.github.ijazshare.assistant.tools.ToolGrammar.build(listOf(tool))
             assertThat(accepts("tool ${tool.name}", single)).isTrue()
         }
 
-        // Finally the real thing, in both dialects — a malformed grammar crashes the
+        // Finally the real thing — a malformed grammar crashes the
         // process deep inside the sampler, so it is worth naming here instead.
         assertThat(accepts("full tool grammar (json)", AssistantTools.grammar)).isTrue()
-        for (tool in AssistantTools.all) {
-            assertThat(
-                accepts("fg tool ${tool.name}", FunctionGemmaDialect.grammar(listOf(tool))),
-            ).isTrue()
-        }
-        assertThat(
-            accepts("full tool grammar (functiongemma)", FunctionGemmaDialect.grammar(AssistantTools.all)),
-        ).isTrue()
     }
 }

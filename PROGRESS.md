@@ -58,7 +58,7 @@ Summarised from `git log --since=2026-09-03`.
 |---|---|---|
 | P0 | Repo + toolchain | **Complete** — gate green locally and in CI; APK verified on device |
 | P1 | Native bridge (whisper.cpp + llama.cpp submodules, JNI) | **Complete** — both engines build, link and report on device |
-| P2 | Model manager (registry, resumable verified downloads) | **Complete** — the registry now holds eight assets (Whisper x2, three LLMs, Piper, OCR data, Silero); each downloads, verifies and loads |
+| P2 | Model manager (registry, resumable verified downloads) | **Complete** — the registry now holds seven assets (Whisper x2, two LLMs, Piper, OCR data, Silero); each downloads, verifies and loads |
 | P3 | STT (AudioRecord, endpointing, Whisper) | **Complete** — plus live partial transcripts while speaking |
 | P4 | LLM parsing (GBNF grammar, TimeResolver, tool calls) | **Complete** — 15 tools (14 when this was written), grammar-constrained, verified on device |
 | P5 | TTS (sherpa-onnx + Piper) | **Complete** — replies and problems are spoken |

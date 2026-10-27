@@ -18,6 +18,7 @@ import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
 import io.github.ijazshare.assistant.tools.AssistantTools
+import io.github.ijazshare.assistant.tools.ToolGrammar
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -47,7 +48,6 @@ class AnswerQualityTest {
 
         val engine = LlamaEngine(context)
         assertThat(runBlocking { engine.load(storage.target(asset)) }).isTrue()
-        val dialect = PromptDialect.forModel(asset.fileName)
 
         val questions = listOf(
             "who painted the Mona Lisa",
@@ -60,9 +60,9 @@ class AnswerQualityTest {
         var echoes = 0
         try {
             for (question in questions) {
-                val prompt = dialect.buildPrompt(question, AssistantTools.all, "Hasan", "- Osman is my brother.")
-                val completion = runBlocking { engine.generate(prompt, dialect.grammar(AssistantTools.all)) }
-                val call = dialect.parse(completion.text)
+                val prompt = PromptBuilder.build(question, AssistantTools.all)
+                val completion = runBlocking { engine.generate(prompt, ToolGrammar.build(AssistantTools.all)) }
+                val call = ToolCallParser.parse(completion.text)
                 val text = call?.arguments?.get("text") ?: ""
                 val echoed = call?.tool == AssistantTools.ANSWER &&
                     text.lowercase().trimEnd('?', '.', '!') == question.lowercase()

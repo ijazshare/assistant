@@ -9,7 +9,7 @@ Assistant is a fully offline Android voice assistant that replaces Google Assist
 
 1. **Language/UI:** Kotlin + Jetpack Compose (Material 3), single `:app` Gradle module, native code under `app/src/main/cpp/` via CMake. `minSdk 33`, `targetSdk`/`compileSdk` = latest stable. Optimize for high-end devices (primary target: the owner's Samsung foldable, Snapdragon SM8850, about 11 GB RAM, Android 17); do not contort the code for low-RAM phones.
 2. **STT:** whisper.cpp (git submodule, pinned commit). English only. Default model `ggml-tiny.en-q5_1` (speed over accuracy); `base.en-q5_1` is an alternative download in the Models screen, used when the default is not installed.
-3. **LLM:** llama.cpp (git submodule, pinned commit). Gemma 3 QAT Q4_0 GGUF. The **1B routes every command** (one grammar-constrained tool call) and is the registry default; the **4B answers questions** (the largest installed model answers, so with only the 1B installed the 1B answers). There is no setting that makes the 4B the router. The registry also lists an experimental FunctionGemma 270M. Architecture must allow adding model families later via the model registry.
+3. **LLM:** llama.cpp (git submodule, pinned commit). Gemma 3 QAT Q4_0 GGUF. The **1B routes every command** (one grammar-constrained tool call) and is the registry default; the **4B answers questions** (the largest installed model answers, so with only the 1B installed the 1B answers). There is no setting that makes the 4B the router. Architecture must allow adding model families later via the model registry.
 4. **TTS:** sherpa-onnx with Piper voice `en_US-amy-medium` (female, offline). Voice is swappable by design (nicer/custom voices planned for v2) but the registry ships this one.
 5. **LLM scope:** the 1B decides commands. A question is answered by the larger on-device model, or by a remote model the owner configures (off by default), which is sent only the question text, fixed instructions and the current time. Answers are one short sentence (the on-device path keeps only the first); questions about the screen are answered on-device only and may run to two. Anything that needs live data is declined, and an answer never claims to have acted.
 6. **Alarms & timers:** delegate to the native Clock app via `AlarmClock` intents. Never build a custom alarm engine.
@@ -27,7 +27,7 @@ Assistant is a fully offline Android voice assistant that replaces Google Assist
    only for model downloads and the opt-in remote model, which is sent only the question text, fixed
    instructions and the current time; and anything read from the device (screen, notifications,
    contacts, messages) stays on the device.
-10. **Model delivery:** APK ships without models. The Models screen downloads each asset with progress UI, SHA-256 verification and resume. Sources are Hugging Face (Whisper, Gemma/FunctionGemma GGUFs) and GitHub (the Piper voice from sherpa-onnx releases, Tesseract data, the Silero voice check). There is no manual import.
+10. **Model delivery:** APK ships without models. The Models screen downloads each asset with progress UI, SHA-256 verification and resume. Sources are Hugging Face (Whisper, Gemma GGUFs) and GitHub (the Piper voice from sherpa-onnx releases, Tesseract data, the Silero voice check). There is no manual import.
 11. **Wake word:** v2. Do not add always-listening anything in v1.
 12. **CI/CD:** GitHub Actions — build/lint/test on PR, signed release APK attached to GitHub Release on `v*` tags.
 
@@ -41,7 +41,7 @@ audio/        AudioRecord capture (16 kHz mono), energy-based endpointing, high-
 context/      AssistantFiles: profile.md, memories.md, tasks.md, notes.md under getExternalFilesDir(null)/context
 diagnostics/  CrashLog: uncaught-exception traces kept on the device (shown in History), never uploaded
 history/      QueryLog (every command, on the device) and CaptureArchive (saved recordings on debug builds)
-llm/          LlamaEngine (JNI wrapper), ModelRouter (which model answers), prompt dialects, tool-call parser, answer and screen prompts, RemoteAnswerer (opt-in), prompt-cache guard
+llm/          LlamaEngine (JNI wrapper), ModelRouter (which model answers), prompt builder, tool-call parser, answer and screen prompts, RemoteAnswerer (opt-in), prompt-cache guard
 models/       ModelRegistry, ModelStorage, ModelDownloader + WorkManager worker (resumable, SHA-256 verified), archive unpacking
 nativebridge/ NativeBridge: loads `libassistant.so` and registers ggml's CPU backends
 ocr/          ScreenReader (accessibility tree first, OCR when it has little text) and TesseractEngine
@@ -70,7 +70,7 @@ One model in memory at a time. Latency budget on the reference device, warm: **<
 
 ### Tools
 
-The 1B's single grammar-constrained tool call is the routing decision. The tool list lives in `tools/AssistantTools.kt`; the GBNF grammar is built from it in `tools/ToolGrammar.kt` (and wrapped per model by the dialects in `llm/`). Fifteen tools: `set_alarm`, `set_timer`, `show_alarms`, `create_reminder`, `send_message`, `call_contact`, `open_app`, `read_screen`, `take_screenshot`, `tap_text`, `scroll`, `navigate`, `read_notifications`, `answer`, `unsupported`. Learned phrases (`assistant/CommandCache.kt`) can skip the model for the cacheable tools only: alarms, timers, show_alarms, create_reminder, open_app, read_screen, take_screenshot, read_notifications, scroll, navigate. It never caches `answer`, `unsupported`, `send_message`, `call_contact` or `tap_text`.
+The 1B's single grammar-constrained tool call is the routing decision. The tool list lives in `tools/AssistantTools.kt`; the GBNF grammar is built from it in `tools/ToolGrammar.kt`. Fifteen tools: `set_alarm`, `set_timer`, `show_alarms`, `create_reminder`, `send_message`, `call_contact`, `open_app`, `read_screen`, `take_screenshot`, `tap_text`, `scroll`, `navigate`, `read_notifications`, `answer`, `unsupported`. Learned phrases (`assistant/CommandCache.kt`) can skip the model for the cacheable tools only: alarms, timers, show_alarms, create_reminder, open_app, read_screen, take_screenshot, read_notifications, scroll, navigate. It never caches `answer`, `unsupported`, `send_message`, `call_contact` or `tap_text`.
 
 - **Never trust LLM date math.** The model only reports what it heard (hour, minute, hours/minutes/seconds, "tomorrow"); code decides the rest. `TimeResolver` totals durations and validates and reconciles the hour against am/pm and part of day. `StatedTime` replaces the model's time with the one the words state ("in 30 minutes" is now plus 30 minutes; "at 9:35" is 9:35) when the transcript states exactly one. A day beyond tomorrow is declined, and a reminder time equal to the current minute is treated as no time. Past times roll to the next day in `ReminderStore`. All heavily unit-tested.
 - Context size 2048; the prompt cache (`.prompt-cache` beside each model) saves prefill, and is tied to the install that wrote it (`PromptCacheGuard`).
@@ -89,7 +89,7 @@ No Room database.
 | Asset | Default file | ~Size |
 |---|---|---|
 | STT | `ggml-tiny.en-q5_1.bin` (alt: `ggml-base.en-q5_1.bin`) | 32 / 60 MB |
-| LLM | Gemma 3 1B IT QAT Q4_0 GGUF (alt: 4B; experimental FunctionGemma 270M Q8_0) | ~0.72 / ~2.5 GB / ~0.29 GB |
+| LLM | Gemma 3 1B IT QAT Q4_0 GGUF (alt: 4B) | ~0.72 / ~2.5 GB |
 | TTS | `vits-piper-en_US-amy-medium` (tar.bz2: onnx + tokens + espeak data) | ~67 MB (85 MB unpacked) |
 | OCR | `eng.traineddata` (Tesseract fast), for screens with no accessibility text | ~4 MB |
 | VAD | `silero_vad.onnx` (v5.1.2), optional: ends a capture sooner in noisy rooms | ~2.3 MB |
