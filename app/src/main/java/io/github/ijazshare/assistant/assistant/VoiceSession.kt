@@ -51,6 +51,7 @@ import io.github.ijazshare.assistant.tools.ContactResolution
 import io.github.ijazshare.assistant.tools.MessageBody
 import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.StatedTime
+import io.github.ijazshare.assistant.tools.TimeWords
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
 import io.github.ijazshare.assistant.tools.ToolResult
@@ -175,6 +176,14 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * or a typed command alike, so a reply that would reopen it can tell it was told not to.
      */
     private var stops = 0
+
+    /**
+     * [stops] and the dismissals as they stood when the current command began, not when the model
+     * was done with it: a dismissal during transcription or inference is as much a stop as one
+     * after, and must neither hold a send nor reopen the microphone.
+     */
+    private var stopsAtStart = 0
+    private var dismissalsAtStart = 0
 
     /** The capture coroutine, kept so a typed command can stop the microphone. */
     private var listening: Job? = null
@@ -336,6 +345,16 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     fun dismissed() {
         PendingSend.dismiss()
         stopListening()
+        // The command in flight is abandoned too. stopListening only ends the capture, so a "Text Sam"
+        // dismissed while Thinking went on to ask for the words, hold the send and reopen the microphone.
+        processing?.cancel()
+        piper.stop()
+    }
+
+    /** Notes the stops and dismissals so far: what a command that began now must not have outlived. */
+    private fun beginCommand() {
+        stopsAtStart = stops
+        dismissalsAtStart = PendingSend.dismissals()
     }
 
     /**
@@ -352,7 +371,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         stopListening()
         // stopListening gave media back; a typed command still speaks, so take focus again.
         requestAudioFocus()
-        scope.launch {
+        beginCommand()
+        processing = scope.launch {
             _state.value = SessionState.Thinking(typed)
             act(typed, sttMillis = 0)
         }
@@ -472,6 +492,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     private suspend fun handle(event: CaptureEvent.Finished) {
         AssistantSounds.capturing = false
+        beginCommand()
         if (event.samples.isEmpty()) {
             fail("I did not hear anything.")
             return
@@ -636,6 +657,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * words keeps the model's numbers, as before.
      */
     private fun withSpokenTime(transcript: String, call: ToolCall): ToolCall {
+        // The tools have only today and tomorrow, so the model cannot have a day past tomorrow right.
+        if (TimeWords.beyondTomorrow(transcript)) {
+            Log.i(TAG, "declining a day past tomorrow in [$transcript]")
+            return ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "I can only set that for today or tomorrow."))
+        }
         val stated = call.arguments["hour"]?.toIntOrNull()
         val minute = call.arguments["minute"]?.toIntOrNull()
         val spoken = StatedTime.of(transcript, stated, minute) ?: return call
@@ -662,8 +688,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         val waiting = PendingSend.take(System.currentTimeMillis()) ?: return false
         // "No, text Bob" is the next order, not the words for the first contact.
         if (PendingSend.isNewCommand(transcript)) return false
-        val call = if (PendingSend.isCancel(transcript)) {
+        val call = if (PendingSend.isCancel(transcript, waiting.display)) {
             ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it."))
+        } else if (PendingSend.isCorrection(transcript, waiting.display)) {
+            // "No, Bob": the name was misheard, and the correction is not a message for the first contact.
+            ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it. Say the whole command again."))
         } else {
             ToolCall(
                 AssistantTools.SEND_MESSAGE,
@@ -682,11 +711,12 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * what it picked arrives here as a number) gets no pending send: the next words are not
      * obviously for anyone, so they are a command.
      */
-    private suspend fun holdSendFor(call: ToolCall): Boolean {
+    private suspend fun holdSendFor(call: ToolCall, dismissalsBefore: Int): Boolean {
         val spoken = call.string("recipient") ?: return false
         val number = withContext(Dispatchers.IO) { contacts.resolveNumber(spoken) } ?: return false
-        PendingSend.hold(PendingSend(number, call.string("display") ?: spoken, System.currentTimeMillis()))
-        return true
+        val send = PendingSend(number, call.string("display") ?: spoken, System.currentTimeMillis())
+        // Not if the owner dismissed the overlay since the command began.
+        return PendingSend.holdUnlessDismissed(send, dismissalsBefore)
     }
 
     /**
@@ -752,7 +782,6 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         resolution: Resolution,
     ) {
         val ready = reconciled(transcript, call)
-        val stopsBefore = stops
 
         // Never pick among several matching contacts silently — "Hassan" matched both a
         // contact and "Dr Hassan ER Chicago", and a blind choice texted the wrong one. Hold
@@ -766,7 +795,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         var result = executor.execute(ready)
         // The executor asked for the words; remember who they are for.
         val askedForWords = ready.tool == AssistantTools.SEND_MESSAGE && !result.success &&
-            ready.string("body") == null && holdSendFor(ready)
+            ready.string("body") == null && holdSendFor(ready, dismissalsAtStart)
 
         result = summarisedScreen(transcript, call, result)
 
@@ -828,7 +857,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // Straight back to the microphone, so the owner can answer the question without summoning
         // again. start() is the ordinary summon, and a stop since this command began (the overlay
         // dismissed, a switch to typing) means they did not want it.
-        if (askedForWords && source == QuerySource.VOICE && stops == stopsBefore) start()
+        if (askedForWords && source == QuerySource.VOICE && stops == stopsAtStart) start()
     }
 
     /**

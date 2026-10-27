@@ -86,4 +86,68 @@ class PendingSendTest {
         listOf("Call me when you land", "I'll text you later", "Send me the report", "See you at six", "Call you back")
             .forEach { assertThat(PendingSend.isNewCommand(it)).isFalse() }
     }
+
+    @Test
+    fun `a dismissal during the command stops its send being held`() {
+        val now = 1_000_000L
+        // "Text Sam", dismissed while it was still thinking: the question is asked after the dismissal.
+        val began = PendingSend.dismissals()
+        PendingSend.dismiss()
+        assertThat(PendingSend.holdUnlessDismissed(PendingSend("+15550101", "Sam Lee", now), began)).isFalse()
+        assertThat(PendingSend.take(now + 1_000L)).isNull()
+    }
+
+    @Test
+    fun `a send is held when nothing was dismissed since the command began`() {
+        val now = 1_000_000L
+        val began = PendingSend.dismissals()
+        assertThat(PendingSend.holdUnlessDismissed(PendingSend("+15550101", "Sam Lee", now), began)).isTrue()
+        assertThat(PendingSend.take(now + 1_000L)?.display).isEqualTo("Sam Lee")
+    }
+
+    @Test
+    fun `a corrected name is not a message for the first contact`() {
+        listOf("No, Bob", "No, I said Bob", "Not Sam, Bob", "No, it's Bob.", "Not Sam", "Nope, Bob Ng")
+            .forEach { assertThat(PendingSend.isCorrection(it, "Sam Lee")).isTrue() }
+    }
+
+    @Test
+    fun `a message that opens with no is still a message, not a correction`() {
+        listOf("No problem, see you at six", "No, I'm not coming", "No, Bob is late", "See you at six", "Bob called")
+            .forEach { assertThat(PendingSend.isCorrection(it, "Sam Lee")).isFalse() }
+    }
+
+    @Test
+    fun `wait and other asides around a cancel are still a cancel`() {
+        listOf(
+            "Wait, cancel",
+            "Wait, no",
+            "No, I changed my mind",
+            "Don't text him",
+            "Cancel the message to Sam",
+            "Never mind, I'll call him",
+            "Hold on",
+            "Never mind, see you at six",
+        ).forEach { assertThat(PendingSend.isCancel(it, "Sam Lee")).isTrue() }
+    }
+
+    @Test
+    fun `a message with words of its own is not a cancel even after wait or hold`() {
+        listOf("Wait, I'll be there at six", "Hold on, I'm coming", "Cancel my appointment tomorrow")
+            .forEach { assertThat(PendingSend.isCancel(it, "Sam Lee")).isFalse() }
+    }
+
+    @Test
+    fun `an order with a polite opening is a command, not the words for the first contact`() {
+        listOf(
+            "Please text Bob instead",
+            "Can you text Bob instead",
+            "Um, text Bob",
+            "Could you call Bob",
+            "Bob, text him instead",
+        )
+            .forEach { assertThat(PendingSend.isNewCommand(it)).isTrue() }
+        assertThat(PendingSend.isNewCommand("Can you call me when you land")).isFalse()
+        assertThat(PendingSend.isNewCommand("I'll call you instead")).isFalse()
+    }
 }

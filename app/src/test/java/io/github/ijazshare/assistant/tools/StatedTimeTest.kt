@@ -192,4 +192,44 @@ class StatedTimeTest {
     fun `the day after tomorrow is not tomorrow`() {
         assertThat(spoken("remind me the day after tomorrow at 9 am", hour = 9, minute = 0)?.tomorrow).isNull()
     }
+
+    @Test
+    fun `a stated hour without am or pm still beats an in in the task`() {
+        assertThat(spoken("remind me at 9 to put in 2 hours of overtime", hour = 9, minute = 0))
+            .isEqualTo(StatedTime.At(9, 0, null))
+        assertThat(spoken("remind me at 8 tonight to put in 2 hours of study", hour = 20, minute = 0))
+            .isEqualTo(StatedTime.At(20, 0, null))
+        assertThat(spoken("remind me tomorrow morning at 9 to log in 3 hours", hour = 9, minute = 0))
+            .isEqualTo(StatedTime.At(9, 0, true))
+        assertThat(StatedTime.relativeMinutes("remind me 9 o'clock to put in 2 hours of overtime")).isNull()
+        assertThat(StatedTime.relativeMinutes("remind me 8 tonight to put in 2 hours of study")).isNull()
+    }
+
+    @Test
+    fun `a clock time inside the task does not hide a real in N minutes`() {
+        assertThat(spoken("remind me to leave for my 3 pm appointment in 30 minutes", hour = 15, minute = 0))
+            .isEqualTo(StatedTime.At(9, 34, false))
+        assertThat(spoken("remind me about the 3 pm call in 20 minutes", hour = 15, minute = 0))
+            .isEqualTo(StatedTime.At(9, 24, false))
+    }
+
+    @Test
+    fun `for noon or midnight in the task does not override a stated hour`() {
+        assertThat(spoken("remind me at 9 am to book a table for noon", hour = 9, minute = 0))
+            .isEqualTo(StatedTime.At(9, 0, null))
+        assertThat(spoken("remind me tomorrow at 8 am to move the meeting for noon", hour = 8, minute = 0))
+            .isEqualTo(StatedTime.At(8, 0, true))
+        assertThat(spoken("remind me at 10 pm to set the timer for midnight", hour = 22, minute = 0))
+            .isEqualTo(StatedTime.At(22, 0, null))
+        // Said first, and the only time asked for, it still is the time.
+        assertThat(spoken("remind me for noon to put in 2 hours of study", hour = 12, minute = 0))
+            .isEqualTo(StatedTime.At(12, 0, null))
+    }
+
+    @Test
+    fun `a day past tomorrow is recognised so it can be declined`() {
+        assertThat(TimeWords.beyondTomorrow("remind me the day after tomorrow at 9 am")).isTrue()
+        assertThat(TimeWords.beyondTomorrow("remind me tomorrow at 9 am")).isFalse()
+        assertThat(TimeWords.beyondTomorrow("remind me at 9 after the meeting tomorrow")).isFalse()
+    }
 }

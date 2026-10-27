@@ -56,8 +56,9 @@ object StatedTime {
                 reconciled to (minuteSaid(transcript, words, reconciled) ?: minute ?: 0)
             }
         }
-        // "The day after tomorrow" is two days on, which only the model's own day can say.
-        val dayAfter = words.zipWithNext().any { it == "after" to "tomorrow" }
+        // "The day after tomorrow" is two days on, which neither this nor the tools can say: the caller
+        // declines it first (see [TimeWords.beyondTomorrow]), and here it is left to the model's day.
+        val dayAfter = TimeWords.beyondTomorrow(transcript)
         return At(said, minutes, tomorrow = if ("tomorrow" in words && !dayAfter) true else null)
     }
 
@@ -66,7 +67,11 @@ object StatedTime {
         val at = words.indexOfFirst { it in named }
         if (at < 0) return false
         val otherHour = words.any { it !in NOONS && TimeResolver.clockHour(it) != null }
-        return !otherHour || words.getOrNull(at - 1) in AT_CUES
+        if (!otherHour) return true
+        val before = words.getOrNull(at - 1)
+        // "At 9 am to book a table for noon" is 9: "for noon" names the time only when no other hour came first.
+        val hourFirst = words.take(at).any { TimeResolver.clockHour(it) != null }
+        return before == "at" || (before == "for" && !hourFirst)
     }
 
     /**
@@ -117,7 +122,7 @@ object StatedTime {
         val words = clockWords(transcript)
         // A clock time said first is the time asked for, and a later "in" is a phrasal verb or part of
         // the task: "at 5 pm to put in 2 hours of overtime". Said after, the length is the time asked for.
-        val clock = words.indexOfFirst { it in MERIDIEMS || it in NOONS || it == "midnight" }
+        val clock = TimeWords.clockIndex(words)
         val minutes = words.indices.filter { words[it] == "in" && (clock < 0 || it < clock) }
             .firstNotNullOfOrNull { durationAt(words, it + 1) } ?: return null
         return minutes.roundToInt().takeIf { it in 1..MAX_RELATIVE_MINUTES }
@@ -205,9 +210,8 @@ object StatedTime {
 
     // 9:35 and 9.35, or 9 35 with the am or pm that makes it a time and not two numbers.
     private val CLOCK_DIGITS = Regex("""\b(\d{1,2})(?:[:.](\d{2})(?!\d)|\s(\d{2})\s?(?:am|pm)\b)""")
-    private val MERIDIEMS = setOf("am", "pm")
-    private val AT_CUES = setOf("at", "for")
-    private val NOONS = setOf("noon", "midday")
+    internal val MERIDIEMS = setOf("am", "pm")
+    internal val NOONS = setOf("noon", "midday")
     private val ARTICLES = setOf("a", "an")
     private val HALVES = listOf(listOf("and", "half"), listOf("and", "a", "half"), listOf("and", "an", "half"))
 
@@ -221,7 +225,7 @@ object StatedTime {
         "hr" to 60.0,
         "hrs" to 60.0,
     )
-    private val TENS = mapOf(
+    internal val TENS = mapOf(
         "twenty" to 20,
         "thirty" to 30,
         "forty" to 40,
