@@ -129,6 +129,26 @@ class StatedTimeTest {
     }
 
     @Test
+    fun `a range of numbers is not a clock time`() {
+        // "2 to 3" with no at, for or am/pm is a range: no time is stated, and the model's hour stands.
+        assertThat(spoken("Remind me in 2 to 3 hours", hour = 16, minute = 0)).isNull()
+        assertThat(TimeResolver.reconcileHour("Remind me in 2 to 3 hours", 16)).isEqualTo(16)
+        assertThat(spoken("Remind me in 5 to 10 minutes", hour = 14, minute = 10)).isNull()
+        assertThat(TimeResolver.reconcileHour("Remind me in 5 to 10 minutes", 14)).isEqualTo(14)
+        assertThat(spoken("Remind me to buy 2 to 3 apples tomorrow", hour = 9, minute = 0)).isNull()
+        assertThat(TimeResolver.reconcileHour("Remind me to buy 2 to 3 apples tomorrow", 9)).isEqualTo(9)
+        // With its am or pm, or after at, it is a time again.
+        assertThat(spoken("wake me ten to six am", hour = 5, minute = 50)).isEqualTo(StatedTime.At(5, 50, null))
+        assertThat(spoken("remind me at ten to six", hour = 17, minute = 50)).isEqualTo(StatedTime.At(17, 50, null))
+    }
+
+    @Test
+    fun `half 7 pm is half past, so its minutes stay the model's`() {
+        assertThat(spoken("Remind me at half 7 pm", hour = 19, minute = 30)).isEqualTo(StatedTime.At(19, 30, null))
+        assertThat(spoken("Remind me at quarter 8 pm", hour = 20, minute = 15)).isEqualTo(StatedTime.At(20, 15, null))
+    }
+
+    @Test
     fun `with two times p m is read as main read it, which is not at all`() {
         // Two times: the model's hour stands, as on main, and "p.m." does not tip it to the 9.
         assertThat(spoken("Remind me at 9 to call Ali at 5 p.m.", hour = 17, minute = 0)).isNull()

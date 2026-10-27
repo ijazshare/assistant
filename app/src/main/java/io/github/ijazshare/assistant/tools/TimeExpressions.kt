@@ -60,7 +60,7 @@ internal object TimeExpressions {
         else -> {
             val bare = words[at] != "at" && words[at] != "for"
             val from = if (bare) at else at + 1
-            namedAt(words, from) ?: pivotAt(words, from) ?: hourAt(words, from, bare)
+            namedAt(words, from) ?: pivotAt(words, from, bare) ?: hourAt(words, from, bare)
         }
     }
 
@@ -77,13 +77,15 @@ internal object TimeExpressions {
         return Expression(kind) to at + (if (twelve) 2 else 1)
     }
 
-    /** "Ten to six", "half past three". */
-    private fun pivotAt(words: List<String>, at: Int): Pair<Expression, Int>? {
+    /** "Ten to six", "half past three", after an at or a for, or bare with its am or pm ("ten to six pm"). */
+    private fun pivotAt(words: List<String>, at: Int, bare: Boolean): Pair<Expression, Int>? {
         val (minutes, pivot, hour) = words.drop(at).take(PIVOT_WORDS).takeIf { it.size == PIVOT_WORDS } ?: return null
         val said = TimeResolver.clockHour(hour)
         val timed = TimeResolver.isMinutes(minutes) && said != null &&
             (pivot in TimeResolver.PAST_THE_HOUR || pivot in TimeResolver.TO_THE_HOUR)
-        if (!timed || said == null) return null
+        // Bare, "2 to 3" is a range, as in "in 2 to 3 hours" and "2 to 3 apples"; only an am or pm makes it a time.
+        val cued = !bare || words.getOrNull(at + PIVOT_WORDS) in MERIDIEMS
+        if (!timed || !cued || said == null) return null
         // "Ten to one" is in the hour before one, which is twelve.
         val inHour = when {
             pivot !in TimeResolver.TO_THE_HOUR -> said

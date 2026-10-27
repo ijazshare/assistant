@@ -33,6 +33,9 @@ object StatedTime {
     private const val NOON = 12
     private const val LAST_MINUTE = 59
     private const val MINUTES_PIVOT_HOUR = 3
+
+    /** Words before an hour that say it is not on the hour: "seven oh five pm", "half 7 pm", "quarter 8 pm". */
+    private val NOT_OCLOCK = setOf("oh", "o", "half", "quarter")
     private const val HALF_MINUTE_SECONDS = 30L
     private const val MAX_RELATIVE_MINUTES = 24 * 60
 
@@ -80,11 +83,12 @@ object StatedTime {
     private fun minuteSaid(transcript: String, words: List<String>, hour: Int): Int? {
         val minutes = digitMinutes(transcript, hour)
         if (minutes != null) return minutes.takeIf { it <= LAST_MINUTE }
-        // The hour itself before the cue, not minutes said after it: "seven ten pm" and "7 5 pm" are not 7 o'clock.
+        // The hour itself before the cue, not minutes said after it: "seven ten pm" and "7 5 pm" are not 7 o'clock,
+        // and nor is "half 7 pm", which is half past.
         val oclock = words.indices.any { i ->
             val before = words.getOrNull(i - 1)
             words.getOrNull(i + 1) in TimeExpressions.MERIDIEMS && TimeResolver.clockHour(words[i]) != null &&
-                (before == null || (TimeResolver.clockHour(before) == null && before != "oh" && before != "o"))
+                (before == null || (TimeResolver.clockHour(before) == null && before !in NOT_OCLOCK))
         }
         val inWords = words.windowed(size = MINUTES_PIVOT_HOUR).any { (minutesWord, pivot, next) ->
             TimeResolver.clockHour(next) != null && TimeResolver.isMinutes(minutesWord) &&
