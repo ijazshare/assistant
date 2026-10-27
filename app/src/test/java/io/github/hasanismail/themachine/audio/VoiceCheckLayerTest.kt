@@ -312,6 +312,29 @@ class VoiceCheckLayerTest {
     }
 
     @Test
+    fun `a NaN from the model turns the check off, it does not count as silence`() {
+        // Armed, then NaN for ever: only a model that is believed to be quiet may end the capture.
+        val model = StubModel { if (it < 3) 1f else Float.NaN }
+        val layer = layer(Scripted(began = 16), model)
+
+        assertThat(run(layer, 600).stop).isNull()
+        assertThat(layer.active).isFalse()
+        assertThat(layer.failure).hasMessageThat().contains("NaN")
+        assertThat(layer.stoppedBy).isNull()
+        assertThat(model.windows).hasSize(4) // none after the NaN
+    }
+
+    @Test
+    fun `a NaN or an infinity before arming leaves the energy part alone too`() {
+        for (bad in listOf(Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY)) {
+            val layer = layer(Scripted(began = 16), StubModel { if (it < 2) 1f else bad })
+            assertThat(run(layer, 600).stop).isNull()
+            assertThat(layer.active).isFalse()
+            assertThat(layer.armedFrame).isEqualTo(0)
+        }
+    }
+
+    @Test
     fun `after a reset an identical capture gives an identical result, and the model is reset too`() {
         val random = Random(2)
         val frames = Array(200) { FloatArray(frame) { (random.nextGaussian() * 0.02).toFloat() } }

@@ -17,7 +17,11 @@ import android.media.MediaRecorder
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import io.github.hasanismail.themachine.stt.WhisperEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.currentCoroutineContext
@@ -27,6 +31,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 
 /** What the recorder is doing, for the overlay to draw. */
@@ -89,6 +94,24 @@ class Captured(
     val source: Int,
     val voiceCheck: VoiceCheckReport,
 )
+
+/**
+ * Runs [stop] the moment this scope is cancelled, while its own coroutine is still stuck in a
+ * blocking call that [stop] ends. A completion handler cannot do this: it fires only once the
+ * coroutine has finished, and that is what the blocked call is preventing. Cancel the result once
+ * the blocking is over; [stop] then does not run.
+ */
+internal fun CoroutineScope.stopOnCancel(stop: () -> Unit): Job {
+    val parent = coroutineContext.job
+    // Undispatched, so it is waiting before the caller's next line, however busy the pool is.
+    return launch(start = CoroutineStart.UNDISPATCHED) {
+        try {
+            awaitCancellation()
+        } finally {
+            if (parent.isCancelled) stop()
+        }
+    }
+}
 
 /**
  * Opens the microphone, streams level events, and stops when [Endpointer] says the
@@ -168,7 +191,7 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
         // AudioRecord.read is an uninterruptible native call, so a cancelled collector does
         // not end the pump — it waits for the current read. stop() unblocks it; without this
         // a dismissal left the microphone open behind whatever the user went back to.
-        val stopOnCancel = currentCoroutineContext().job.invokeOnCompletion { runCatching { record.stop() } }
+        val stopOnCancel = stopOnCancel { runCatching { record.stop() } }
         return try {
             record.startRecording()
             // The one moment that decides whether the user is heard. Everything before it
@@ -192,7 +215,7 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
                     "armed=${check.armed} armedFrame=${check.armedFrame}" +
                     (endpointer.failure?.let { " voiceCheckFailed=${it.message}" } ?: ""),
             )
-            stopOnCancel.dispose()
+            stopOnCancel.cancel()
             runCatching { record.stop() }
             record.release()
             onCaptured?.invoke(

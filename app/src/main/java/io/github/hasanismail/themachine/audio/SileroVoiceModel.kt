@@ -12,6 +12,7 @@ package io.github.hasanismail.themachine.audio
 import com.k2fsa.sherpa.onnx.SileroVadModelConfig
 import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.VadModelConfig
+import io.github.hasanismail.themachine.models.ModelStorage
 import java.io.File
 
 /**
@@ -21,40 +22,77 @@ import java.io.File
  * queue) shares the model's memory with them and would corrupt it.
  *
  * sherpa-onnx ends the whole process, uncatchably, on a window that is not [VoiceCheckLayer.WINDOW]
- * samples, and a v4 model wants 512. So [open] is for the one file the registry names, after its
- * SHA-256 has been checked, and [probability] refuses any other length before the native call.
+ * samples, and a v4 model wants 512. So [open] refuses every file but the pinned v5.1.2 one, by
+ * size and SHA-256, whoever calls it, and [VoiceModel.probability] refuses any other window length
+ * before the native call.
  *
- * [Vad] is not thread-safe. Captures use it from the recorder's thread one at a time, but a
- * capture that would not stop can overlap the next, and a dismissal can release it mid-capture,
- * so every call is serialised and a released model throws, which turns the check off, instead of
- * reaching freed memory.
+ * The [Vad] has one memory, and it is not thread-safe. Captures use it from the recorder's thread
+ * one at a time, but a capture that would not stop can overlap the next, and a dismissal can release
+ * it mid-capture. So every call is serialised, a released model throws, which turns the check off,
+ * instead of reaching freed memory, and each capture gets its own [newCapture] handle: only the
+ * newest may use the memory, and an older one throws, so no window of one capture is ever heard by
+ * another.
  */
-class SileroVoiceModel private constructor(private val vad: Vad) : VoiceModel {
+class SileroVoiceModel internal constructor(private val engine: Engine) {
+    /** What [Vad] is to this class, so the ownership rules can be tested without native code. */
+    internal interface Engine {
+        fun compute(window: FloatArray): Float
+
+        fun reset()
+
+        fun release()
+    }
+
     private var released = false
+    private var owner: VoiceModel? = null
 
-    @Synchronized
-    override fun probability(window: FloatArray): Float {
-        check(!released) { "voice model released" }
-        require(window.size == VoiceCheckLayer.WINDOW) { "window of ${window.size} samples" }
-        return vad.compute(window)
-    }
-
-    @Synchronized
-    override fun reset() {
-        check(!released) { "voice model released" }
-        vad.reset()
-    }
+    /**
+     * A model for one capture. Its [VoiceModel.reset] takes the memory over from whichever capture
+     * had it; from then on the older capture's [VoiceModel.probability] throws.
+     */
+    fun newCapture(): VoiceModel = Capture()
 
     @Synchronized
     fun release() {
         if (released) return
         released = true
-        vad.release()
+        engine.release()
+    }
+
+    private inner class Capture : VoiceModel {
+        override fun probability(window: FloatArray): Float = synchronized(this@SileroVoiceModel) {
+            check(!released) { "voice model released" }
+            check(owner === this) { "voice model taken over by a newer capture" }
+            require(window.size == VoiceCheckLayer.WINDOW) { "window of ${window.size} samples" }
+            engine.compute(window)
+        }
+
+        override fun reset() = synchronized(this@SileroVoiceModel) {
+            check(!released) { "voice model released" }
+            owner = this
+            engine.reset()
+        }
+    }
+
+    private class VadEngine(private val vad: Vad) : Engine {
+        override fun compute(window: FloatArray) = vad.compute(window)
+
+        override fun reset() = vad.reset()
+
+        override fun release() = vad.release()
     }
 
     companion object {
-        /** Loads the model at [file]: the verified Silero v5.1.2 file, nothing else. */
+        /** The one file this can run: Silero VAD v5.1.2, which takes 576-sample windows. */
+        const val SHA256 = "2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f"
+        const val BYTES = 2_327_524L
+
+        /**
+         * Loads the model at [file]: the Silero v5.1.2 file, nothing else.
+         * @throws IllegalArgumentException if the file is anything else
+         */
         fun open(file: File): SileroVoiceModel {
+            requirePinned(file, SHA256, BYTES)
             // Class defaults, but for the path. The segmentation fields are unused by compute()
             // and only have to validate.
             val config = VadModelConfig(
@@ -70,7 +108,14 @@ class SileroVoiceModel private constructor(private val vad: Vad) : VoiceModel {
                 numThreads = 1,
                 provider = "cpu",
             )
-            return SileroVoiceModel(Vad(null, config))
+            return SileroVoiceModel(VadEngine(Vad(null, config)))
+        }
+
+        /** About 2.3 MB, so the hash is a few milliseconds. */
+        internal fun requirePinned(file: File, sha256: String, bytes: Long) {
+            require(file.isFile && file.length() == bytes) { "not the pinned voice model: size" }
+            val actual = ModelStorage(file.absoluteFile.parentFile!!).sha256(file)
+            require(actual.equals(sha256, ignoreCase = true)) { "not the pinned voice model: hash" }
         }
     }
 }

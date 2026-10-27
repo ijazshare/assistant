@@ -10,6 +10,7 @@
 package io.github.hasanismail.themachine.models
 
 import com.google.common.truth.Truth.assertThat
+import io.github.hasanismail.themachine.audio.SileroVoiceModel
 import org.junit.Test
 import java.io.File
 
@@ -123,6 +124,9 @@ class ModelRegistryTest {
         assertThat(ModelRole.VAD.required).isFalse()
         assertThat(vad.sha256).isEqualTo("2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f")
         assertThat(vad.byteSize).isEqualTo(2_327_524L)
+        // SileroVoiceModel.open refuses anything else itself, so the two must name the same file.
+        assertThat(vad.sha256).isEqualTo(SileroVoiceModel.SHA256)
+        assertThat(vad.byteSize).isEqualTo(SileroVoiceModel.BYTES)
         assertThat(vad.url).contains("/v5.1.2/")
         assertThat(vad.isDefault).isTrue()
     }

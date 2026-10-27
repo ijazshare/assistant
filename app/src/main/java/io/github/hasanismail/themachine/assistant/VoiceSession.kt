@@ -154,12 +154,10 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     /**
      * The voice check's model, loaded once the first time it is wanted, if the optional download is
-     * there. Null runs the energy endpointer alone.
+     * there. Empty runs the energy endpointer alone. A file that is not the verified model, or would
+     * not load, is not retried.
      */
-    private var voiceModel: SileroVoiceModel? = null
-
-    /** Set when the file on disk is not the verified model or would not load, so it is not retried. */
-    private var voiceModelRejected = false
+    private val voiceModel = VoiceModelSlot<SileroVoiceModel> { it.release() }
 
     private val router = ModelRouter(context)
 
@@ -363,28 +361,22 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * Loads the voice check's model, if the optional download is installed. Never fails the
      * session: without it the microphone closes on the energy endpointer alone, as it always has.
      *
-     * The file is hashed, not just measured, before it is handed to native code: a model with
-     * another window size ends the process. About 2.3 MB, so the hash is a few milliseconds.
+     * [SileroVoiceModel.open] hashes the file before it is handed to native code: a model with
+     * another window size ends the process.
      */
     private fun prepareVoiceCheck() {
-        if (voiceModel != null || voiceModelRejected) return
         val asset = installed(ModelRole.VAD) ?: return
-        if (!storage.verify(asset)) {
-            Log.w(TAG, "voice check: ${asset.fileName} is not the expected model; running without it")
-            voiceModelRejected = true
-            return
-        }
-        // LinkageError as well: a native library that will not load is an Error, not an Exception.
-        voiceModel = try {
-            SileroVoiceModel.open(storage.target(asset))
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Log.w(TAG, "voice check: could not load the model", e)
-            voiceModelRejected = true
-            null
-        } catch (e: LinkageError) {
-            Log.w(TAG, "voice check: native library missing", e)
-            voiceModelRejected = true
-            null
+        voiceModel.prepare {
+            // LinkageError as well: a native library that will not load is an Error, not an Exception.
+            try {
+                SileroVoiceModel.open(storage.target(asset))
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Log.w(TAG, "voice check: ${asset.fileName} is not the expected model or would not load", e)
+                null
+            } catch (e: LinkageError) {
+                Log.w(TAG, "voice check: native library missing", e)
+                null
+            }
         }
     }
 
@@ -403,10 +395,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // The endpointer ignores the first few frames, which are the microphone opening
         // rather than anything in the room. The recorder makes one for each source it opens.
         // The voice check, if its model is installed, sits on top of each and starts afresh with it,
-        // the model's memory included.
-        val model = voiceModel
+        // the model's memory included. Each gets its own handle on the model, so a capture that was
+        // slow to stop cannot feed its audio into the next one's memory.
+        val model = voiceModel.current()
         val newEndpointer = {
-            VoiceCheckLayer(Endpointer(leadInMillis = Endpointer.MIC_SETTLE_MILLIS)::accept, model)
+            VoiceCheckLayer(Endpointer(leadInMillis = Endpointer.MIC_SETTLE_MILLIS)::accept, model?.newCapture())
         }
         var finished: CaptureEvent.Finished? = null
         try {
@@ -863,8 +856,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         teardown.launch {
             // Safe whenever it runs: a model that is released answers the capture still using it
             // with an error, which turns the check off for that capture.
-            voiceModel?.release()
-            voiceModel = null
+            voiceModel.release()
             // Waited for, not raced: the save walks the very cells nativeFree releases,
             // and a use-after-free here is the same SIGSEGV that state saving already
             // cost once.
