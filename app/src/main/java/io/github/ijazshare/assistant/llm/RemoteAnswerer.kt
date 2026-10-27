@@ -29,8 +29,8 @@ import java.util.concurrent.TimeUnit
  * API — the lingua franca that OpenRouter, llama.cpp's server, vLLM and Ollama all speak, so
  * the endpoint swaps to a box at home by changing a URL and nothing else.
  *
- * Only the question text and the user's own notes are sent; audio never is, and speech
- * recognition, tool routing and speech synthesis stay on the phone. Every failure — no
+ * Only the question text is sent. Audio, the user's name and their notes never are, and
+ * speech recognition, tool routing and speech synthesis stay on the phone. Every failure — no
  * network, a timeout, a non-2xx, an unparseable body — returns null so the caller falls back
  * to the on-device model exactly as if no remote had been configured.
  */
@@ -41,14 +41,9 @@ class RemoteAnswerer(
         .build(),
 ) {
 
-    suspend fun answer(
-        config: RemoteLlmConfig,
-        question: String,
-        adminName: String,
-        userContext: String,
-    ): Completion? = withContext(Dispatchers.IO) {
+    suspend fun answer(config: RemoteLlmConfig, question: String): Completion? = withContext(Dispatchers.IO) {
         val started = System.nanoTime()
-        val body = runCatching { post(config, requestBody(config.model, question, adminName, userContext)) }
+        val body = runCatching { post(config, requestBody(config.model, question)) }
             .onFailure { Log.w(TAG, "remote answer failed", it) }
             .getOrNull() ?: return@withContext null
         val text = replyText(body) ?: return@withContext null
@@ -98,7 +93,6 @@ class RemoteAnswerer(
         private const val NANOS_PER_MILLI = 1_000_000
         private const val MAX_TOKENS = 160
         private const val TEMPERATURE = 0.2
-        private const val CONTEXT_BUDGET = 1500
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
         private val NOW_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE HH:mm, d MMMM yyyy")
         private val json = Json {
@@ -109,12 +103,13 @@ class RemoteAnswerer(
         /**
          * The same honesty rules the on-device answerer is held to, minus the "offline"
          * framing: a remote model still has no live data, still must not invent a number,
-         * and still cannot act on the phone from a spoken reply.
+         * and still cannot act on the phone from a spoken reply. Nothing about the user is
+         * included: their name and notes go to the on-device model only.
          */
-        fun systemPrompt(adminName: String, userContext: String, now: LocalDateTime = LocalDateTime.now()): String =
+        fun systemPrompt(now: LocalDateTime = LocalDateTime.now()): String =
             buildString {
                 append(
-                    "You are $adminName's assistant, answering by voice on their phone. Answer " +
+                    "You are an assistant answering by voice on a phone. Answer " +
                         "general-knowledge questions — established facts, definitions, arithmetic — in " +
                         "ONE short plain sentence suitable to be read aloud. If a correct answer would need " +
                         "live or changing information you do not have — weather, news, prices, scores, or " +
@@ -124,20 +119,17 @@ class RemoteAnswerer(
                         "the phone from this reply; if asked to do one of those, say you cannot do that here " +
                         "— never claim you did it.",
                 )
-                if (userContext.isNotBlank()) {
-                    append("\n\nAbout $adminName:\n").append(userContext.take(CONTEXT_BUDGET))
-                }
                 append("\n\nNow: ").append(now.format(NOW_FORMAT))
             }
 
         /** The chat-completions request as JSON. Public so it can be checked without a network. */
-        fun requestBody(model: String, question: String, adminName: String, userContext: String): String =
+        fun requestBody(model: String, question: String): String =
             json.encodeToString(
                 ChatRequest.serializer(),
                 ChatRequest(
                     model = model,
                     messages = listOf(
-                        Message("system", systemPrompt(adminName, userContext)),
+                        Message("system", systemPrompt()),
                         Message("user", question),
                     ),
                     maxTokens = MAX_TOKENS,

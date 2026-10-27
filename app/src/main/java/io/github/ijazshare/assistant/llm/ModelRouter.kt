@@ -102,11 +102,12 @@ class ModelRouter(private val context: Context) {
         remote: RemoteLlmConfig? = null,
     ): Completion? {
         // A configured remote model is the stronger answerer and costs the phone no memory,
-        // and only the question text crosses the wire. Any failure falls through to the
+        // and only the question text crosses the wire: the name and notes are for the
+        // on-device model below and nothing else. Any failure falls through to the
         // on-device path exactly as if no remote existed, so a dead network is never a dead
         // assistant.
         if (remote != null) {
-            remoteAnswerer.answer(remote, question, adminName, userContext)?.let { return it }
+            remoteAnswerer.answer(remote, question)?.let { return it }
             Log.i(TAG, "remote model unavailable; falling back to the on-device model")
         }
         return generateWith(AnswerPrompt.build(question, adminName, userContext), AnswerPrompt.MAX_TOKENS)

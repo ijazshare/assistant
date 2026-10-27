@@ -17,7 +17,7 @@ class RemoteAnswererTest {
 
     @Test
     fun `request carries the model, the honesty rules and the question`() {
-        val body = RemoteAnswerer.requestBody("openai/gpt-4o-mini", "who painted the Mona Lisa", "Admin", "")
+        val body = RemoteAnswerer.requestBody("openai/gpt-4o-mini", "who painted the Mona Lisa")
         assertThat(body).contains("\"model\":\"openai/gpt-4o-mini\"")
         assertThat(body).contains("\"role\":\"system\"")
         assertThat(body).contains("never claim you did it")
@@ -42,13 +42,5 @@ class RemoteAnswererTest {
             RemoteAnswerer.replyText("""{"choices":[{"message":{"role":"assistant","content":"   "}}]}"""),
         ).isNull()
         assertThat(RemoteAnswerer.replyText("not json")).isNull()
-    }
-
-    @Test
-    fun `notes about the user are included only when present`() {
-        assertThat(RemoteAnswerer.systemPrompt("Admin", "")).doesNotContain("About Admin")
-        assertThat(
-            RemoteAnswerer.systemPrompt("Admin", "Prefers metric units."),
-        ).contains("About Admin:\nPrefers metric units.")
     }
 }
