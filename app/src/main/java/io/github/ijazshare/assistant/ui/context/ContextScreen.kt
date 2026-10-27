@@ -45,10 +45,10 @@ import androidx.compose.ui.unit.dp
 import io.github.ijazshare.assistant.context.AssistantFile
 import io.github.ijazshare.assistant.context.AssistantFiles
 import io.github.ijazshare.assistant.settings.AssistantSettings
-import io.github.ijazshare.assistant.ui.machine.AssistantRule
-import io.github.ijazshare.assistant.ui.machine.TrackingBox
-import io.github.ijazshare.assistant.ui.machine.rememberSnapProgress
-import io.github.ijazshare.assistant.ui.machine.scanlines
+import io.github.ijazshare.assistant.ui.assistant.AssistantRule
+import io.github.ijazshare.assistant.ui.assistant.TrackingBox
+import io.github.ijazshare.assistant.ui.assistant.rememberSnapProgress
+import io.github.ijazshare.assistant.ui.assistant.scanlines
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantDump
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel

@@ -45,9 +45,9 @@ import io.github.ijazshare.assistant.permissions.GrantMechanism
 import io.github.ijazshare.assistant.permissions.PermissionInspector
 import io.github.ijazshare.assistant.permissions.PermissionState
 import io.github.ijazshare.assistant.permissions.PermissionTier
-import io.github.ijazshare.assistant.ui.machine.AssistantRule
-import io.github.ijazshare.assistant.ui.machine.TrackingBox
-import io.github.ijazshare.assistant.ui.machine.rememberSnapProgress
+import io.github.ijazshare.assistant.ui.assistant.AssistantRule
+import io.github.ijazshare.assistant.ui.assistant.TrackingBox
+import io.github.ijazshare.assistant.ui.assistant.rememberSnapProgress
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
 import io.github.ijazshare.assistant.ui.theme.AssistantReadout

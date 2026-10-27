@@ -372,6 +372,7 @@ class LocalAnswersTest {
         val london = "It is 9:57 PM in London."
         assertThat(asked("Hey, what time is it in Sydney?")).isEqualTo("It is 8:57 AM on Tuesday in Sydney.")
         assertThat(asked("Hey Machine, what time is it in London?")).isEqualTo(london)
+        assertThat(asked("Hey Assistant, what time is it in London?")).isEqualTo(london)
         assertThat(asked("Okay, what's the time in Paris?")).isEqualTo("It is 10:57 PM in Paris.")
         assertThat(asked("Um, what time is it in Tokyo?")).isEqualTo(tokyo)
         assertThat(asked("So what's the time in Lagos?")).isEqualTo("It is 10:57 PM in Lagos.")

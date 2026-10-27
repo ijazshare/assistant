@@ -22,7 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dagger.hilt.android.AndroidEntryPoint
-import io.github.ijazshare.assistant.ui.machine.scanlines
+import io.github.ijazshare.assistant.ui.assistant.scanlines
 import io.github.ijazshare.assistant.ui.onboarding.AccessChecklist
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantTheme

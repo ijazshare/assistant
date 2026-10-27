@@ -7,7 +7,7 @@
  * Software Foundation, either version 3 of the License, or (at your option) any
  * later version. See the LICENSE file in the project root for the full text.
  */
-package io.github.ijazshare.assistant.ui.machine
+package io.github.ijazshare.assistant.ui.assistant
 
 import android.app.ActivityManager
 import android.content.Context

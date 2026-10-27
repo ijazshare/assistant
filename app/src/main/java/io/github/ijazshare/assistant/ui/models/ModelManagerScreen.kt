@@ -43,11 +43,11 @@ import io.github.ijazshare.assistant.models.ModelRegistry
 import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
-import io.github.ijazshare.assistant.ui.machine.AssistantRule
-import io.github.ijazshare.assistant.ui.machine.IndeterminateCells
-import io.github.ijazshare.assistant.ui.machine.TrackingBox
-import io.github.ijazshare.assistant.ui.machine.rememberSnapProgress
-import io.github.ijazshare.assistant.ui.machine.scanlines
+import io.github.ijazshare.assistant.ui.assistant.AssistantRule
+import io.github.ijazshare.assistant.ui.assistant.IndeterminateCells
+import io.github.ijazshare.assistant.ui.assistant.TrackingBox
+import io.github.ijazshare.assistant.ui.assistant.rememberSnapProgress
+import io.github.ijazshare.assistant.ui.assistant.scanlines
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
 import io.github.ijazshare.assistant.ui.theme.AssistantReadout

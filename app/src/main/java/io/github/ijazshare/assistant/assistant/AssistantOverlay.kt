@@ -59,9 +59,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.ijazshare.assistant.tools.Contact
-import io.github.ijazshare.assistant.ui.machine.IndeterminateCells
-import io.github.ijazshare.assistant.ui.machine.LevelMeter
-import io.github.ijazshare.assistant.ui.machine.scanlines
+import io.github.ijazshare.assistant.ui.assistant.IndeterminateCells
+import io.github.ijazshare.assistant.ui.assistant.LevelMeter
+import io.github.ijazshare.assistant.ui.assistant.scanlines
 
 // Halo HUD palette for the overlay: Cortana cyan on a translucent UNSC-navy hologram.
 private val OnCard = Color(0xFFDCF2FF)

@@ -31,7 +31,7 @@ internal object WorldClock {
 
     /** Said before a question without changing it: "hey", "okay so", "can you tell me", "do you know". */
     private val LEAD = Regex(
-        """^(?:\W*\b(?:hey(?:\s+machine)?|hi|ok(?:ay)?|um+|uh+|erm?|so|well|and|alright|please|excuse\s+me|""" +
+        """^(?:\W*\b(?:hey(?:\s+(?:machine|assistant))?|hi|ok(?:ay)?|um+|uh+|erm?|so|well|and|alright|please|excuse\s+me|""" +
             """sorry)\b)*\W*(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?|do\s+you\s+know\s+|""" +
             """i(?:\s+want|\s+would\s+like|['’]d\s+like)\s+to\s+know\s+)?""",
         IGNORE_CASE,
