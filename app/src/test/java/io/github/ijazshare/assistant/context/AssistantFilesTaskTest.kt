@@ -107,6 +107,44 @@ class AssistantFilesTaskTest {
         assertThat(task.title).isEqualTo("call Ali")
         assertThat(task.id).isEqualTo(id)
         assertThat(task.done).isFalse()
+        assertThat(task.delivered).isTrue()
+    }
+
+    @Test
+    fun `an unanswered reminder is flagged for a reboot, and comes back once at most`() {
+        val files = files()
+        // "delivered" in the title too: only the bookkeeping comment may change.
+        val id = files.appendTask("check the parcel was delivered", due)
+        files.markDelivered(id)
+        // Snoozed, then fired again: one flag, not two.
+        files.rescheduleTask(id, due.plusMinutes(10))
+        files.markDelivered(id)
+        assertThat(files.readTasks().single().delivered).isTrue()
+        assertThat(Regex("delivered").findAll(files.file(AssistantFiles.TASKS).readText()).count()).isEqualTo(2)
+        // Shown again after a reboot, with no due time left: the flag goes.
+        files.markDelivered(id)
+        val task = files.readTasks().single()
+        assertThat(task.delivered).isFalse()
+        assertThat(task.title).isEqualTo("check the parcel was delivered")
+    }
+
+    @Test
+    fun `a reminder swiped away is not shown again`() {
+        val files = files()
+        val id = files.appendTask("call Ali", due)
+        files.markDelivered(id)
+        assertThat(files.markSeen(id)).isTrue()
+        assertThat(files.readTasks().single().delivered).isFalse()
+    }
+
+    @Test
+    fun `the model is not shown ticked-off tasks`() {
+        val files = files()
+        files.completeTask(files.appendTask("buy milk", null))
+        files.appendTask("call Ali", due)
+        val prompt = files.contextForPrompt()
+        assertThat(prompt).contains("call Ali")
+        assertThat(prompt).doesNotContain("buy milk")
     }
 
     @Test

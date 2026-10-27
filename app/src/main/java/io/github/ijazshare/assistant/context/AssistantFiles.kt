@@ -33,6 +33,8 @@ data class TaskLine(
     val title: String,
     val due: LocalDateTime?,
     val done: Boolean,
+    /** Fired and not yet answered, so a reboot that clears its notification shows it again. */
+    val delivered: Boolean = false,
 )
 
 /**
@@ -134,16 +136,31 @@ class AssistantFiles(private val root: File) {
     }
 
     /**
-     * Marks a task as delivered by dropping its due field, leaving the line otherwise
-     * untouched.
+     * Marks a task as delivered: its due field becomes a `delivered` flag, and the line is
+     * otherwise untouched.
      *
      * Without this a reminder that fired while the process was dead was rescheduled by
      * the very process start the alarm caused: its time was in the past, so it was
      * re-armed five seconds out, fired again, and started over. A reminder set for the
      * evening became a notification every five seconds until the phone was rebooted.
+     *
+     * The flag is for a reboot, which clears notifications: a reminder never answered is
+     * shown again then. That second showing has no due time left and drops the flag, so a
+     * reminder comes back once at most.
      */
     fun markDelivered(id: String): Boolean = rewriteTask(id) { line ->
-        line.replaceFirst(DUE_FIELD, "").replace("  ", " ").trimEnd()
+        line.editComment { it.replace(DELIVERED_FIELD, "").replaceFirst(DUE_FIELD, DELIVERED) }
+    }
+
+    /** The notification was swiped away: seen, so a reboot does not bring it back. */
+    fun markSeen(id: String): Boolean = rewriteTask(id) { line ->
+        line.editComment { it.replace(DELIVERED_FIELD, "") }
+    }
+
+    /** Edits only the trailing bookkeeping comment, never the words the user wrote. */
+    private fun String.editComment(edit: (String) -> String): String {
+        val fields = COMMENT.find(this)?.groups?.get(1) ?: return this
+        return replaceRange(fields.range, edit(fields.value))
     }
 
     private fun parseTask(line: String): TaskLine? {
@@ -155,6 +172,7 @@ class AssistantFiles(private val root: File) {
             due = DUE_FIELD.find(fields)?.groupValues?.get(1)
                 ?.let { runCatching { LocalDateTime.parse(it, ISO) }.getOrNull() },
             done = match.groupValues[BOX_GROUP].equals("x", ignoreCase = true),
+            delivered = DELIVERED_FIELD.containsMatchIn(fields),
         )
     }
 
@@ -200,6 +218,9 @@ class AssistantFiles(private val root: File) {
             "## ${spec.title}\n" + read(spec).lineSequence()
                 // Strip the guidance comments; they are for the user, not the model.
                 .filterNot { it.trimStart().startsWith("<!--") || it.trimStart().startsWith(">") }
+                // And ticked-off tasks: kept, they crowd the open ones, newest first, out of
+                // the model's budget.
+                .filterNot { spec.id == TASKS.id && it.trimStart().startsWith("- [x]", ignoreCase = true) }
                 // And the bookkeeping on task lines, which is for the code.
                 .map { it.replace(INLINE_COMMENT, "").trimEnd() }
                 .joinToString("\n")
@@ -240,6 +261,8 @@ class AssistantFiles(private val root: File) {
          */
         private val TASK_FILE_LOCK = Any()
         private val DUE_FIELD = Regex("""\bdue:(\S+)""")
+        private const val DELIVERED = "delivered"
+        private val DELIVERED_FIELD = Regex("""\s*\b$DELIVERED\b""")
         private val INLINE_COMMENT = Regex("""\s*<!--.*?-->""")
 
         val PROFILE = AssistantFile(

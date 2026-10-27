@@ -43,12 +43,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.ijazshare.assistant.BuildConfig
 import io.github.ijazshare.assistant.R
+import io.github.ijazshare.assistant.context.AssistantFiles
 import io.github.ijazshare.assistant.models.ModelRegistry
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
 import io.github.ijazshare.assistant.permissions.AssistantPermissions
 import io.github.ijazshare.assistant.permissions.PermissionInspector
 import io.github.ijazshare.assistant.settings.AssistantSettings
+import io.github.ijazshare.assistant.tools.ReminderReceiver
 import io.github.ijazshare.assistant.ui.assistant.AssistantRule
 import io.github.ijazshare.assistant.ui.assistant.BootLine
 import io.github.ijazshare.assistant.ui.assistant.BootSequence
@@ -68,6 +70,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // Opened from a reminder's notification: seen, so a reboot does not show it again.
+        intent.getStringExtra(ReminderReceiver.EXTRA_SEEN)?.let { id ->
+            Thread { runCatching { AssistantFiles(this).markSeen(id) } }.start()
+        }
         setContent {
             AssistantTheme {
                 Scaffold(

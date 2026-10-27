@@ -136,19 +136,29 @@ class ReminderStore(private val context: Context) {
      * Re-arms every open, dated task from the file. Returns how many.
      *
      * A reminder whose time passed while the phone was off fires shortly after it comes
-     * back rather than being lost: late is recoverable, silent is not.
+     * back rather than being lost: late is recoverable, silent is not. For the same reason,
+     * [afterBoot] a reminder that fired and was never answered is shown again, because a
+     * reboot cleared its notification. Only then: at any other process start it is still up.
      */
-    fun rescheduleAll(): Int {
+    fun rescheduleAll(afterBoot: Boolean = false): Int {
         val now = LocalDateTime.now()
-        val armed = files.readTasks()
-            .filter { !it.done && it.id != null && it.due != null }
+        val open = files.readTasks().filter { !it.done && it.id != null }
+        val armed = open
+            .filter { it.due != null }
             .count { task ->
                 val due = task.due ?: return@count false
                 val at = if (due.isBefore(now)) now.plusSeconds(LATE_GRACE_SECONDS) else due
                 schedule(task.id ?: return@count false, task.title, at) != null
             }
-        Log.i(TAG, "reminders: re-armed $armed")
-        return armed
+        val shownAgain = if (!afterBoot) {
+            0
+        } else {
+            open.filter { it.due == null && it.delivered }.count { task ->
+                schedule(task.id ?: return@count false, task.title, now.plusSeconds(LATE_GRACE_SECONDS)) != null
+            }
+        }
+        Log.i(TAG, "reminders: re-armed $armed, showing $shownAgain again")
+        return armed + shownAgain
     }
 
     /**

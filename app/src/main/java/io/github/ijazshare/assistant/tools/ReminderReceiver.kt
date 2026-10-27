@@ -46,9 +46,18 @@ class ReminderReceiver : BroadcastReceiver() {
                 Log.i(TAG, "reminder snoozed to $due")
             }
 
+            ACTION_DISMISS -> offMainThread { AssistantFiles(context).markSeen(id) }
+
             else -> {
-                // Recorded as delivered before it is shown, so a process start caused by
-                // this very alarm does not find it overdue and arm it all over again.
+                // Still showing means this is the copy a cold start armed again five seconds
+                // out: AssistantApplication re-arms overdue reminders before this receiver
+                // has marked the reminder delivered. Shown, it alerted twice; marked, it
+                // dropped the flag a reboot needs.
+                val showing = context.getSystemService<NotificationManager>()
+                    ?.activeNotifications?.any { it.id == id.hashCode() } == true
+                if (showing) return
+                // Recorded as delivered before it is shown, so later process starts do not
+                // find it overdue and arm it all over again.
                 offMainThread { AssistantFiles(context).markDelivered(id) }
                 show(context, id, task)
             }
@@ -83,10 +92,11 @@ class ReminderReceiver : BroadcastReceiver() {
         }
         ensureChannel(context)
 
+        // Opening it counts as seen, like a swipe: the activity clears the reboot flag.
         val open = PendingIntent.getActivity(
             context,
-            0,
-            Intent(context, MainActivity::class.java),
+            id.hashCode() * SALT_STRIDE + SALT_OPEN,
+            Intent(context, MainActivity::class.java).putExtra(EXTRA_SEEN, id),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -100,6 +110,8 @@ class ReminderReceiver : BroadcastReceiver() {
             .setContentIntent(open)
             .addAction(0, "Done", action(context, id, task, ACTION_DONE, SALT_DONE))
             .addAction(0, "Snooze 10 min", action(context, id, task, ACTION_SNOOZE, SALT_SNOOZE))
+            // Swiped away counts as seen; anything else left unanswered is shown again after a reboot.
+            .setDeleteIntent(action(context, id, task, ACTION_DISMISS, SALT_DISMISS))
             .setAutoCancel(true)
             .build()
 
@@ -133,12 +145,16 @@ class ReminderReceiver : BroadcastReceiver() {
         private const val TAG = "Assistant"
         const val EXTRA_ID = "id"
         const val EXTRA_TASK = "task"
+        const val EXTRA_SEEN = "seen"
         const val ACTION_FIRE = "io.github.ijazshare.assistant.REMINDER_FIRE"
         const val ACTION_DONE = "io.github.ijazshare.assistant.REMINDER_DONE"
         const val ACTION_SNOOZE = "io.github.ijazshare.assistant.REMINDER_SNOOZE"
+        const val ACTION_DISMISS = "io.github.ijazshare.assistant.REMINDER_DISMISS"
         const val CHANNEL_ID = "reminders"
         private const val SALT_STRIDE = 31
         private const val SALT_DONE = 1
         private const val SALT_SNOOZE = 2
+        private const val SALT_DISMISS = 3
+        private const val SALT_OPEN = 4
     }
 }

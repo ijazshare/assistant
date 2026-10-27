@@ -42,7 +42,7 @@ class ReminderBootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         Thread {
             try {
-                ReminderStore(context).rescheduleAll()
+                ReminderStore(context).rescheduleAll(afterBoot = intent.action == Intent.ACTION_BOOT_COMPLETED)
             } catch (e: IOException) {
                 // An unreadable tasks file at boot must not become a crash on every boot.
                 Log.e("Assistant", "reminder reschedule failed", e)
