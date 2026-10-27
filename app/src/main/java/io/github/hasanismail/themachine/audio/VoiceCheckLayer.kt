@@ -17,7 +17,7 @@ interface VoiceModel {
     /**
      * The probability, 0 to 1, that [window] holds a voice. Exactly [VoiceCheckLayer.WINDOW]
      * samples: 64 of the window before and 512 new. The model remembers what it has heard until
-     * [reset]. May throw; the check is then off for the rest of that capture.
+     * [reset]. May throw; the check is then off for the rest of that capture. A NaN does the same.
      */
     fun probability(window: FloatArray): Float
 
@@ -54,14 +54,27 @@ data class VoiceCheckReport(
  *  - once armed, 25 windows in a row (800 ms) at or below 0.2 end the capture.
  * The constants were fixed on a tuning set and then scored on others without change.
  *
- * With no model, or once it throws, this is the energy part alone: same verdicts, frame for frame.
+ * Two limits of that rule, both measured:
+ *  - 800 ms is the most a pause can last, not what it tolerates. The model's quiet run can begin in
+ *    soft speech just before a pause and carry on into the first words after it, so in noise pauses
+ *    of about 0.66 s have been cut (the gap at which cuts begin, on two held-out captures: whistles,
+ *    and music at -6 dB). In a quiet room a pause past about 0.8 s can be cut.
+ *  - Under a loud bed the model can lose the voice while it is still speaking. On the real clips the
+ *    longest quiet run inside speech was 18 of the 25 windows: a margin of about 224 ms. With a vent
+ *    4 dB louder than the real one, 2 of 400 trials were cut in mid-speech (energy alone cut 74 early,
+ *    layered 76); with the vent at the real level or 6 dB above it, none. A longer wait buys little:
+ *    at 31 windows the captures it saves from stopping more than 1 s late fall from 132 to 13, and
+ *    the early cut the layer adds stays. So it is accepted, not fixed.
+ *
+ * With no model, or once it throws or answers NaN, this is the energy part alone: same verdicts, frame for frame.
  *
  * Windows. The model takes exactly [WINDOW] samples every time: 64 it has already seen and 512
  * new, so a window completes every 512 samples. A wrong length does not throw: the native library
  * ends the whole process. Nothing is fed during the microphone's opening [leadInFrames].
  *
  * One per capture, and per source opened: the filter and the model both start from silence.
- * Not thread-safe.
+ * Not thread-safe. The [model] must be this capture's own: two captures that share a model's
+ * memory would hear each other's audio ([SileroVoiceModel.newCapture]).
  *
  * @param energy the energy part, asked first on every frame with the levels it would get alone:
  *   `Endpointer(...)::accept`.
@@ -165,18 +178,26 @@ class VoiceCheckLayer(
         window[filled++] = y
         if (filled < WINDOW) return false
         val voice = model ?: return false
+        val p = ask(voice) ?: return false
+        return counting && onWindow(p)
+    }
+
+    /** The model's probability for the window; null, with the check off, if it gave none. */
+    private fun ask(voice: VoiceModel): Float? {
         val p = try {
             voice.probability(window)
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            disabled = true
             failure = e
-            return false
+            null
         } finally {
             // The last 64 samples are the context of the next window.
             window.copyInto(window, 0, SHIFT, WINDOW)
             filled = WINDOW - SHIFT
         }
-        return counting && onWindow(p)
+        // A NaN is not silence either: a model that says so is off, not a stop.
+        if (p != null && !p.isFinite()) failure = IllegalStateException("model returned $p")
+        disabled = failure != null
+        return if (disabled) null else p
     }
 
     private fun onWindow(p: Float): Boolean {
