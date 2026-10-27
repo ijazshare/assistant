@@ -103,4 +103,12 @@ class MessageBodyTest {
         // Filler does not make dictation a request.
         assertThat(MessageBody.isRequest("send me the report for tomorrow", "Sam")).isFalse()
     }
+
+    @Test
+    fun `a message to me is dictation, not a request`() {
+        listOf("Text me when you land", "Message me", "Text me right now", "Send me that")
+            .forEach { assertThat(MessageBody.isRequest(it, "Sam")).isFalse() }
+        // "For me" is still only politeness.
+        assertThat(MessageBody.isRequest("Can you send a text to Sam for me", "Sam")).isTrue()
+    }
 }

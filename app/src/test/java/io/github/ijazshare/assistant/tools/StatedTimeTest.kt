@@ -232,4 +232,20 @@ class StatedTimeTest {
         assertThat(TimeWords.beyondTomorrow("remind me tomorrow at 9 am")).isFalse()
         assertThat(TimeWords.beyondTomorrow("remind me at 9 after the meeting tomorrow")).isFalse()
     }
+
+    @Test
+    fun `a second at in the task does not stop the hour being corrected`() {
+        assertThat(spoken("remind me at 6 to look at 2 flats", hour = 2)).isEqualTo(StatedTime.At(6, 0, null))
+    }
+
+    @Test
+    fun `twelve noon and twelve midnight are one time each`() {
+        assertThat(spoken("set an alarm for twelve noon", hour = 0)).isEqualTo(StatedTime.At(12, 0, null))
+        assertThat(spoken("set an alarm for 12 noon", hour = 0)).isEqualTo(StatedTime.At(12, 0, null))
+        assertThat(spoken("set an alarm for twelve midnight", hour = 12)).isEqualTo(StatedTime.At(0, 0, null))
+        // Another hour said still decides: "at 9 am ... for 12 noon" is 9.
+        assertThat(
+            spoken("remind me at 9 am to book a table for 12 noon", hour = 9),
+        ).isEqualTo(StatedTime.At(9, 0, null))
+    }
 }

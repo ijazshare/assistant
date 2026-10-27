@@ -150,4 +150,26 @@ class PendingSendTest {
         assertThat(PendingSend.isNewCommand("Can you call me when you land")).isFalse()
         assertThat(PendingSend.isNewCommand("I'll call you instead")).isFalse()
     }
+
+    @Test
+    fun `an answer that opens with a messaging verb is the message`() {
+        listOf(
+            "Text me when you land", "Message me", "Text me right now", "Send me that", "Call when you land",
+            "Text when you get there", "Ring the bell when you arrive", "Message received", "Send Mom my love",
+        ).forEach { assertThat(PendingSend.isNewCommand(it, "Sam")).isFalse() }
+    }
+
+    @Test
+    fun `a verb straight onto another name is a command, and onto the same name is not`() {
+        listOf("text Bob", "Please text Bob", "Send an email to Bob", "Call Bob Smith", "No, text him")
+            .forEach { assertThat(PendingSend.isNewCommand(it, "Sam")).isTrue() }
+        assertThat(PendingSend.isNewCommand("Text Sam", "Sam")).isFalse()
+        assertThat(PendingSend.isNewCommand("Text Bob I'll be late", "Sam")).isFalse()
+    }
+
+    @Test
+    fun `short refusals stay cancels, the safe side`() {
+        listOf("No thanks", "Please don't", "Don't do it", "Stop it")
+            .forEach { assertThat(PendingSend.isCancel(it, "Sam")).isTrue() }
+    }
 }

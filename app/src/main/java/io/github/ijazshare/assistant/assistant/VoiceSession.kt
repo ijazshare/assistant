@@ -687,7 +687,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private suspend fun answeredPendingSend(transcript: String, sttMillis: Long): Boolean {
         val waiting = PendingSend.take(System.currentTimeMillis()) ?: return false
         // "No, text Bob" is the next order, not the words for the first contact.
-        if (PendingSend.isNewCommand(transcript)) return false
+        if (PendingSend.isNewCommand(transcript, waiting.display)) return false
         val call = if (PendingSend.isCancel(transcript, waiting.display)) {
             ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it."))
         } else if (PendingSend.isCorrection(transcript, waiting.display)) {

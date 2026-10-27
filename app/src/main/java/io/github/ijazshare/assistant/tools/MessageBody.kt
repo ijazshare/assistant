@@ -24,6 +24,7 @@ object MessageBody {
     private const val TRACEABLE_FRACTION = 0.5f
 
     private val WORD = Regex("[^\\p{L}\\p{N}]+")
+    private val FOR_ME = Regex("\\bfor me\\b")
 
     /**
      * Words every messaging command carries, whatever the message: never evidence of one.
@@ -52,7 +53,7 @@ object MessageBody {
         "now", "please", "ok", "okay", "then", "and", "can", "could", "you", "just", "go", "ahead",
         "it", "that", "this", "a", "an", "the", "to", "him", "her", "them", "over", "off", "again",
         "message", "messages", "text", "texts", "sms", "email", "whatsapp", "signal", "telegram", "dm",
-        "msg", "txt", "quick", "quickly", "real", "right", "hey", "for", "me", "up",
+        "msg", "txt", "quick", "quickly", "real", "right", "hey", "for", "up",
     )
 
     /**
@@ -67,7 +68,8 @@ object MessageBody {
      */
     fun isRequest(body: String, recipient: String = ""): Boolean {
         val named = recipient.lowercase().split(WORD).toSet()
-        val words = body.lowercase().split(WORD).filter { it.isNotEmpty() && it !in named }
+        // "For me" is politeness ("text Sam for me"); a "me" anywhere else is dictation: "text me when you land".
+        val words = body.lowercase().replace(FOR_ME, " ").split(WORD).filter { it.isNotEmpty() && it !in named }
         val verb = words.indexOfFirst { it in REQUEST_VERBS }
         // Only politeness may stand in front of the verb: "Now send ...", "Can you text ...".
         if (verb < 0 || words.take(verb).any { it !in REQUEST_WORDS }) return false

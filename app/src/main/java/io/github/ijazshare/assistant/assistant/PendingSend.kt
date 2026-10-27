@@ -115,6 +115,9 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
         // "Call me when you land" is dictation; "call Bob" is not.
         private val ME_WORDS = setOf("me", "you", "us", "back")
 
+        // What may stand between the verb and the name: "send an email to Bob".
+        private val NAME_LEAD = setOf("a", "an", "the", "to", "message", "text", "sms", "email")
+
         private const val MAX_NAME_WORDS = 2
 
         private val NOT_LETTERS = Regex("[^a-z' ]")
@@ -122,6 +125,9 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
 
         private fun wordsOf(transcript: String): List<String> =
             transcript.lowercase().replace('’', '\'').replace(NOT_LETTERS, " ").split(' ').filter { it.isNotEmpty() }
+
+        private fun casedWordsOf(transcript: String): List<String> =
+            transcript.replace('’', '\'').replace(NOT_LETTERS_ANY_CASE, " ").split(' ').filter { it.isNotEmpty() }
 
         /**
          * Whether the owner changed their mind instead of dictating: "Never mind." is not a message.
@@ -146,8 +152,7 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
          * messages.
          */
         fun isCorrection(transcript: String, recipient: String = ""): Boolean {
-            val said = transcript.replace('’', '\'').replace(NOT_LETTERS_ANY_CASE, " ")
-                .split(' ').filter { it.isNotEmpty() }
+            val said = casedWordsOf(transcript)
             if (said.firstOrNull()?.lowercase() !in CORRECTION_OPENERS) return false
             val names = wordsOf(recipient).toSet()
             val rest = said.drop(1).filter { it.lowercase() !in CORRECTION_FILLER }
@@ -158,18 +163,25 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
         }
 
         /**
-         * Whether the owner, asked what to say, gave another order instead: "No, text Bob", "Please text
-         * Bob instead". It would be sent to the first contact word for word, so it is a command, not an
-         * answer.
+         * Whether the owner, asked what to say to [recipient], gave another order instead. It would be sent
+         * to the first contact word for word, so it is a command, not an answer. The owner asked for the
+         * next dictation to be the message, so only a clear redirection counts: "instead", a no before a
+         * verb ("No, text him"), or a verb straight onto a capitalised name that is not [recipient] and
+         * nothing else ("Text Bob", "Please send an email to Bob"). "Call when you land", "Message
+         * received" and "Send Mom my love" are dictation.
          */
-        fun isNewCommand(transcript: String): Boolean {
-            val all = wordsOf(transcript)
-            val words = all.dropWhile { it in LEAD_INS }
-            val verb = words.firstOrNull() ?: return false
-            if (verb in NEW_COMMAND_VERBS && words.getOrNull(1) !in ME_WORDS) return true
+        fun isNewCommand(transcript: String, recipient: String = ""): Boolean {
+            val said = casedWordsOf(transcript)
+            val all = said.map { it.lowercase() }
+            val redirect = all.indices.any { all[it] in NEW_COMMAND_VERBS && all.getOrNull(it + 1) !in ME_WORDS }
             // "Instead" is a redirect wherever it falls: "Bob, text him instead" is not for Sam either.
-            return "instead" in all &&
-                all.indices.any { all[it] in NEW_COMMAND_VERBS && all.getOrNull(it + 1) !in ME_WORDS }
+            if ("instead" in all && redirect) return true
+            val start = all.indexOfFirst { it !in LEAD_INS }
+            if (start < 0 || all[start] !in NEW_COMMAND_VERBS || all.getOrNull(start + 1) in ME_WORDS) return false
+            if (all.take(start).any { it in CORRECTION_OPENERS }) return true
+            val names = wordsOf(recipient).toSet()
+            val rest = said.drop(start + 1).dropWhile { it.lowercase() in NAME_LEAD }
+            return rest.size in 1..MAX_NAME_WORDS && rest.all { it.first().isUpperCase() && it.lowercase() !in names }
         }
     }
 }

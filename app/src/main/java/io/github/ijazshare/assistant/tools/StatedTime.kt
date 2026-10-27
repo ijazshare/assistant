@@ -66,7 +66,10 @@ object StatedTime {
     private fun namesTime(words: List<String>, named: Set<String>): Boolean {
         val at = words.indexOfFirst { it in named }
         if (at < 0) return false
-        val otherHour = words.any { it !in NOONS && TimeResolver.clockHour(it) != null }
+        // "Twelve noon" is one time, not an hour and a noon.
+        val twelve = words.getOrNull(at - 1) in TWELVES
+        val otherHour = words.withIndex()
+            .any { (i, word) -> !(twelve && i == at - 1) && word !in NOONS && TimeResolver.clockHour(word) != null }
         if (!otherHour) return true
         val before = words.getOrNull(at - 1)
         // "At 9 am to book a table for noon" is 9: "for noon" names the time only when no other hour came first.
@@ -212,6 +215,7 @@ object StatedTime {
     private val CLOCK_DIGITS = Regex("""\b(\d{1,2})(?:[:.](\d{2})(?!\d)|\s(\d{2})\s?(?:am|pm)\b)""")
     internal val MERIDIEMS = setOf("am", "pm")
     internal val NOONS = setOf("noon", "midday")
+    private val TWELVES = setOf("twelve", "12")
     private val ARTICLES = setOf("a", "an")
     private val HALVES = listOf(listOf("and", "half"), listOf("and", "a", "half"), listOf("and", "an", "half"))
 

@@ -137,19 +137,23 @@ object TimeResolver {
      * With no part-of-day cue the model's hour stands, since "alarm at seven" does not say which
      * seven — unless it is not a seven at all. "Tomorrow at 7" came back as 3, and 3 is neither
      * of the sevens, so the hour said wins. Only the number straight after "at" counts, and not
-     * when it is the minutes of "at ten to six". With two "at N" the model's hour stands.
+     * when it is the minutes of "at ten to six". With two "at N" the model's hour stands, unless
+     * one is the time asked for: "at 6 o'clock", or right after remind, alarm or me.
      */
     private fun hourAfterAt(words: List<String>, resolved: Int): Int {
         // Padded so the last "at" still has a window of four.
-        val saids = (words + List(PADDING) { "" }).windowed(size = 4).mapNotNull { window ->
-            val (at, hour, pivot) = window
-            val after = window.last()
+        val padded = words + List(PADDING) { "" }
+        val ats = words.indices.filter { i ->
+            val (at, hour, pivot) = padded.subList(i, i + PADDING)
             val minutesFirst = isMinutes(hour) && (pivot in PAST_THE_HOUR || pivot in TO_THE_HOUR) &&
-                clockHour(after) != null
-            if (at != "at" || minutesFirst) null else clockHour(hour)
+                clockHour(padded[i + PADDING]) != null
+            at == "at" && !minutesFirst && clockHour(hour) != null
         }
         // Two of them and one is not a time: "look at 2 flats tomorrow at 6". Which is not said.
-        val said = saids.singleOrNull()
+        val asked = ats.firstOrNull { i ->
+            (padded[i + 2] == "o" && padded[i + PADDING] == "clock") || padded.getOrNull(i - 1) in ASKING_WORDS
+        }
+        val said = (asked ?: ats.singleOrNull())?.let { clockHour(padded[it + 1]) }
         return if (said == null || said % NOON == resolved % NOON) resolved else said
     }
 
@@ -166,6 +170,7 @@ object TimeResolver {
     // "3 p.m." splits into 3, p and m, and then carries no cue at all.
     internal val DOTTED_MERIDIEM = Regex("""\b([ap])\.\s?m\b\.?""")
 
+    private val ASKING_WORDS = setOf("remind", "alarm", "me")
     private val EVENING_CUES = setOf("pm", "evening", "night", "tonight", "afternoon")
     private val MORNING_CUES = setOf("am", "morning")
     internal val SPOKEN_NUMBERS = mapOf(

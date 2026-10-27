@@ -142,4 +142,12 @@ class TimeResolverTest {
         // One "at" and a wrong hour is still corrected.
         assertThat(TimeResolver.reconcileHour("remind me tomorrow at 7 to call Ali", 3)).isEqualTo(7)
     }
+
+    @Test
+    fun `the at that asks for the time wins over a later at that does not`() {
+        assertThat(TimeResolver.reconcileHour("remind me at 6 to look at 2 flats", 2)).isEqualTo(6)
+        assertThat(TimeResolver.reconcileHour("set an alarm at 7 o'clock to look at 2 flats", 2)).isEqualTo(7)
+        // Neither is marked as the time, so it is still left to the model.
+        assertThat(TimeResolver.reconcileHour("call Ali at 5 and look at 2 flats", 2)).isEqualTo(2)
+    }
 }
