@@ -127,6 +127,36 @@ class EndpointerHighBandTest {
     }
 
     @Test
+    fun `ticks above 1_5 kHz after the user stops do not hold a quiet room open`() {
+        // A soft speaker in a quiet room, then something high-pitched every 0.6 s: a turn signal,
+        // cutlery, a bird. Each tick is 100 ms at 0.008, ten decibels under the voice's peaks and
+        // below the old endpointer's 0.012, but no quieter than what the voice sustains. Counted
+        // as near the speaker, the ticks kept every rule from firing and the capture ran to 20 s.
+        val voiceSyllable = floatArrayOf(0.008f, 0.008f, 0.008f, 0.03f, 0.008f, 0.008f, 0.003f, 0.003f, 0.003f, 0.003f)
+        val start = leadIn + Endpointer.CALIBRATION_FRAMES + 10
+        val speech = 80
+        val lastWord = start + speech
+        val voice = FloatArray(1_000) { 0.001f }
+        val high = FloatArray(voice.size) { 0.0006f }
+        for (k in 0 until speech) {
+            voice[start + k] = voiceSyllable[k % voiceSyllable.size]
+            high[start + k] = voice[start + k] * 0.3f
+        }
+        for (k in lastWord until voice.size) {
+            if ((k - lastWord) % 30 in 10 until 15) {
+                voice[k] = 0.008f
+                high[k] = 0.0078f
+            }
+        }
+
+        val (frame, reason) = stop(voice, high)!!
+        assertThat(reason).isEqualTo(StopReason.ENDPOINT)
+        assertThat(frame).isGreaterThan(lastWord)
+        // 2 s with nothing near the speaker, counted from the last word: within 3 s.
+        assertThat(frame).isAtMost(lastWord + 150)
+    }
+
+    @Test
     fun `left at zero the high band never holds the capture open`() {
         // accept(rms) is the endpointer without the hold: what EndpointerTest exercises.
         val random = Random(26)
