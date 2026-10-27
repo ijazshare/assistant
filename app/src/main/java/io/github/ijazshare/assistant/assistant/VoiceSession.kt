@@ -1017,11 +1017,14 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // The microphone is done the moment the overlay closes; drop the foreground state
         // with it rather than leave a "listening" notification up after the session is gone.
         MicForegroundService.stop(context)
-        // Piper and the router stop themselves promptly; whisper and llama take the
-        // monitor an in-flight decode holds, and this is the main thread closing an
-        // overlay. Freeing them is handed to a scope that outlives the session.
-        piper.release()
+        // The router stops itself promptly. Piper waits out a reply it is synthesising, and
+        // whisper and llama the monitor an in-flight decode holds, and this is the main
+        // thread closing an overlay, so freeing them is handed to a scope that outlives the
+        // session. Stopping the voice is instant, and keeps a reply mid-synthesis silent.
+        piper.stop()
         router.release()
+        // Its own job: a long synthesis must not hold the models in memory while it ends.
+        teardown.launch { piper.release() }
         teardown.launch {
             // Safe whenever it runs: a model that is released answers the capture still using it
             // with an error, which turns the check off for that capture.

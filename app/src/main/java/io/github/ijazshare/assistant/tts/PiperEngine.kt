@@ -230,7 +230,7 @@ class PiperEngine {
 
     /**
      * Frees the voice. Waits for a synthesis in flight rather than pulling the engine out
-     * from under it; that wait is one short sentence at most.
+     * from under it, which can be a whole screen read aloud, so not on the main thread.
      */
     fun release() {
         closing = true

@@ -52,6 +52,9 @@ class ToolExecutor(
 
     private val screenshots = ScreenshotStore(context)
 
+    /** One per session, so the label scan of every installed app is paid once, not per command. */
+    private val apps = AppLookup(context)
+
     private val handlers: Map<String, suspend (ToolCall) -> ToolResult> = mapOf(
         AssistantTools.SET_ALARM to { call -> setAlarm(call) },
         AssistantTools.SET_TIMER to { call -> setTimer(call) },
@@ -150,14 +153,15 @@ class ToolExecutor(
 
     // ---- Messaging ---------------------------------------------------------------
 
-    private fun sendMessage(call: ToolCall): ToolResult {
+    private suspend fun sendMessage(call: ToolCall): ToolResult {
         val recipient = call.string("recipient") ?: return ToolResult.failed("Who should I message?")
         // The name to say back. When the session resolved an ambiguous name to one the user
         // chose, "recipient" is that contact's number and "display" is their name.
         val label = call.string("display")?.takeIf { it.isNotBlank() } ?: recipient
         // The person first: "What should I say to Sam?" with no Sam in the contacts asked for
         // words that had nowhere to go, and the answer was taken as a new command.
-        val number = contacts.resolveNumber(recipient)
+        // Contacts queries are off the main thread, where they stalled the overlay.
+        val number = withContext(Dispatchers.IO) { contacts.resolveNumber(recipient) }
             ?: return ToolResult.failed("I could not find $label.")
         // A blank body reaches here when the session dropped an invented one: ask for the
         // words rather than send something the user never said.
@@ -188,10 +192,10 @@ class ToolExecutor(
         }
     }
 
-    private fun callContact(call: ToolCall): ToolResult {
+    private suspend fun callContact(call: ToolCall): ToolResult {
         val recipient = call.string("recipient") ?: return ToolResult.failed("Who should I call?")
         val label = call.string("display")?.takeIf { it.isNotBlank() } ?: recipient
-        val number = contacts.resolveNumber(recipient)
+        val number = withContext(Dispatchers.IO) { contacts.resolveNumber(recipient) }
             ?: return ToolResult.failed("I could not find $label.")
         return try {
             // Straight through the system telecom service on the default phone line. A plain
@@ -213,9 +217,9 @@ class ToolExecutor(
 
     // ---- Apps --------------------------------------------------------------------
 
-    private fun openApp(call: ToolCall): ToolResult {
+    private suspend fun openApp(call: ToolCall): ToolResult {
         val name = call.string("app") ?: return ToolResult.failed("Which app?")
-        val match = AppLookup(context).find(name)
+        val match = withContext(Dispatchers.IO) { apps.find(name) }
             ?: return ToolResult.failed("I could not find an app called $name.")
         val intent = context.packageManager.getLaunchIntentForPackage(match.packageName)
             ?: return ToolResult.failed("$name cannot be opened.")
