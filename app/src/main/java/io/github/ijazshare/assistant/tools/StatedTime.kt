@@ -27,7 +27,7 @@ import java.time.LocalDateTime
  */
 object StatedTime {
 
-    /** A time the words state outright; [tomorrow] is null when they leave the day to the model. */
+    /** A time the words state outright; [tomorrow] is null when they name some other day, left to the model. */
     data class At(val hour: Int, val minute: Int, val tomorrow: Boolean?)
 
     private const val NOON = 12
@@ -62,10 +62,19 @@ object StatedTime {
                 reconciled to (minuteSaid(transcript, words, reconciled) ?: minute ?: 0)
             }
         }
-        // "The day after tomorrow" is two days on, which neither this nor the tools can say: the caller
-        // declines it first (see [TimeWords.beyondTomorrow]), and here it is left to the model's day.
+        // Tomorrow when the words say so. With no day named, the next time the clock reads it, today or,
+        // once today's has gone, tomorrow, which is what the reminder store and the Clock app make of it:
+        // the model's "tomorrow" without the word is a day it made up, and "at 4.15 pm" said at 12:24
+        // went to the next day. Another day named is the model's, as it always was. "The day after
+        // tomorrow" is two days on, which neither this nor the tools can say: the caller declines it
+        // first (see [TimeWords.beyondTomorrow]).
         val dayAfter = TimeWords.beyondTomorrow(transcript)
-        return At(said, minutes, tomorrow = if ("tomorrow" in words && !dayAfter) true else null)
+        val tomorrow = when {
+            "tomorrow" in words && !dayAfter -> true
+            words.any { it in OTHER_DAYS } -> null
+            else -> false
+        }
+        return At(said, minutes, tomorrow)
     }
 
     /** [minutes] from [now], to the nearest minute (the clock is in minutes, and early is worse than late). */
@@ -114,6 +123,17 @@ object StatedTime {
         // Whichever of the two forms matched has its minutes in the one group that is not empty.
         return found?.groupValues?.drop(2)?.firstNotNullOfOrNull { it.toIntOrNull() }
     }
+
+    /**
+     * Words that name a day other than today or tomorrow, or may: a weekday, a month, a date ("28th" is
+     * "28 th" here), "next week", "in 3 days". Whether Monday is tomorrow takes a calendar, so the day
+     * stays the model's. A word here by mistake only leaves the day to the model, as before.
+     */
+    private val OTHER_DAYS = setOf(
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        "january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+        "november", "december", "st", "nd", "rd", "th", "week", "weekend", "days",
+    )
 
     // 9:35 and 9.35, or 9 35 with the am or pm that makes it a time and not two numbers.
     private val CLOCK_DIGITS = Regex("""\b(\d{1,2})(?:[:.](\d{2})(?!\d)|\s(\d{2})\s?(?:am|pm)\b)""")

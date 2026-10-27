@@ -155,12 +155,14 @@ class ToolExecutor(
         // The name to say back. When the session resolved an ambiguous name to one the user
         // chose, "recipient" is that contact's number and "display" is their name.
         val label = call.string("display")?.takeIf { it.isNotBlank() } ?: recipient
+        // The person first: "What should I say to Sam?" with no Sam in the contacts asked for
+        // words that had nowhere to go, and the answer was taken as a new command.
+        val number = contacts.resolveNumber(recipient)
+            ?: return ToolResult.failed("I could not find $label.")
         // A blank body reaches here when the session dropped an invented one: ask for the
         // words rather than send something the user never said.
         val body = call.string("body")?.takeIf { it.isNotBlank() }
             ?: return ToolResult.failed("What should I say to $label?")
-        val number = contacts.resolveNumber(recipient)
-            ?: return ToolResult.failed("I could not find $label.")
 
         return try {
             val sms = context.getSystemService(SmsManager::class.java)

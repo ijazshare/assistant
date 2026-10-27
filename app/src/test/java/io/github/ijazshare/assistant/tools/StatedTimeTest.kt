@@ -96,36 +96,36 @@ class StatedTimeTest {
     fun `a specific time gets its hour and minute from the words`() {
         // The model's hour is only used to say which of two sevens; the minute is read.
         assertThat(spoken("remind me at 9:35 to call Ali", hour = 9, minute = 0))
-            .isEqualTo(StatedTime.At(9, 35, null))
+            .isEqualTo(StatedTime.At(9, 35, false))
         assertThat(spoken("remind me at 9.35 to call Ali", hour = 9, minute = 0))
-            .isEqualTo(StatedTime.At(9, 35, null))
+            .isEqualTo(StatedTime.At(9, 35, false))
         assertThat(spoken("remind me 9 35 am to call Ali", hour = 9, minute = 0))
-            .isEqualTo(StatedTime.At(9, 35, null))
+            .isEqualTo(StatedTime.At(9, 35, false))
         assertThat(spoken("remind me at 9:35pm to call Ali", hour = 9, minute = 0))
-            .isEqualTo(StatedTime.At(21, 35, null))
+            .isEqualTo(StatedTime.At(21, 35, false))
     }
 
     @Test
     fun `pm in any spelling, and o'clock`() {
         assertThat(spoken("remind me at 3 pm to call Ali", hour = 3, minute = 0))
-            .isEqualTo(StatedTime.At(15, 0, null))
+            .isEqualTo(StatedTime.At(15, 0, false))
         assertThat(spoken("remind me at 3 p.m. to call Ali", hour = 3, minute = 0))
-            .isEqualTo(StatedTime.At(15, 0, null))
+            .isEqualTo(StatedTime.At(15, 0, false))
         // The model's stray minute does not survive "3 pm".
-        assertThat(spoken("alarm at 3 pm", hour = 15, minute = 3)).isEqualTo(StatedTime.At(15, 0, null))
+        assertThat(spoken("alarm at 3 pm", hour = 15, minute = 3)).isEqualTo(StatedTime.At(15, 0, false))
         // But minutes said in words are left to the model.
         assertThat(spoken("alarm at half past 3 pm", hour = 15, minute = 30))
-            .isEqualTo(StatedTime.At(15, 30, null))
+            .isEqualTo(StatedTime.At(15, 30, false))
     }
 
     @Test
     fun `the hour is the one time said, not the first small number`() {
         assertThat(spoken("Remind me to take 2 pills at 3 p.m.", hour = 15, minute = 0))
-            .isEqualTo(StatedTime.At(15, 0, null))
+            .isEqualTo(StatedTime.At(15, 0, false))
         assertThat(spoken("Remind me to call 2 people at 5 pm", hour = 17, minute = 0))
-            .isEqualTo(StatedTime.At(17, 0, null))
+            .isEqualTo(StatedTime.At(17, 0, false))
         assertThat(spoken("remind me to feed 3 cats at ten to six pm", hour = 17, minute = 50))
-            .isEqualTo(StatedTime.At(17, 50, null))
+            .isEqualTo(StatedTime.At(17, 50, false))
     }
 
     @Test
@@ -138,14 +138,14 @@ class StatedTimeTest {
         assertThat(spoken("Remind me to buy 2 to 3 apples tomorrow", hour = 9, minute = 0)).isNull()
         assertThat(TimeResolver.reconcileHour("Remind me to buy 2 to 3 apples tomorrow", 9)).isEqualTo(9)
         // With its am or pm, or after at, it is a time again.
-        assertThat(spoken("wake me ten to six am", hour = 5, minute = 50)).isEqualTo(StatedTime.At(5, 50, null))
-        assertThat(spoken("remind me at ten to six", hour = 17, minute = 50)).isEqualTo(StatedTime.At(17, 50, null))
+        assertThat(spoken("wake me ten to six am", hour = 5, minute = 50)).isEqualTo(StatedTime.At(5, 50, false))
+        assertThat(spoken("remind me at ten to six", hour = 17, minute = 50)).isEqualTo(StatedTime.At(17, 50, false))
     }
 
     @Test
     fun `half 7 pm is half past, so its minutes stay the model's`() {
-        assertThat(spoken("Remind me at half 7 pm", hour = 19, minute = 30)).isEqualTo(StatedTime.At(19, 30, null))
-        assertThat(spoken("Remind me at quarter 8 pm", hour = 20, minute = 15)).isEqualTo(StatedTime.At(20, 15, null))
+        assertThat(spoken("Remind me at half 7 pm", hour = 19, minute = 30)).isEqualTo(StatedTime.At(19, 30, false))
+        assertThat(spoken("Remind me at quarter 8 pm", hour = 20, minute = 15)).isEqualTo(StatedTime.At(20, 15, false))
     }
 
     @Test
@@ -158,11 +158,11 @@ class StatedTimeTest {
     @Test
     fun `noon and midnight are twelve and zero, o'clock`() {
         assertThat(spoken("remind me at noon to eat", hour = 3, minute = 15))
-            .isEqualTo(StatedTime.At(12, 0, null))
+            .isEqualTo(StatedTime.At(12, 0, false))
         assertThat(spoken("remind me at midnight to sleep", hour = 12, minute = 0))
-            .isEqualTo(StatedTime.At(0, 0, null))
+            .isEqualTo(StatedTime.At(0, 0, false))
         assertThat(spoken("wake me at noon", hour = null, minute = null))
-            .isEqualTo(StatedTime.At(12, 0, null))
+            .isEqualTo(StatedTime.At(12, 0, false))
     }
 
     @Test
@@ -173,7 +173,7 @@ class StatedTimeTest {
             .isEqualTo(StatedTime.At(7, 0, tomorrow = true))
         // Which seven is the model's to say when nothing does.
         assertThat(spoken("remind me at 7 to call Ali", hour = 19, minute = 0))
-            .isEqualTo(StatedTime.At(19, 0, null))
+            .isEqualTo(StatedTime.At(19, 0, false))
         // Nor is "at ten to six" the hour ten.
         assertThat(TimeResolver.reconcileHour("remind me at ten to six", 5)).isEqualTo(5)
     }
@@ -189,29 +189,47 @@ class StatedTimeTest {
     @Test
     fun `minutes said in words before pm are kept for the model`() {
         assertThat(spoken("set an alarm for seven ten pm", hour = 19, minute = 10))
-            .isEqualTo(StatedTime.At(19, 10, null))
+            .isEqualTo(StatedTime.At(19, 10, false))
         assertThat(spoken("set an alarm for seven oh five pm", hour = 19, minute = 5))
-            .isEqualTo(StatedTime.At(19, 5, null))
-        assertThat(spoken("set an alarm for 7 5 pm", hour = 19, minute = 5)).isEqualTo(StatedTime.At(19, 5, null))
+            .isEqualTo(StatedTime.At(19, 5, false))
+        assertThat(spoken("set an alarm for 7 5 pm", hour = 19, minute = 5)).isEqualTo(StatedTime.At(19, 5, false))
         // A lone hour is still o'clock.
-        assertThat(spoken("set an alarm for ten pm", hour = 22, minute = 7)).isEqualTo(StatedTime.At(22, 0, null))
+        assertThat(spoken("set an alarm for ten pm", hour = 22, minute = 7)).isEqualTo(StatedTime.At(22, 0, false))
     }
 
     @Test
     fun `a price or date is not the minutes of the time`() {
         assertThat(spoken("remind me at 3 pm to pay the 12.50 bill", hour = 15, minute = 0))
-            .isEqualTo(StatedTime.At(15, 0, null))
+            .isEqualTo(StatedTime.At(15, 0, false))
         assertThat(spoken("remind me at 6 pm on 10.11 to call", hour = 18, minute = 0))
-            .isEqualTo(StatedTime.At(18, 0, null))
+            .isEqualTo(StatedTime.At(18, 0, false))
         assertThat(spoken("remind me at 3 pm to pay the 3.50 bill", hour = 15, minute = 0))
-            .isEqualTo(StatedTime.At(15, 0, null))
+            .isEqualTo(StatedTime.At(15, 0, false))
         assertThat(spoken("remind me at 3 pm to pay the 4:20 bill", hour = 15, minute = 0))
-            .isEqualTo(StatedTime.At(15, 0, null))
+            .isEqualTo(StatedTime.At(15, 0, false))
     }
 
     @Test
     fun `the day after tomorrow is not tomorrow`() {
-        assertThat(spoken("remind me the day after tomorrow at 9 am", hour = 9, minute = 0)?.tomorrow).isNull()
+        assertThat(spoken("remind me the day after tomorrow at 9 am", hour = 9, minute = 0)?.tomorrow).isFalse()
+    }
+
+    @Test
+    fun `a time said with no day is not tomorrow, whatever the model said`() {
+        // Said at 12:24 with the model's tomorrow: the reminder went to 4:15 the next day.
+        assertThat(spoken("remind me at 4.15 pm to work something", hour = 16, minute = 15))
+            .isEqualTo(StatedTime.At(16, 15, tomorrow = false))
+        assertThat(spoken("remind me tonight at 9", hour = 21, minute = 0))
+            .isEqualTo(StatedTime.At(21, 0, tomorrow = false))
+    }
+
+    @Test
+    fun `another day named leaves the day to the model`() {
+        // Said on a Sunday, Monday is tomorrow, and only the model was told the date.
+        assertThat(spoken("remind me on Monday at 9 am", hour = 9, minute = 0))
+            .isEqualTo(StatedTime.At(9, 0, tomorrow = null))
+        assertThat(spoken("remind me on the 28th at 9 am", hour = 9, minute = 0))
+            .isEqualTo(StatedTime.At(9, 0, tomorrow = null))
     }
 
     @Test
@@ -223,9 +241,9 @@ class StatedTimeTest {
 
     @Test
     fun `twelve noon and twelve midnight are one time each`() {
-        assertThat(spoken("set an alarm for twelve noon", hour = 0)).isEqualTo(StatedTime.At(12, 0, null))
-        assertThat(spoken("set an alarm for 12 noon", hour = 0)).isEqualTo(StatedTime.At(12, 0, null))
-        assertThat(spoken("set an alarm for twelve midnight", hour = 12)).isEqualTo(StatedTime.At(0, 0, null))
+        assertThat(spoken("set an alarm for twelve noon", hour = 0)).isEqualTo(StatedTime.At(12, 0, false))
+        assertThat(spoken("set an alarm for 12 noon", hour = 0)).isEqualTo(StatedTime.At(12, 0, false))
+        assertThat(spoken("set an alarm for twelve midnight", hour = 12)).isEqualTo(StatedTime.At(0, 0, false))
     }
 
     @Test
@@ -246,13 +264,15 @@ class StatedTimeTest {
     @Test
     fun `a length for how long is not a time`() {
         assertThat(spoken("remind me at 5 pm to study for 2 hours", hour = 17, minute = 0))
-            .isEqualTo(StatedTime.At(17, 0, null))
+            .isEqualTo(StatedTime.At(17, 0, false))
     }
 
     @Test
     fun `one time with extra words is still one time`() {
-        assertThat(spoken("remind me at 10 pm to lock up", hour = 22, minute = 0)).isEqualTo(StatedTime.At(22, 0, null))
-        assertThat(spoken("set an alarm for 7 o'clock", hour = 7, minute = 0)).isEqualTo(StatedTime.At(7, 0, null))
+        assertThat(
+            spoken("remind me at 10 pm to lock up", hour = 22, minute = 0),
+        ).isEqualTo(StatedTime.At(22, 0, false))
+        assertThat(spoken("set an alarm for 7 o'clock", hour = 7, minute = 0)).isEqualTo(StatedTime.At(7, 0, false))
         assertThat(spoken("remind me tomorrow morning at 9 to log in", hour = 9, minute = 0))
             .isEqualTo(StatedTime.At(9, 0, true))
         assertThat(TimeExpressions.of("remind me at half past three pm")).hasSize(1)

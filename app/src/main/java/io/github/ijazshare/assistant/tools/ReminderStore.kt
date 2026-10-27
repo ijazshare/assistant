@@ -72,19 +72,21 @@ class ReminderStore(private val context: Context) {
             ?: return@withContext ToolResult.failed("I have written that down, but I cannot reach the alarm service.")
 
         val spokenTime = due.format(SPOKEN_TIME)
+        // Said whenever it is not today, so a reminder for tomorrow never sounds like one for today.
+        val day = if (due.toLocalDate() == now.toLocalDate()) "" else " tomorrow"
         when {
             // Promising a reminder that can never be shown would be a lie; say so now.
             !notificationsWillShow() -> ToolResult.ok(
-                "I will remind you to $task at $spokenTime, but notifications are off.",
+                "I will remind you to $task$day at $spokenTime, but notifications are off.",
                 "Allow Notifications under System access, or the reminder will be silent.",
             )
 
             exactness == Exactness.INEXACT -> ToolResult.ok(
-                "I will remind you to $task at about $spokenTime.",
+                "I will remind you to $task$day at about $spokenTime.",
                 "Grant Exact alarms under System access for it to be on time.",
             )
 
-            else -> ToolResult.ok("I will remind you to $task at $spokenTime.")
+            else -> ToolResult.ok("I will remind you to $task$day at $spokenTime.")
         }
     }
 
