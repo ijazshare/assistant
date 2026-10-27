@@ -139,7 +139,7 @@ jobs:
         run: |
           set -euo pipefail
           tag='${{ github.event.inputs.tag || github.ref_name }}'
-          out="the-machine-${tag}.apk"
+          out="assistant-${tag}.apk"
           cp "$APK_PATH" "$out"
           sha256sum "$out" > "$out.sha256"
           echo "--- $out ---"

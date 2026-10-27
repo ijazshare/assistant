@@ -69,11 +69,11 @@ multilingual recognition, and automations.
 
 ## Install
 
-Download the APK from [Releases](https://github.com/hasan-ismail/themachine/releases) and
+Download the APK from [Releases](https://github.com/ijazshare/assistant/releases) and
 sideload it. Verify the download first:
 
 ```bash
-sha256sum -c the-machine-v0.1.0.apk.sha256
+sha256sum -c assistant-<tag>.apk.sha256
 ```
 
 There is no Play Store build. On first launch the app walks you through the permissions it
@@ -111,8 +111,8 @@ These are enforced, not just promised:
 You need JDK 21 and the Android SDK. Everything else the build fetches itself.
 
 ```bash
-git clone --recurse-submodules https://github.com/hasan-ismail/themachine.git
-cd themachine
+git clone --recurse-submodules https://github.com/ijazshare/assistant.git
+cd assistant
 ./gradlew assembleDebug
 ```
 
@@ -141,7 +141,7 @@ Releases are built by [`.github/workflows/release.yml`](.github/workflows/releas
 # 1. Create a keystore (keep the .jks and these passwords somewhere safe and offline —
 #    losing them means you can never ship an update that upgrades an installed copy).
 keytool -genkeypair -v \
-  -keystore release.jks -alias themachine \
+  -keystore release.jks -alias assistant \
   -keyalg RSA -keysize 4096 -validity 10000
 
 # 2. Base64-encode it for the secret.
@@ -154,7 +154,7 @@ Then add, under *Settings → Secrets and variables → Actions*:
 |---|---|
 | `SIGNING_KEYSTORE_B64` | contents of `release.jks.b64` |
 | `SIGNING_KEYSTORE_PASSWORD` | the keystore password |
-| `SIGNING_KEY_ALIAS` | `themachine` |
+| `SIGNING_KEY_ALIAS` | `assistant` |
 | `SIGNING_KEY_PASSWORD` | the key password |
 
 Delete `release.jks.b64` afterwards. The workflow refuses to run if any secret is missing —
