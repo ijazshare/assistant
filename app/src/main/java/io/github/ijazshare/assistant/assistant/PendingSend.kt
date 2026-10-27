@@ -19,14 +19,20 @@ import java.util.concurrent.atomic.AtomicInteger
  * went to the router as a fresh question. The recipient is held as the number it resolved to
  * plus the name to say back, so the reply goes to the same person even if the contacts
  * change in between.
+ *
+ * A reply that opens like an order ("Text Bob please") is not sent but read back: [body] is then
+ * that reply, held for a yes.
  */
-data class PendingSend(val number: String, val display: String, val askedAtMillis: Long) {
+data class PendingSend(val number: String, val display: String, val askedAtMillis: Long, val body: String? = null) {
 
     /** Whether the answer is too late to be an answer: a transcript a minute on is a new command. */
-    fun expired(now: Long): Boolean = now - askedAtMillis > WINDOW_MILLIS
+    fun expired(now: Long): Boolean = now - askedAtMillis > if (body == null) WINDOW_MILLIS else CONFIRM_MILLIS
 
     companion object {
         const val WINDOW_MILLIS = 60_000L
+
+        /** A read-back is a quick question, and a yes a minute later is not an answer to it. */
+        const val CONFIRM_MILLIS = 30_000L
 
         /**
          * The send waiting for its words, for [WINDOW_MILLIS].
@@ -103,20 +109,14 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
             "text", "send", "message", "tell", "ask", "please", "sorry", "i'm", "it", "not", "no",
         )
 
-        // The first words of a fresh command, as opposed to the words of the message.
-        private val NEW_COMMAND_VERBS = setOf(
-            "send", "text", "message", "sms", "email", "whatsapp", "signal", "telegram", "dm", "call", "ring",
+        // A reply that starts with one of these, after the politeness, may be an order and not dictation.
+        private val ORDER_OPENING = Regex(
+            "^(?:(?:please|um|uh|actually|so|ok|okay|can you|could you) )*" +
+                "(?:text|send|message|call|ring|phone|email|tell|dm|whatsapp)(?: |$)",
         )
-        private val LEAD_INS = setOf(
-            "no", "nope", "actually", "instead", "oh", "wait", "sorry", "ok", "okay", "hey", "please", "can", "could",
-            "would", "will", "you", "um", "uh", "i", "meant", "to", "well", "so", "just",
+        private val YES = setOf(
+            "yes", "yeah", "yep", "yup", "sure", "send", "send it", "go ahead", "do it", "correct", "ok", "okay",
         )
-
-        // "Call me when you land" is dictation; "call Bob" is not.
-        private val ME_WORDS = setOf("me", "you", "us", "back")
-
-        // What may stand between the verb and the name: "send an email to Bob".
-        private val NAME_LEAD = setOf("a", "an", "the", "to", "message", "text", "sms", "email")
 
         private const val MAX_NAME_WORDS = 2
 
@@ -125,9 +125,6 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
 
         private fun wordsOf(transcript: String): List<String> =
             transcript.lowercase().replace('’', '\'').replace(NOT_LETTERS, " ").split(' ').filter { it.isNotEmpty() }
-
-        private fun casedWordsOf(transcript: String): List<String> =
-            transcript.replace('’', '\'').replace(NOT_LETTERS_ANY_CASE, " ").split(' ').filter { it.isNotEmpty() }
 
         /**
          * Whether the owner changed their mind instead of dictating: "Never mind." is not a message.
@@ -152,7 +149,8 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
          * messages.
          */
         fun isCorrection(transcript: String, recipient: String = ""): Boolean {
-            val said = casedWordsOf(transcript)
+            val said = transcript.replace('’', '\'').replace(NOT_LETTERS_ANY_CASE, " ").trim().split(' ')
+                .filter { it.isNotEmpty() }
             if (said.firstOrNull()?.lowercase() !in CORRECTION_OPENERS) return false
             val names = wordsOf(recipient).toSet()
             val rest = said.drop(1).filter { it.lowercase() !in CORRECTION_FILLER }
@@ -163,25 +161,14 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
         }
 
         /**
-         * Whether the owner, asked what to say to [recipient], gave another order instead. It would be sent
-         * to the first contact word for word, so it is a command, not an answer. The owner asked for the
-         * next dictation to be the message, so only a clear redirection counts: "instead", a no before a
-         * verb ("No, text him"), or a verb straight onto a capitalised name that is not [recipient] and
-         * nothing else ("Text Bob", "Please send an email to Bob"). "Call when you land", "Message
-         * received" and "Send Mom my love" are dictation.
+         * Whether the reply opens like an order to text or call someone, which could be one that landed
+         * in the answer slot ("Text Bob please") or the message ("Text me when you land").
          */
-        fun isNewCommand(transcript: String, recipient: String = ""): Boolean {
-            val said = casedWordsOf(transcript)
-            val all = said.map { it.lowercase() }
-            val redirect = all.indices.any { all[it] in NEW_COMMAND_VERBS && all.getOrNull(it + 1) !in ME_WORDS }
-            // "Instead" is a redirect wherever it falls: "Bob, text him instead" is not for Sam either.
-            if ("instead" in all && redirect) return true
-            val start = all.indexOfFirst { it !in LEAD_INS }
-            if (start < 0 || all[start] !in NEW_COMMAND_VERBS || all.getOrNull(start + 1) in ME_WORDS) return false
-            if (all.take(start).any { it in CORRECTION_OPENERS }) return true
-            val names = wordsOf(recipient).toSet()
-            val rest = said.drop(start + 1).dropWhile { it.lowercase() in NAME_LEAD }
-            return rest.size in 1..MAX_NAME_WORDS && rest.all { it.first().isUpperCase() && it.lowercase() !in names }
-        }
+        fun startsWithVerb(
+            transcript: String,
+        ): Boolean = ORDER_OPENING.containsMatchIn(wordsOf(transcript).joinToString(" "))
+
+        /** Whether the answer to a read-back is a yes: anything else is a no. */
+        fun isYes(transcript: String): Boolean = wordsOf(transcript).joinToString(" ") in YES
     }
 }

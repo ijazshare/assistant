@@ -95,7 +95,7 @@ object TimeResolver {
             .filter { it.isNotEmpty() }
         val evening = words.any { it in EVENING_CUES }
         val morning = words.any { it in MORNING_CUES }
-        if (evening == morning) return if (evening) resolved else hourAfterAt(words, resolved)
+        if (evening == morning) return if (evening) resolved else hourAfterAt(transcript, words, resolved)
 
         val said = hourSaid(words) ?: return resolved
 
@@ -137,23 +137,20 @@ object TimeResolver {
      * With no part-of-day cue the model's hour stands, since "alarm at seven" does not say which
      * seven — unless it is not a seven at all. "Tomorrow at 7" came back as 3, and 3 is neither
      * of the sevens, so the hour said wins. Only the number straight after "at" counts, and not
-     * when it is the minutes of "at ten to six". With two "at N" the model's hour stands, unless
-     * one is the time asked for: "at 6 o'clock", or right after remind, alarm or me.
+     * when it is the minutes of "at ten to six". And only when it is the one time the transcript
+     * states: with a second, which one is the time asked for is not said (see [StatedTime]).
      */
-    private fun hourAfterAt(words: List<String>, resolved: Int): Int {
+    private fun hourAfterAt(transcript: String, words: List<String>, resolved: Int): Int {
+        if (TimeExpressions.of(transcript).size != 1) return resolved
         // Padded so the last "at" still has a window of four.
         val padded = words + List(PADDING) { "" }
-        val ats = words.indices.filter { i ->
+        val at = words.indices.firstOrNull { i ->
             val (at, hour, pivot) = padded.subList(i, i + PADDING)
             val minutesFirst = isMinutes(hour) && (pivot in PAST_THE_HOUR || pivot in TO_THE_HOUR) &&
                 clockHour(padded[i + PADDING]) != null
             at == "at" && !minutesFirst && clockHour(hour) != null
         }
-        // Two of them and one is not a time: "look at 2 flats tomorrow at 6". Which is not said.
-        val asked = ats.firstOrNull { i ->
-            (padded[i + 2] == "o" && padded[i + PADDING] == "clock") || padded.getOrNull(i - 1) in ASKING_WORDS
-        }
-        val said = (asked ?: ats.singleOrNull())?.let { clockHour(padded[it + 1]) }
+        val said = at?.let { clockHour(padded[it + 1]) }
         return if (said == null || said % NOON == resolved % NOON) resolved else said
     }
 
@@ -170,7 +167,6 @@ object TimeResolver {
     // "3 p.m." splits into 3, p and m, and then carries no cue at all.
     internal val DOTTED_MERIDIEM = Regex("""\b([ap])\.\s?m\b\.?""")
 
-    private val ASKING_WORDS = setOf("remind", "alarm", "me")
     private val EVENING_CUES = setOf("pm", "evening", "night", "tonight", "afternoon")
     private val MORNING_CUES = setOf("am", "morning")
     internal val SPOKEN_NUMBERS = mapOf(

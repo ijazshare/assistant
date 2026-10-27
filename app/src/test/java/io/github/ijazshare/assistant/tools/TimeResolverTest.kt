@@ -144,10 +144,12 @@ class TimeResolverTest {
     }
 
     @Test
-    fun `the at that asks for the time wins over a later at that does not`() {
-        assertThat(TimeResolver.reconcileHour("remind me at 6 to look at 2 flats", 2)).isEqualTo(6)
-        assertThat(TimeResolver.reconcileHour("set an alarm at 7 o'clock to look at 2 flats", 2)).isEqualTo(7)
-        // Neither is marked as the time, so it is still left to the model.
-        assertThat(TimeResolver.reconcileHour("call Ali at 5 and look at 2 flats", 2)).isEqualTo(2)
+    fun `with a second time the model's hour stands`() {
+        listOf(
+            "remind me at 6 to look at 2 flats",
+            "set an alarm at 7 o'clock to look at 2 flats",
+            "remind me at 7 to put in 2 hours of overtime",
+            "call Ali at 5 and look at 2 flats",
+        ).forEach { assertThat(TimeResolver.reconcileHour(it, 2)).isEqualTo(2) }
     }
 }

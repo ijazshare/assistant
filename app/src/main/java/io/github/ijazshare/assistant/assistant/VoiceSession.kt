@@ -51,6 +51,7 @@ import io.github.ijazshare.assistant.tools.ContactResolution
 import io.github.ijazshare.assistant.tools.MessageBody
 import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.StatedTime
+import io.github.ijazshare.assistant.tools.TimeResolver
 import io.github.ijazshare.assistant.tools.TimeWords
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
@@ -653,8 +654,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     /**
      * Replaces the model's time with the one the words state: "in 30 minutes" is now plus thirty
-     * minutes, and "at 9:35" is 9:35, whatever the model made of them. A transcript with no time
-     * words keeps the model's numbers, as before.
+     * minutes, and "at 9:35" is 9:35, whatever the model made of them, but only when the transcript
+     * states exactly one time. With none or several the model's numbers stand, with only the am/pm
+     * correction of the hour it always had.
      */
     private fun withSpokenTime(transcript: String, call: ToolCall): ToolCall {
         // The tools have only today and tomorrow, so the model cannot have a day past tomorrow right.
@@ -664,7 +666,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         }
         val stated = call.arguments["hour"]?.toIntOrNull()
         val minute = call.arguments["minute"]?.toIntOrNull()
-        val spoken = StatedTime.of(transcript, stated, minute) ?: return call
+        val spoken = StatedTime.of(transcript, stated, minute) ?: return withReconciledHour(transcript, call, stated)
         val fixes = buildMap {
             if (spoken.hour != stated) put("hour", spoken.hour.toString())
             if (spoken.minute != (minute ?: 0)) put("minute", spoken.minute.toString())
@@ -677,30 +679,63 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         return call.copy(arguments = call.arguments + fixes)
     }
 
+    /** The model's time stands, with only the hour put right against an am, pm or part of day said. */
+    private fun withReconciledHour(transcript: String, call: ToolCall, stated: Int?): ToolCall {
+        val corrected = stated?.let { TimeResolver.reconcileHour(transcript, it) }
+        if (corrected == null || corrected == stated) return call
+        Log.i(TAG, "hour corrected from $stated to $corrected for [$transcript]")
+        return call.copy(arguments = call.arguments + ("hour" to corrected.toString()))
+    }
+
     /**
-     * If a send is waiting for its words, this transcript is them, or a change of mind.
+     * If a send is waiting for its words, this transcript is them, or a change of mind. If one is
+     * waiting for its yes, this is the yes.
      *
      * Ahead of the cache and the router: "I'll be there at six" is a message here, and
      * would be a reminder anywhere else. Used once, expired or not, so the transcript after
      * it is a command again.
      */
     private suspend fun answeredPendingSend(transcript: String, sttMillis: Long): Boolean {
-        val waiting = PendingSend.take(System.currentTimeMillis()) ?: return false
-        // "No, text Bob" is the next order, not the words for the first contact.
-        if (PendingSend.isNewCommand(transcript, waiting.display)) return false
-        val call = if (PendingSend.isCancel(transcript, waiting.display)) {
-            ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it."))
-        } else if (PendingSend.isCorrection(transcript, waiting.display)) {
+        val now = System.currentTimeMillis()
+        val waiting = PendingSend.take(now) ?: return false
+        val send = ToolCall(
+            AssistantTools.SEND_MESSAGE,
+            mapOf(
+                "recipient" to waiting.number,
+                "display" to waiting.display,
+                "body" to (waiting.body ?: transcript.trim()),
+            ),
+        )
+        var readBack = false
+        val call = when {
+            waiting.body != null ->
+                if (PendingSend.isYes(transcript)) {
+                    send
+                } else {
+                    ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I didn't send it."))
+                }
+
+            PendingSend.isCancel(transcript, waiting.display) ->
+                ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it."))
+
             // "No, Bob": the name was misheard, and the correction is not a message for the first contact.
-            ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it. Say the whole command again."))
-        } else {
-            ToolCall(
-                AssistantTools.SEND_MESSAGE,
-                mapOf("recipient" to waiting.number, "display" to waiting.display, "body" to transcript.trim()),
-            )
+            PendingSend.isCorrection(transcript, waiting.display) ->
+                ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it. Say the whole command again."))
+
+            // "Text Bob please" is an order that landed in the answer slot, and "Text me when you land" is
+            // dictation; which one it is cannot be told from the words, so it is read back, not sent.
+            PendingSend.startsWithVerb(transcript) -> {
+                val reply = transcript.trim()
+                readBack =
+                    PendingSend.holdUnlessDismissed(waiting.copy(body = reply, askedAtMillis = now), dismissalsAtStart)
+                ToolCall(AssistantTools.ANSWER, mapOf("text" to "Send \"$reply\" to ${waiting.display}?"))
+            }
+
+            else -> send
         }
         // Resolution.CACHE: no model was involved, and nothing here is learned.
         carryOut(transcript, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
+        if (readBack) listenForAnswer()
         return true
     }
 
@@ -854,10 +889,16 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // spoken rather than after.
         piper.speak(result.spoken)
 
-        // Straight back to the microphone, so the owner can answer the question without summoning
-        // again. start() is the ordinary summon, and a stop since this command began (the overlay
-        // dismissed, a switch to typing) means they did not want it.
-        if (askedForWords && source == QuerySource.VOICE && stops == stopsAtStart) start()
+        if (askedForWords) listenForAnswer()
+    }
+
+    /**
+     * Straight back to the microphone, so the owner can answer the question just asked without summoning
+     * again. start() is the ordinary summon, and a stop since this command began (the overlay dismissed,
+     * a switch to typing) means they did not want it.
+     */
+    private fun listenForAnswer() {
+        if (source == QuerySource.VOICE && stops == stopsAtStart) start()
     }
 
     /**

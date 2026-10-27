@@ -48,8 +48,12 @@ class StatedTimeTest {
             "in a minute" to 1,
             "in one hour and thirty minutes" to 90,
         )
+        val now = LocalDateTime.of(2026, 10, 27, 9, 4, 0)
         lengths.forEach { (said, minutes) ->
-            assertThat(StatedTime.relativeMinutes("remind me $said to call Ali")).isEqualTo(minutes)
+            val due = now.plusMinutes(minutes.toLong())
+            assertThat(
+                spoken("remind me $said to call Ali", now = now),
+            ).isEqualTo(StatedTime.At(due.hour, due.minute, false))
         }
     }
 
@@ -81,11 +85,11 @@ class StatedTimeTest {
 
     @Test
     fun `in is only a duration when a length follows it`() {
-        assertThat(StatedTime.relativeMinutes("remind me in the car to call Ali")).isNull()
-        assertThat(StatedTime.relativeMinutes("remind me in a bit")).isNull()
-        assertThat(StatedTime.relativeMinutes("remind me in 3 days")).isNull()
-        assertThat(StatedTime.relativeMinutes("remind me in 50 hours")).isNull()
-        assertThat(StatedTime.relativeMinutes("remind me at 7 to call Ali")).isNull()
+        listOf("in the car to call Ali", "in a bit", "in 3 days", "at work to call Ali").forEach {
+            assertThat(TimeExpressions.of("remind me $it")).isEmpty()
+        }
+        // A length over a day is a time expression, but not one code will set.
+        assertThat(spoken("remind me in 50 hours", hour = 7)).isNull()
     }
 
     @Test
@@ -141,18 +145,9 @@ class StatedTimeTest {
     @Test
     fun `no time words leave the model alone`() {
         assertThat(spoken("remind me to buy milk", hour = null, minute = null)).isNull()
-        assertThat(spoken("remind me to buy milk", hour = 7, minute = 30))
-            .isEqualTo(StatedTime.At(7, 30, null))
-        assertThat(spoken("wake me at 18:00", hour = 18, minute = 0)).isEqualTo(StatedTime.At(18, 0, null))
-    }
-
-    @Test
-    fun `an in after the stated time is part of the task, not a length of time`() {
-        // The bug: "put in 2 hours" made a stated 5 pm into 11:04.
-        assertThat(spoken("remind me at 5 pm to put in 2 hours of overtime", hour = 17, minute = 0))
-            .isEqualTo(StatedTime.At(17, 0, null))
-        // A length said first is still the time asked for.
-        assertThat(StatedTime.relativeMinutes("remind me in half an hour to catch the 5 pm train")).isEqualTo(30)
+        assertThat(spoken("remind me to buy milk", hour = 7, minute = 30)).isNull()
+        // 18:00 is no clock time to read: the model's 18:00 stands.
+        assertThat(spoken("wake me at 18:00", hour = 18, minute = 0)).isNull()
     }
 
     @Test
@@ -179,51 +174,8 @@ class StatedTimeTest {
     }
 
     @Test
-    fun `noon or midnight in the task does not replace the stated time`() {
-        assertThat(spoken("remind me at 11 am to submit the form before noon", hour = 11, minute = 0))
-            .isEqualTo(StatedTime.At(11, 0, null))
-        assertThat(spoken("remind me at 11 pm to lock up before midnight", hour = 23, minute = 0))
-            .isEqualTo(StatedTime.At(23, 0, null))
-        assertThat(spoken("remind me before 3 pm and at noon to eat", hour = 12, minute = 0))
-            .isEqualTo(StatedTime.At(12, 0, null))
-    }
-
-    @Test
     fun `the day after tomorrow is not tomorrow`() {
         assertThat(spoken("remind me the day after tomorrow at 9 am", hour = 9, minute = 0)?.tomorrow).isNull()
-    }
-
-    @Test
-    fun `a stated hour without am or pm still beats an in in the task`() {
-        assertThat(spoken("remind me at 9 to put in 2 hours of overtime", hour = 9, minute = 0))
-            .isEqualTo(StatedTime.At(9, 0, null))
-        assertThat(spoken("remind me at 8 tonight to put in 2 hours of study", hour = 20, minute = 0))
-            .isEqualTo(StatedTime.At(20, 0, null))
-        assertThat(spoken("remind me tomorrow morning at 9 to log in 3 hours", hour = 9, minute = 0))
-            .isEqualTo(StatedTime.At(9, 0, true))
-        assertThat(StatedTime.relativeMinutes("remind me 9 o'clock to put in 2 hours of overtime")).isNull()
-        assertThat(StatedTime.relativeMinutes("remind me 8 tonight to put in 2 hours of study")).isNull()
-    }
-
-    @Test
-    fun `a clock time inside the task does not hide a real in N minutes`() {
-        assertThat(spoken("remind me to leave for my 3 pm appointment in 30 minutes", hour = 15, minute = 0))
-            .isEqualTo(StatedTime.At(9, 34, false))
-        assertThat(spoken("remind me about the 3 pm call in 20 minutes", hour = 15, minute = 0))
-            .isEqualTo(StatedTime.At(9, 24, false))
-    }
-
-    @Test
-    fun `for noon or midnight in the task does not override a stated hour`() {
-        assertThat(spoken("remind me at 9 am to book a table for noon", hour = 9, minute = 0))
-            .isEqualTo(StatedTime.At(9, 0, null))
-        assertThat(spoken("remind me tomorrow at 8 am to move the meeting for noon", hour = 8, minute = 0))
-            .isEqualTo(StatedTime.At(8, 0, true))
-        assertThat(spoken("remind me at 10 pm to set the timer for midnight", hour = 22, minute = 0))
-            .isEqualTo(StatedTime.At(22, 0, null))
-        // Said first, and the only time asked for, it still is the time.
-        assertThat(spoken("remind me for noon to put in 2 hours of study", hour = 12, minute = 0))
-            .isEqualTo(StatedTime.At(12, 0, null))
     }
 
     @Test
@@ -234,18 +186,40 @@ class StatedTimeTest {
     }
 
     @Test
-    fun `a second at in the task does not stop the hour being corrected`() {
-        assertThat(spoken("remind me at 6 to look at 2 flats", hour = 2)).isEqualTo(StatedTime.At(6, 0, null))
-    }
-
-    @Test
     fun `twelve noon and twelve midnight are one time each`() {
         assertThat(spoken("set an alarm for twelve noon", hour = 0)).isEqualTo(StatedTime.At(12, 0, null))
         assertThat(spoken("set an alarm for 12 noon", hour = 0)).isEqualTo(StatedTime.At(12, 0, null))
         assertThat(spoken("set an alarm for twelve midnight", hour = 12)).isEqualTo(StatedTime.At(0, 0, null))
-        // Another hour said still decides: "at 9 am ... for 12 noon" is 9.
-        assertThat(
-            spoken("remind me at 9 am to book a table for 12 noon", hour = 9),
-        ).isEqualTo(StatedTime.At(9, 0, null))
+    }
+
+    @Test
+    fun `more than one time is left to the model`() {
+        listOf(
+            "Set an alarm for 6 tomorrow, I need to be at work at 8",
+            "Remind me tomorrow at 9 to ask Ali to call me at 5",
+            "Remind me tomorrow at 10 to have lunch with Ali at noon",
+            "remind me at 9 to put in 2 hours of overtime",
+            "remind me to leave for my 3 pm appointment in 30 minutes",
+            "remind me at 9 am to book a table for 12 noon",
+            "remind me at 11 am to submit the form before noon",
+            "remind me at 6 to look at 2 flats",
+            "remind me in half an hour to catch the 5 pm train",
+        ).forEach { assertThat(spoken(it, hour = 9, minute = 0)).isNull() }
+    }
+
+    @Test
+    fun `a length for how long is not a time`() {
+        assertThat(spoken("remind me at 5 pm to study for 2 hours", hour = 17, minute = 0))
+            .isEqualTo(StatedTime.At(17, 0, null))
+    }
+
+    @Test
+    fun `one time with extra words is still one time`() {
+        assertThat(spoken("remind me at 10 pm to lock up", hour = 22, minute = 0)).isEqualTo(StatedTime.At(22, 0, null))
+        assertThat(spoken("set an alarm for 7 o'clock", hour = 7, minute = 0)).isEqualTo(StatedTime.At(7, 0, null))
+        assertThat(spoken("remind me tomorrow morning at 9 to log in", hour = 9, minute = 0))
+            .isEqualTo(StatedTime.At(9, 0, true))
+        assertThat(TimeExpressions.of("remind me at half past three pm")).hasSize(1)
+        assertThat(TimeExpressions.of("remind me at ten to six")).hasSize(1)
     }
 }

@@ -76,18 +76,6 @@ class PendingSendTest {
     }
 
     @Test
-    fun `another order is a command, not the words for the first contact`() {
-        listOf("Text Bob", "No, text Bob instead", "Actually call Bob", "send an email to Bob", "Call Bob")
-            .forEach { assertThat(PendingSend.isNewCommand(it)).isTrue() }
-    }
-
-    @Test
-    fun `dictation that starts with a verb is still a message`() {
-        listOf("Call me when you land", "I'll text you later", "Send me the report", "See you at six", "Call you back")
-            .forEach { assertThat(PendingSend.isNewCommand(it)).isFalse() }
-    }
-
-    @Test
     fun `a dismissal during the command stops its send being held`() {
         val now = 1_000_000L
         // "Text Sam", dismissed while it was still thinking: the question is asked after the dismissal.
@@ -138,38 +126,40 @@ class PendingSendTest {
     }
 
     @Test
-    fun `an order with a polite opening is a command, not the words for the first contact`() {
-        listOf(
-            "Please text Bob instead",
-            "Can you text Bob instead",
-            "Um, text Bob",
-            "Could you call Bob",
-            "Bob, text him instead",
-        )
-            .forEach { assertThat(PendingSend.isNewCommand(it)).isTrue() }
-        assertThat(PendingSend.isNewCommand("Can you call me when you land")).isFalse()
-        assertThat(PendingSend.isNewCommand("I'll call you instead")).isFalse()
-    }
-
-    @Test
-    fun `an answer that opens with a messaging verb is the message`() {
-        listOf(
-            "Text me when you land", "Message me", "Text me right now", "Send me that", "Call when you land",
-            "Text when you get there", "Ring the bell when you arrive", "Message received", "Send Mom my love",
-        ).forEach { assertThat(PendingSend.isNewCommand(it, "Sam")).isFalse() }
-    }
-
-    @Test
-    fun `a verb straight onto another name is a command, and onto the same name is not`() {
-        listOf("text Bob", "Please text Bob", "Send an email to Bob", "Call Bob Smith", "No, text him")
-            .forEach { assertThat(PendingSend.isNewCommand(it, "Sam")).isTrue() }
-        assertThat(PendingSend.isNewCommand("Text Sam", "Sam")).isFalse()
-        assertThat(PendingSend.isNewCommand("Text Bob I'll be late", "Sam")).isFalse()
-    }
-
-    @Test
     fun `short refusals stay cancels, the safe side`() {
         listOf("No thanks", "Please don't", "Don't do it", "Stop it")
             .forEach { assertThat(PendingSend.isCancel(it, "Sam")).isTrue() }
+    }
+
+    @Test
+    fun `a reply that opens with an order is read back, whoever it is for`() {
+        val replies = "Text Bob please|Send it to Bob|Can you text Bob for me?|Text my wife|Text me when you land|" +
+            "Please call Bob|Um, could you ring Bob|Actually, tell him I'm late|Call me when you land|" +
+            "WhatsApp Bob|Email Bob|DM Bob|phone Bob|Message Bob"
+        replies.split('|').forEach { assertThat(PendingSend.startsWithVerb(it)).isTrue() }
+    }
+
+    @Test
+    fun `any other reply is the message, sent at once`() {
+        val replies = "I'll be there at six|See you at six|I'll call you back|I'll text you later|Textbook arrived|" +
+            "Thanks for the call|Can you pick up milk"
+        replies.split('|').forEach { assertThat(PendingSend.startsWithVerb(it)).isFalse() }
+    }
+
+    @Test
+    fun `a read-back is answered by a yes and nothing else sends it`() {
+        "Yes|yes.|Yeah|Yep|Yup|Sure|Send|Send it|Go ahead|Do it|Correct|OK|Okay.".split('|')
+            .forEach { assertThat(PendingSend.isYes(it)).isTrue() }
+        "No|Yes but add hello|Text Bob|Maybe|Cancel|I'll be there at six|".split('|')
+            .forEach { assertThat(PendingSend.isYes(it)).isFalse() }
+    }
+
+    @Test
+    fun `a read-back is held for thirty seconds, not sixty`() {
+        val now = 1_000_000L
+        val held = PendingSend("+15550101", "Sam Lee", now, body = "Text Bob please")
+        assertThat(held.expired(now + PendingSend.CONFIRM_MILLIS)).isFalse()
+        assertThat(held.expired(now + PendingSend.CONFIRM_MILLIS + 1)).isTrue()
+        assertThat(held.copy(body = null).expired(now + PendingSend.CONFIRM_MILLIS + 1)).isFalse()
     }
 }
