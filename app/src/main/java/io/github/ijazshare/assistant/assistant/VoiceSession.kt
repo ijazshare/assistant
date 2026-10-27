@@ -733,8 +733,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
             else -> send
         }
+        // A read-back answered yes sends the words that were read back, so they are checked against
+        // the dictation they came from: checked against the "yes", every word looks invented and is dropped.
+        val said = waiting.body?.takeIf { call === send } ?: transcript
         // Resolution.CACHE: no model was involved, and nothing here is learned.
-        carryOut(transcript, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
+        carryOut(said, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
         if (readBack) listenForAnswer()
         return true
     }

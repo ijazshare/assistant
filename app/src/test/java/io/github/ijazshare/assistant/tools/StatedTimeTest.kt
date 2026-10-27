@@ -116,7 +116,23 @@ class StatedTimeTest {
         // But minutes said in words are left to the model.
         assertThat(spoken("alarm at half past 3 pm", hour = 15, minute = 30))
             .isEqualTo(StatedTime.At(15, 30, null))
-        assertThat(TimeResolver.reconcileHour("remind me at 3 p.m.", 3)).isEqualTo(15)
+    }
+
+    @Test
+    fun `the hour is the one time said, not the first small number`() {
+        assertThat(spoken("Remind me to take 2 pills at 3 p.m.", hour = 15, minute = 0))
+            .isEqualTo(StatedTime.At(15, 0, null))
+        assertThat(spoken("Remind me to call 2 people at 5 pm", hour = 17, minute = 0))
+            .isEqualTo(StatedTime.At(17, 0, null))
+        assertThat(spoken("remind me to feed 3 cats at ten to six pm", hour = 17, minute = 50))
+            .isEqualTo(StatedTime.At(17, 50, null))
+    }
+
+    @Test
+    fun `with two times p m is read as main read it, which is not at all`() {
+        // Two times: the model's hour stands, as on main, and "p.m." does not tip it to the 9.
+        assertThat(spoken("Remind me at 9 to call Ali at 5 p.m.", hour = 17, minute = 0)).isNull()
+        assertThat(TimeResolver.reconcileHour("Remind me at 9 to call Ali at 5 p.m.", 17)).isEqualTo(17)
     }
 
     @Test

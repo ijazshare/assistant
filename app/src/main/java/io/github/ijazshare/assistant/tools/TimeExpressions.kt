@@ -23,12 +23,13 @@ internal object TimeExpressions {
     private const val TEN = 10
     private const val MINUTES_PER_HOUR = 60
     private const val PIVOT_WORDS = 3
+    private const val CLOCK_HOURS = 12
 
     /** What a time expression is: a length from now, a clock time, or one of the two named ones. */
     enum class Kind { LENGTH, CLOCK, NOON, MIDNIGHT }
 
-    /** One time expression; [minutes] is the length of a [Kind.LENGTH]. */
-    data class Expression(val kind: Kind, val minutes: Int = 0)
+    /** One time expression; [minutes] is the length of a [Kind.LENGTH], [hour] the 12-hour hour of a [Kind.CLOCK]. */
+    data class Expression(val kind: Kind, val minutes: Int = 0, val hour: Int? = null)
 
     /**
      * The time expressions in [transcript], in order: a length ("in 30 minutes"), a clock time ("at 9:35",
@@ -79,14 +80,22 @@ internal object TimeExpressions {
     /** "Ten to six", "half past three". */
     private fun pivotAt(words: List<String>, at: Int): Pair<Expression, Int>? {
         val (minutes, pivot, hour) = words.drop(at).take(PIVOT_WORDS).takeIf { it.size == PIVOT_WORDS } ?: return null
-        val timed = TimeResolver.isMinutes(minutes) && TimeResolver.clockHour(hour) != null &&
+        val said = TimeResolver.clockHour(hour)
+        val timed = TimeResolver.isMinutes(minutes) && said != null &&
             (pivot in TimeResolver.PAST_THE_HOUR || pivot in TimeResolver.TO_THE_HOUR)
-        return if (timed) Expression(Kind.CLOCK) to at + PIVOT_WORDS else null
+        if (!timed || said == null) return null
+        // "Ten to one" is in the hour before one, which is twelve.
+        val inHour = when {
+            pivot !in TimeResolver.TO_THE_HOUR -> said
+            said == 1 -> CLOCK_HOURS
+            else -> said - 1
+        }
+        return Expression(Kind.CLOCK, hour = inHour) to at + PIVOT_WORDS
     }
 
     /** An hour with the minutes said after it ("9 35", "seven ten", "seven oh five") and its am, pm or o'clock. */
     private fun hourAt(words: List<String>, at: Int, bare: Boolean): Pair<Expression, Int>? {
-        if (words.getOrNull(at)?.let(TimeResolver::clockHour) == null) return null
+        val hour = words.getOrNull(at)?.let(TimeResolver::clockHour) ?: return null
         var end = at + 1
         if (words.getOrNull(end) in OHS && numberAt(words, end + 1) != null) end++
         numberAt(words, end)?.takeIf { (value, _) -> value == value.toInt().toDouble() && value < MINUTES_PER_HOUR }
@@ -97,7 +106,7 @@ internal object TimeExpressions {
             else -> 0
         }
         // Without an at or for, a number is only a time when something says so: "3 pm", "7 o'clock".
-        return if (cue > 0 || !bare) Expression(Kind.CLOCK) to end + cue else null
+        return if (cue > 0 || !bare) Expression(Kind.CLOCK, hour = hour) to end + cue else null
     }
 
     /**

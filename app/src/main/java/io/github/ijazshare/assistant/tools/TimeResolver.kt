@@ -83,21 +83,24 @@ object TimeResolver {
      *
      * Only an explicit part-of-day cue triggers this. Without one the model's answer
      * stands, because "alarm at seven" genuinely does not say which seven.
+     *
+     * [stated] is the hour of the one time the transcript states, when the caller found it
+     * (see [StatedTime]); without it the first clock-sized number is taken, as it always was,
+     * which in "take 2 pills at 3 pm" is the 2.
      */
-    fun reconcileHour(transcript: String, hour: Int?): Int? {
+    fun reconcileHour(transcript: String, hour: Int?, stated: Int? = null): Int? {
         val resolved = hourOf(hour) ?: return hour
         // "6pm" is one token to a plain split, and neither the number six nor the word
         // pm; the boundary between a digit and a letter has to be made explicit first.
         val words = transcript.lowercase()
-            .replace(DOTTED_MERIDIEM, "$1m")
             .replace(DIGIT_LETTER_BOUNDARY, " ")
             .split(WORD_BREAK)
             .filter { it.isNotEmpty() }
         val evening = words.any { it in EVENING_CUES }
         val morning = words.any { it in MORNING_CUES }
-        if (evening == morning) return if (evening) resolved else hourAfterAt(transcript, words, resolved)
+        if (evening == morning) return if (evening) resolved else hourAfterAt(transcript, words, resolved, stated)
 
-        val said = hourSaid(words) ?: return resolved
+        val said = stated ?: hourSaid(words) ?: return resolved
 
         val corrected = when {
             evening && said == NOON -> NOON
@@ -140,7 +143,7 @@ object TimeResolver {
      * when it is the minutes of "at ten to six". And only when it is the one time the transcript
      * states: with a second, which one is the time asked for is not said (see [StatedTime]).
      */
-    private fun hourAfterAt(transcript: String, words: List<String>, resolved: Int): Int {
+    private fun hourAfterAt(transcript: String, words: List<String>, resolved: Int, stated: Int?): Int {
         if (TimeExpressions.of(transcript).size != 1) return resolved
         // Padded so the last "at" still has a window of four.
         val padded = words + List(PADDING) { "" }
@@ -150,7 +153,7 @@ object TimeResolver {
                 clockHour(padded[i + PADDING]) != null
             at == "at" && !minutesFirst && clockHour(hour) != null
         }
-        val said = at?.let { clockHour(padded[it + 1]) }
+        val said = stated ?: at?.let { clockHour(padded[it + 1]) }
         return if (said == null || said % NOON == resolved % NOON) resolved else said
     }
 

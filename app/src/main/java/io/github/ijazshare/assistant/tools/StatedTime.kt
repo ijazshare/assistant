@@ -51,7 +51,11 @@ object StatedTime {
             Kind.MIDNIGHT -> 0 to 0
 
             Kind.CLOCK -> {
-                val reconciled = TimeResolver.reconcileHour(transcript, hour) ?: return null
+                // The hour of the one time said, not the first small number: "take 2 pills at 3 p.m." is 3.
+                // "p.m." is read here, where it can only belong to that time; the model-led path
+                // for several times keeps main's reading, which never saw it.
+                val cued = transcript.replace(TimeResolver.DOTTED_MERIDIEM, "$1m")
+                val reconciled = TimeResolver.reconcileHour(cued, hour, only.hour) ?: return null
                 reconciled to (minuteSaid(transcript, words, reconciled) ?: minute ?: 0)
             }
         }
