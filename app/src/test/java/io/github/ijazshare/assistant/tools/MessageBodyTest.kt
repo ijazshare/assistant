@@ -68,6 +68,15 @@ class MessageBodyTest {
     }
 
     @Test
+    fun aShortWordIsNotFoundInsideALongerOne() {
+        // "ok" is inside "okay", and "in" inside "running": neither was said.
+        assertThat(MessageBody.isTraceable("okay text Dad please", "ok", "Dad")).isFalse()
+        assertThat(MessageBody.isTraceable("text Dad running", "in on", "Dad")).isFalse()
+        // A longer word still matches its own inflection.
+        assertThat(MessageBody.isTraceable("text Dad running later", "running late", "Dad")).isTrue()
+    }
+
+    @Test
     fun aRequestToSendIsNotTheMessage() {
         // The bug: "Now send that message to Hassan IT" was itself sent to Hassan IT.
         assertThat(MessageBody.isRequest("Now send that message to Hassan IT", "Hassan IT")).isTrue()

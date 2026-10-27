@@ -23,6 +23,9 @@ object MessageBody {
     /** Below this fraction of body words found in the transcript, the body was invented. */
     private const val TRACEABLE_FRACTION = 0.5f
 
+    /** Shorter body words must appear whole in the transcript, not inside another word. */
+    private const val MIN_INFIX = 4
+
     private val WORD = Regex("[^\\p{L}\\p{N}]+")
     private val FOR_ME = Regex("\\bfor me\\b")
 
@@ -96,8 +99,12 @@ object MessageBody {
         val named = recipient.lowercase().split(WORD).toSet() + COMMAND_WORDS
         val words = all.filterNot { it in named }
         if (words.isEmpty()) return false
-        val haystack = transcript.lowercase().split(WORD).filterNot { it in named }.joinToString(" ")
-        val found = words.count { haystack.contains(it) }
+        val heard = transcript.lowercase().split(WORD).filterNot { it in named }
+        // A long word may be found inside a longer one ("late" in "later"); a short one only
+        // whole, or an invented "ok" was found in "okay" and sent.
+        val found = words.count { word ->
+            if (word.length < MIN_INFIX) word in heard else heard.any { it.contains(word) }
+        }
         return found.toFloat() / words.size >= TRACEABLE_FRACTION
     }
 }
