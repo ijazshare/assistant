@@ -80,7 +80,7 @@ The 1B's single grammar-constrained tool call is the routing decision. The tool 
 No Room database.
 
 - `set_alarm` → `AlarmClock.ACTION_SET_ALARM` with `EXTRA_HOUR/MINUTES/MESSAGE` and `EXTRA_SKIP_UI=true` (stay in overlay). `set_timer` → `ACTION_SET_TIMER` with `EXTRA_LENGTH`. `show_alarms` → `ACTION_SHOW_ALARMS`.
-- `create_reminder` → a line in `tasks.md` via `ReminderStore`; with a time, `AlarmManager.setExactAndAllowWhileIdle` (inexact fallback). `ReminderReceiver` posts the notification with Done and Snooze 10 min actions. `ReminderBootReceiver` re-arms every reminder on `BOOT_COMPLETED`, timezone change and time change.
+- `create_reminder` → a line in `tasks.md` via `ReminderStore`; with a time, `AlarmManager.setExactAndAllowWhileIdle` (inexact fallback). `ReminderReceiver` posts the notification with Done and Snooze 10 min actions. `ReminderBootReceiver` re-arms every reminder on `BOOT_COMPLETED`, timezone change and time change, and after a reboot shows once more a reminder that fired but was never answered (Done, Snooze, swiped or opened): a fired reminder's line carries a `delivered` flag in place of its due time. Ticked-off tasks are left out of the answer model's context.
 - `send_message` → `SmsManager`, never without a body the user said; `call_contact` → `TelecomManager.placeCall` (falls back to the dialler). Contacts must match whole words of a display name.
 - `open_app` → `AppLookup` and the app's launch intent; no accessibility needed. `tap_text`, `scroll`, `navigate`, `take_screenshot`, `read_screen` → the accessibility service (`read_screen` falls back to Tesseract OCR, if installed, when the tree has fewer than 3 lines or 40 characters of text). `read_notifications` → the notification listener.
 

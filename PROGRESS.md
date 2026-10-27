@@ -47,6 +47,10 @@ Summarised from `git log --since=2026-09-03`.
   editor saves only real edits and never over a newer file (opening the screen used to save
   the boxes before they had loaded, which could blank the files). The overlay keeps the screen
   on while it is up. CLAUDE.md, README.md and this file were brought in line with the code.
+- **Second review (27 Oct).** A reminder that fired but was never answered is shown once more
+  after a reboot, and a cold start no longer alerts twice. Ticked-off tasks no longer fill the
+  answer model's context. A short word in a message body must have been said whole ("ok" is
+  not in "okay"). Contact and app lookups and the voice's teardown are off the main thread.
 
 ## Phase status
 
