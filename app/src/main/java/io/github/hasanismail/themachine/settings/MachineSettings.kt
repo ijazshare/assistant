@@ -1,5 +1,5 @@
 /*
- * The Machine — an offline voice assistant for Android.
+ * Assistant — an offline voice assistant for Android.
  * Copyright (C) 2026 Hasan Ismail
  *
  * This program is free software: you can redistribute it and/or modify it under
@@ -95,7 +95,7 @@ class MachineSettings(private val context: Context) {
 
     companion object {
         /**
-         * The Machine calls its operator "Admin" until told otherwise — which is both
+         * The assistant calls its operator "Admin" until told otherwise — which is both
          * the sensible default and the right register for the thing.
          */
         const val DEFAULT_ADMIN_NAME = "Admin"

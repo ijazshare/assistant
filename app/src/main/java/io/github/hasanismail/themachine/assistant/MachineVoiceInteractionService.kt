@@ -1,5 +1,5 @@
 /*
- * The Machine — an offline voice assistant for Android.
+ * Assistant — an offline voice assistant for Android.
  * Copyright (C) 2026 Hasan Ismail
  *
  * This program is free software: you can redistribute it and/or modify it under
@@ -14,7 +14,7 @@ import android.service.voice.VoiceInteractionService
 import android.util.Log
 
 /**
- * Declaring this is what makes The Machine appear under *Default digital assistant app*.
+ * Declaring this is what makes the app appear under *Default digital assistant app*.
  *
  * Android builds the assistant picker by querying for services with the
  * android.service.voice.VoiceInteractionService intent filter that also carry the

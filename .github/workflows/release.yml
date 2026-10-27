@@ -160,7 +160,7 @@ jobs:
             ${{ env.RELEASE_APK }}
             ${{ env.RELEASE_APK }}.sha256
           body: |
-            The Machine — offline voice assistant for Android.
+            Assistant — offline voice assistant for Android.
 
             **Install:** download the APK below and sideload it. There is no Play Store build.
             Verify the download against the `.sha256` file before installing.

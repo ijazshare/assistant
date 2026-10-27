@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  What makes The Machine selectable as the default digital assistant.
+  What makes the app selectable as the default digital assistant.
 
   android:recognitionService is REQUIRED and must name a real class; pointing it at
   something that does not exist silently stops the app being offered in the picker.
-  The Machine does not actually transcribe through SpeechRecognizer — that path is
+  The app does not actually transcribe through SpeechRecognizer — that path is
   system-mediated and usually cloud-backed — so the class it names reports an error
   rather than pretending to serve other apps.
 -->

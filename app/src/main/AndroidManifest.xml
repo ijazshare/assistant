@@ -4,7 +4,7 @@
 
     <!--
       ==========================================================================
-      The Machine asks for broad access on purpose: it is meant to act on the
+      The app asks for broad access on purpose: it is meant to act on the
       phone, not just set alarms. What it does NOT do is send any of it anywhere.
       There is no analytics SDK, no crash reporter, and the only network traffic
       in the app is downloading models — enforced by a CI job, not just promised.
@@ -103,7 +103,7 @@
 
     <!--
       Needed to launch and act on arbitrary apps by name. Play would demand a declared
-      justification; The Machine is sideloaded, and an assistant restricted to a
+      justification; this app is sideloaded, and an assistant restricted to a
       hardcoded list of apps cannot do what it is being asked to do.
     -->
     <uses-permission
@@ -210,7 +210,7 @@
         <!--
           ==================================================================
           Assistant role. Declaring VoiceInteractionService with the
-          android.voice_interaction metadata is what makes The Machine appear
+          android.voice_interaction metadata is what makes the app appear
           under "Default digital assistant app" — an app that does not declare
           it is simply not a candidate, no matter what else it holds.
           ==================================================================
@@ -239,7 +239,7 @@
           Exported with no permission because a RecognitionService is meant to be bound
           by the system and by other apps — that is the entire contract, and there is no
           BIND_ permission for it. Harmless here: this implementation immediately reports
-          ERROR_CLIENT to anything that binds, because The Machine transcribes in-process
+          ERROR_CLIENT to anything that binds, because the app transcribes in-process
           with Whisper rather than serving the system SpeechRecognizer API.
         -->
         <service

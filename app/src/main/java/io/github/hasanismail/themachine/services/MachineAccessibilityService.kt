@@ -1,5 +1,5 @@
 /*
- * The Machine — an offline voice assistant for Android.
+ * Assistant — an offline voice assistant for Android.
  * Copyright (C) 2026 Hasan Ismail
  *
  * This program is free software: you can redistribute it and/or modify it under
@@ -245,7 +245,7 @@ class MachineAccessibilityService : AccessibilityService() {
      * altogether, so there is no window to capture on its own and the whole display is
      * taken instead. What must not survive into the OCR is this assistant's own panel
      * and the keyboard above it — otherwise "read the screen" comes back reciting
-     * "THE MACHINE. TYPE. TAP TO DISMISS." Both are anchored to the bottom, so the
+     * "Assistant. Type." Both are anchored to the bottom, so the
      * honest crop is everything above the highest of them.
      */
     private fun uncoveredBounds(): Rect? {
@@ -328,7 +328,7 @@ class MachineAccessibilityService : AccessibilityService() {
      *
      * While the assistant is open its own overlay holds focus, so the obvious
      * `rootInActiveWindow` returns the panel itself: asked to read the screen, the
-     * assistant read its own buttons back — "THE MACHINE. TYPE. TAP TO DISMISS." Our
+     * assistant read its own buttons back — "Assistant. Type." Our
      * own windows are skipped, and the topmost application window is used instead.
      */
     private fun foregroundWindow(): AccessibilityWindowInfo? {

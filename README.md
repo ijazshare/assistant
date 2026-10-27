@@ -1,8 +1,9 @@
 # Assistant
 
-> **Fork.** This is a personal fork of [hasan-ismail/themachine](https://github.com/hasan-ismail/themachine),
-> renamed and redesigned. Licensed under AGPL-3.0, same as upstream — see [LICENSE](LICENSE).
-> Changes here include a modern UI redesign and expanded on-device actions.
+> Assistant is developed independently. It started as a fork of
+> [Hasan Ismail's offline voice assistant](https://github.com/hasan-ismail/themachine) and has
+> been modified since September 2026. Like the original, it is licensed under AGPL-3.0 — see
+> [LICENSE](LICENSE).
 
 A fully offline voice assistant for Android. It replaces Google Assistant for the things
 people actually use an assistant for — alarms, timers, reminders and tasks — and does the
@@ -40,14 +41,14 @@ nothing read from the device leaves it.
 ## Why
 
 Every mainstream phone assistant streams your voice to a server. For "set a timer for ten
-minutes" that trade is absurd. The Machine does the same job with the microphone data never
+minutes" that trade is absurd. Assistant does the same job with the microphone data never
 leaving the device.
 
 ## Features
 
 Planned for v1, tracked in [PROGRESS.md](PROGRESS.md):
 
-- **Hold the side button, speak, done.** The Machine registers as Android's default digital
+- **Hold the side button, speak, done.** The app registers as Android's default digital
   assistant, so the existing assistant gesture wakes it.
 - **Alarms and timers** are delegated to your phone's own Clock app via standard `AlarmClock`
   intents — no second alarm engine to fight with, and no alarms trapped inside this app.
@@ -165,7 +166,7 @@ and `*.jks` are gitignored.
 
 ## Licence and attribution
 
-The Machine is licensed under the **GNU Affero General Public License v3.0** — see
+Assistant is licensed under the **GNU Affero General Public License v3.0** — see
 [LICENSE](LICENSE).
 
 It builds on work by others, each under its own licence:

@@ -1,5 +1,5 @@
 /*
- * The Machine — an offline voice assistant for Android.
+ * Assistant — an offline voice assistant for Android.
  * Copyright (C) 2026 Hasan Ismail
  *
  * This program is free software: you can redistribute it and/or modify it under
@@ -17,7 +17,7 @@ import android.speech.RecognitionService
  * pointing it at a class that does not exist stops the whole app from being offered as
  * an assistant.
  *
- * The Machine does not recognise speech through this API — SpeechRecognizer is a
+ * The app does not recognise speech through this API — SpeechRecognizer is a
  * system-mediated, usually cloud-backed path, which is the opposite of the point. All
  * transcription happens in-process through Whisper. So these callbacks report an error
  * rather than pretending: any third-party app that binds here is told plainly that this
