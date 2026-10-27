@@ -66,4 +66,28 @@ class MessageBodyTest {
     fun dropsABodyAboutSomethingElse() {
         assertThat(MessageBody.isTraceable("message mum", "the meeting is at three")).isFalse()
     }
+
+    @Test
+    fun aRequestToSendIsNotTheMessage() {
+        // The bug: "Now send that message to Hassan IT" was itself sent to Hassan IT.
+        assertThat(MessageBody.isRequest("Now send that message to Hassan IT", "Hassan IT")).isTrue()
+        assertThat(MessageBody.isRequest("Now send that message to Sam Lee", "Sam Lee")).isTrue()
+        assertThat(MessageBody.isRequest("send it to Sam", "Sam")).isTrue()
+        assertThat(MessageBody.isRequest("text Sam", "Sam")).isTrue()
+        assertThat(MessageBody.isRequest("send Sam a message", "Sam")).isTrue()
+        assertThat(MessageBody.isRequest("Can you please text him", "Sam")).isTrue()
+    }
+
+    @Test
+    fun dictationIsNotARequest() {
+        assertThat(MessageBody.isRequest("I'll be late", "Sam")).isFalse()
+        assertThat(MessageBody.isRequest("I'm on my way", "Sam")).isFalse()
+        assertThat(MessageBody.isRequest("send me the report", "Sam")).isFalse()
+        assertThat(MessageBody.isRequest("I sent the file to Omar", "Sam")).isFalse()
+        // Whole sentences too, if the model ever hands one back.
+        assertThat(MessageBody.isRequest("text Sam I'll be late", "Sam")).isFalse()
+        assertThat(MessageBody.isRequest("send a message to Sam saying I'm on my way", "Sam")).isFalse()
+        assertThat(MessageBody.isRequest("tell Sam to send me the report", "Sam")).isFalse()
+        assertThat(MessageBody.isRequest("message Sam that I sent the file to Omar", "Sam")).isFalse()
+    }
 }

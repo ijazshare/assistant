@@ -37,6 +37,43 @@ object MessageBody {
         "an", "the", "my",
     )
 
+    /** The verbs that open a request to send: what is said after them is the request, not a message. */
+    private val REQUEST_VERBS = setOf(
+        "send", "text", "message", "sms", "email", "whatsapp", "signal", "telegram", "dm", "msg", "txt",
+        "ping", "tell", "write", "reply",
+    )
+
+    /**
+     * What may follow the verb of a request, or come before it, without being a message: the
+     * message and the person it is meant for, by name or pronoun, and the politeness around
+     * them. One word that is none of these — "send me the *report*" — and it is dictation.
+     */
+    private val REQUEST_WORDS = setOf(
+        "now", "please", "ok", "okay", "then", "and", "can", "could", "you", "just", "go", "ahead",
+        "it", "that", "this", "a", "an", "the", "to", "him", "her", "them", "over", "off", "again",
+        "message", "messages", "text", "texts", "sms", "email", "whatsapp", "signal", "telegram", "dm",
+        "msg", "txt",
+    )
+
+    /**
+     * True if [body] is the request to send rather than words to send: "Now send that message
+     * to Sam Lee", "send it to Sam", "text Sam", "send Sam a message".
+     *
+     * The model hands back the request as the body when none was dictated, and it passes
+     * [isTraceable] because the user did say those words. A request is a command verb, then
+     * nothing but the recipient and the little words of asking; dictation after "text Sam"
+     * has words of its own, so "text Sam I'll be late" is untouched (its body, "I'll be
+     * late", never starts with a verb), and so is "send me the report".
+     */
+    fun isRequest(body: String, recipient: String = ""): Boolean {
+        val named = recipient.lowercase().split(WORD).toSet()
+        val words = body.lowercase().split(WORD).filter { it.isNotEmpty() && it !in named }
+        val verb = words.indexOfFirst { it in REQUEST_VERBS }
+        // Only politeness may stand in front of the verb: "Now send ...", "Can you text ...".
+        if (verb < 0 || words.take(verb).any { it !in REQUEST_WORDS }) return false
+        return words.drop(verb + 1).all { it in REQUEST_WORDS }
+    }
+
     /**
      * True if [body] looks like something the user actually said in [transcript] when
      * texting [recipient].

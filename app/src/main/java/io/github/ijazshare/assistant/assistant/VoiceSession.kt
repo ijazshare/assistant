@@ -591,10 +591,18 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
         // A message body the user never said is invented, not dictated; drop it so the
         // executor asks for the words rather than sending "hello how are you" to someone.
+        // So is one that is the request itself ("Now send that message to Sam"), which the
+        // user did say, but as the command and not as the message.
         if (call.tool == AssistantTools.SEND_MESSAGE) {
             val body = call.arguments["body"].orEmpty()
             val recipient = call.arguments["recipient"].orEmpty()
-            if (body.isNotBlank() && !MessageBody.isTraceable(transcript, body, recipient)) {
+            val display = call.arguments["display"].orEmpty()
+            if (body.isNotBlank() &&
+                (
+                    MessageBody.isRequest(body, "$recipient $display") ||
+                        !MessageBody.isTraceable(transcript, body, recipient)
+                    )
+            ) {
                 Log.i(TAG, "dropping invented body \"$body\" for [$transcript]")
                 return call.copy(arguments = call.arguments - "body")
             }
