@@ -50,7 +50,7 @@ import io.github.ijazshare.assistant.tools.ContactRecency
 import io.github.ijazshare.assistant.tools.ContactResolution
 import io.github.ijazshare.assistant.tools.MessageBody
 import io.github.ijazshare.assistant.tools.ReminderStore
-import io.github.ijazshare.assistant.tools.TimeResolver
+import io.github.ijazshare.assistant.tools.StatedTime
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
 import io.github.ijazshare.assistant.tools.ToolResult
@@ -600,12 +600,31 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
             }
         }
 
-        val timed = call.tool == AssistantTools.SET_ALARM || call.tool == AssistantTools.CREATE_REMINDER
+        if (call.tool == AssistantTools.SET_ALARM || call.tool == AssistantTools.CREATE_REMINDER) {
+            return withSpokenTime(transcript, call)
+        }
+        return call
+    }
+
+    /**
+     * Replaces the model's time with the one the words state: "in 30 minutes" is now plus thirty
+     * minutes, and "at 9:35" is 9:35, whatever the model made of them. A transcript with no time
+     * words keeps the model's numbers, as before.
+     */
+    private fun withSpokenTime(transcript: String, call: ToolCall): ToolCall {
         val stated = call.arguments["hour"]?.toIntOrNull()
-        val corrected = if (timed && stated != null) TimeResolver.reconcileHour(transcript, stated) else null
-        if (corrected == null || corrected == stated) return call
-        Log.i(TAG, "hour corrected from $stated to $corrected for [$transcript]")
-        return call.copy(arguments = call.arguments + ("hour" to corrected.toString()))
+        val minute = call.arguments["minute"]?.toIntOrNull()
+        val spoken = StatedTime.of(transcript, stated, minute) ?: return call
+        val fixes = buildMap {
+            if (spoken.hour != stated) put("hour", spoken.hour.toString())
+            if (spoken.minute != (minute ?: 0)) put("minute", spoken.minute.toString())
+            if (spoken.tomorrow != null && spoken.tomorrow != call.bool("tomorrow")) {
+                put("tomorrow", spoken.tomorrow.toString())
+            }
+        }
+        if (fixes.isEmpty()) return call
+        Log.i(TAG, "time corrected by $fixes (model said $stated:$minute) for [$transcript]")
+        return call.copy(arguments = call.arguments + fixes)
     }
 
     /**

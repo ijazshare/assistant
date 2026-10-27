@@ -31,6 +31,7 @@ object TimeResolver {
     private const val NOON = 12
     private const val LAST_HOUR = 23
     private const val LAST_MINUTE = 59
+    private const val PADDING = 3
 
     /**
      * Whether [hour]:[minute] is the current clock minute.
@@ -88,12 +89,13 @@ object TimeResolver {
         // "6pm" is one token to a plain split, and neither the number six nor the word
         // pm; the boundary between a digit and a letter has to be made explicit first.
         val words = transcript.lowercase()
+            .replace(DOTTED_MERIDIEM, "$1m")
             .replace(DIGIT_LETTER_BOUNDARY, " ")
             .split(WORD_BREAK)
             .filter { it.isNotEmpty() }
         val evening = words.any { it in EVENING_CUES }
         val morning = words.any { it in MORNING_CUES }
-        if (evening == morning) return resolved
+        if (evening == morning) return if (evening) resolved else hourAfterAt(words, resolved)
 
         val said = hourSaid(words) ?: return resolved
 
@@ -131,26 +133,50 @@ object TimeResolver {
         return counted ?: words.firstNotNullOfOrNull(::clockHour)
     }
 
-    private fun clockHour(word: String): Int? =
+    /**
+     * With no part-of-day cue the model's hour stands, since "alarm at seven" does not say which
+     * seven — unless it is not a seven at all. "Tomorrow at 7" came back as 3, and 3 is neither
+     * of the sevens, so the hour said wins. Only the number straight after "at" counts, and not
+     * when it is the minutes of "at ten to six".
+     */
+    private fun hourAfterAt(words: List<String>, resolved: Int): Int {
+        // Padded so the last "at" still has a window of four.
+        val said = (words + List(PADDING) { "" }).windowed(size = 4).firstNotNullOfOrNull { window ->
+            val (at, hour, pivot) = window
+            val after = window.last()
+            val minutesFirst = isMinutes(hour) && (pivot in PAST_THE_HOUR || pivot in TO_THE_HOUR) &&
+                clockHour(after) != null
+            if (at != "at" || minutesFirst) null else clockHour(hour)
+        }
+        return if (said == null || said % NOON == resolved % NOON) resolved else said
+    }
+
+    internal fun clockHour(word: String): Int? =
         (SPOKEN_NUMBERS[word] ?: word.takeWhile { it.isDigit() }.toIntOrNull())
             ?.takeIf { it in 1..NOON }
 
-    private fun isMinutes(word: String): Boolean =
+    internal fun isMinutes(word: String): Boolean =
         word in SPOKEN_MINUTES || word.toIntOrNull() in 1..LAST_MINUTE
 
     private val WORD_BREAK = Regex("""[^a-z0-9]+""")
-    private val DIGIT_LETTER_BOUNDARY = Regex("""(?<=\d)(?=[a-z])""")
+    internal val DIGIT_LETTER_BOUNDARY = Regex("""(?<=\d)(?=[a-z])""")
+
+    // "3 p.m." splits into 3, p and m, and then carries no cue at all.
+    internal val DOTTED_MERIDIEM = Regex("""\b([ap])\.\s?m\b\.?""")
+
     private val EVENING_CUES = setOf("pm", "evening", "night", "tonight", "afternoon")
     private val MORNING_CUES = setOf("am", "morning")
-    private val SPOKEN_NUMBERS = mapOf(
+    internal val SPOKEN_NUMBERS = mapOf(
         "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5, "six" to 6,
         "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10, "eleven" to 11, "twelve" to 12,
+        "thirteen" to 13, "fourteen" to 14, "fifteen" to 15, "sixteen" to 16, "seventeen" to 17,
+        "eighteen" to 18, "nineteen" to 19,
         "noon" to 12, "midday" to 12,
     )
 
     // "Ten past six" is six o'clock and ten; "ten to six" is five o'clock and fifty.
-    private val PAST_THE_HOUR = setOf("past", "after")
-    private val TO_THE_HOUR = setOf("to", "till", "til")
+    internal val PAST_THE_HOUR = setOf("past", "after")
+    internal val TO_THE_HOUR = setOf("to", "till", "til")
 
     // The minutes as spoken in front of to or past. "Twenty-five" is already twenty and five
     // by the time this is asked, so the tens are enough. Noon is a time, never an amount.
