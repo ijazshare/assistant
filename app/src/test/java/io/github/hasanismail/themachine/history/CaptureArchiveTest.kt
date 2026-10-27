@@ -10,6 +10,9 @@
 package io.github.hasanismail.themachine.history
 
 import com.google.common.truth.Truth.assertThat
+import io.github.hasanismail.themachine.audio.Captured
+import io.github.hasanismail.themachine.audio.FrameMeter
+import io.github.hasanismail.themachine.audio.StopReason
 import kotlinx.serialization.json.Json
 import org.junit.Rule
 import org.junit.Test
@@ -17,6 +20,8 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.nextDown
+import kotlin.math.nextUp
 
 class CaptureArchiveTest {
 
@@ -30,10 +35,19 @@ class CaptureArchiveTest {
     private fun index(): List<CaptureRecord> =
         File(folder.root, CaptureArchive.INDEX).readLines().map { Json.decodeFromString<CaptureRecord>(it) }
 
+    private fun captured(
+        samples: FloatArray,
+        levels: FloatArray,
+        highBandLevels: FloatArray = FloatArray(levels.size),
+        reason: StopReason = StopReason.ENDPOINT,
+    ) = Captured(samples, levels, highBandLevels, reason, source = 6)
+
     @Test
     fun `a capture becomes a wav and an index line that names it`() {
-        CaptureArchive(folder.root, enabled = true)
-            .save(1_000L, floatArrayOf(0f, 0.5f, -0.5f), floatArrayOf(0.01234567f, 0.5f), "ENDPOINT", 6)
+        CaptureArchive(folder.root, enabled = true).save(
+            1_000L,
+            captured(floatArrayOf(0f, 0.5f, -0.5f), floatArrayOf(0.01234567f, 0.5f), floatArrayOf(0.002f, 0.25f)),
+        )
 
         val wav = wavs().single()
         assertThat(wav.length()).isEqualTo(44L + 3 * 2)
@@ -43,12 +57,41 @@ class CaptureArchiveTest {
         assertThat(record.reason).isEqualTo("ENDPOINT")
         assertThat(record.source).isEqualTo(6)
         assertThat(record.frameMillis).isEqualTo(20L)
+        // Kept as the endpointer was given them. These were rounded to five decimals (0.01235)
+        // until the high band came in: its quiet-room levels sit near 0.001, where that rounding
+        // can move a level across one of the endpointer's comparisons, and a replay would then
+        // decide differently from the phone.
+        assertThat(record.levels).containsExactly(0.01234567f, 0.5f).inOrder()
+        assertThat(record.highBandLevels).containsExactly(0.002f, 0.25f).inOrder()
+        assertThat(record.levelsFrontEnd).isEqualTo(FrameMeter.FRONT_END)
+    }
+
+    @Test
+    fun `the levels read back exactly as the endpointer was given them`() {
+        val levels = floatArrayOf(1e-7f, 0.0011f, 1f / 3, 0.004f.nextUp(), 0.004f.nextDown(), 0.08f)
+        CaptureArchive(folder.root, enabled = true)
+            .save(1_000L, captured(FloatArray(2), levels, highBandLevels = levels.reversedArray()))
+
+        val record = index().single()
+        assertThat(record.levels.toFloatArray()).isEqualTo(levels)
+        assertThat(record.highBandLevels.toFloatArray()).isEqualTo(levels.reversedArray())
+    }
+
+    @Test
+    fun `an index line from before the high band still reads, as raw levels`() {
+        val line = """{"atEpochMillis":1000,"reason":"ENDPOINT","source":6,"frameMillis":20,""" +
+            """"recording":"19700101-000001-000-endpoint.wav","levels":[0.01235,0.5]}"""
+
+        val record = Json.decodeFromString<CaptureRecord>(line)
+
         assertThat(record.levels).containsExactly(0.01235f, 0.5f).inOrder()
+        assertThat(record.highBandLevels).isEmpty()
+        assertThat(record.levelsFrontEnd).isEqualTo(CaptureArchive.RAW_LEVELS)
     }
 
     @Test
     fun `a release build writes nothing`() {
-        CaptureArchive(folder.root, enabled = false).save(1_000L, floatArrayOf(0.1f), floatArrayOf(0.1f), "ENDPOINT", 6)
+        CaptureArchive(folder.root, enabled = false).save(1_000L, captured(floatArrayOf(0.1f), floatArrayOf(0.1f)))
 
         assertThat(folder.root.listFiles()).isEmpty()
     }
@@ -57,7 +100,7 @@ class CaptureArchiveTest {
     fun `only the newest captures are kept`() {
         val archive = CaptureArchive(folder.root, enabled = true, keep = 2)
         listOf(1_000L, 2_000L, 3_000L).forEach {
-            archive.save(it, floatArrayOf(0f), floatArrayOf(0f), "MAX_DURATION", 6)
+            archive.save(it, captured(floatArrayOf(0f), floatArrayOf(0f), reason = StopReason.MAX_DURATION))
         }
 
         assertThat(wavs()).hasSize(2)

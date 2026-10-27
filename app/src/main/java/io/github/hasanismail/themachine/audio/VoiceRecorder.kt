@@ -63,7 +63,7 @@ sealed interface CaptureEvent {
 }
 
 enum class StopReason {
-    /** Trailing silence after speech — the normal ending. */
+    /** The speaker finished: quiet after speech, or only the room or background for long enough. */
     ENDPOINT,
 
     /** Hit the hard cap without ever detecting an end. */
@@ -76,8 +76,18 @@ enum class StopReason {
     NO_SPEECH,
 }
 
-/** One capture on one source as it closed, whatever closed it: the audio and every frame's RMS. */
-class Captured(val samples: FloatArray, val levels: FloatArray, val reason: StopReason, val source: Int)
+/**
+ * One capture on one source as it closed, whatever closed it: the audio as recorded, and each
+ * frame's two levels exactly as [Endpointer.accept] was given them — [levels] above 400 Hz and
+ * [highBandLevels] above 1.5 kHz ([FrameMeter]).
+ */
+class Captured(
+    val samples: FloatArray,
+    val levels: FloatArray,
+    val highBandLevels: FloatArray,
+    val reason: StopReason,
+    val source: Int,
+)
 
 /**
  * Opens the microphone, streams level events, and stops when [Endpointer] says the
@@ -92,8 +102,14 @@ class Captured(val samples: FloatArray, val levels: FloatArray, val reason: Stop
  */
 class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
 
+    /**
+     * [newEndpointer] makes a fresh endpointer for each source tried. The endpointer measures
+     * the room as the source opens and follows it from there; a source that opened and fed
+     * silence would hand its next one a room measured at nothing, and the opening transient of
+     * the next source would land after the lead-in instead of inside it.
+     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-    fun capture(endpointer: Endpointer = Endpointer()): Flow<CaptureEvent> = callbackFlow {
+    fun capture(newEndpointer: () -> Endpointer = { Endpointer() }): Flow<CaptureEvent> = callbackFlow {
         val minBuffer = AudioRecord.getMinBufferSize(
             WhisperEngine.SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
@@ -118,7 +134,7 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
             val record = buildRecordOn(source, minBuffer)
             if (record != null) {
                 everOpened = true
-                val silent = runAttempt(record, source, endpointer)
+                val silent = runAttempt(record, source, newEndpointer())
                 keepTrying = silent && index < SOURCES.lastIndex
                 if (keepTrying) {
                     Log.w(TAG, "source $source opened but was silent; reopening on the next source")
@@ -172,7 +188,13 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
             runCatching { record.stop() }
             record.release()
             onCaptured?.invoke(
-                Captured(stats.samples.toFloatArray(), stats.levels.toFloatArray(), stats.reason, source),
+                Captured(
+                    stats.samples.toFloatArray(),
+                    stats.levels.toFloatArray(),
+                    stats.highBandLevels.toFloatArray(),
+                    stats.reason,
+                    source,
+                ),
             )
         }
     }
@@ -181,6 +203,8 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
      * What a capture actually did, so the finally can report it. A peak of ~0 across many
      * frames means the source opened but fed silence (a known VOICE_RECOGNITION state after
      * an audio-route change); few frames with no speech means it was dismissed early.
+     *
+     * One per source opened, so the [meter]'s filters start from silence with it.
      */
     private class CaptureStats {
         var frames = 0
@@ -188,7 +212,9 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
         var speaking = false
         var reason = StopReason.CANCELLED
         val samples = ArrayList<Float>(WhisperEngine.SAMPLE_RATE * INITIAL_SECONDS)
+        val meter = FrameMeter()
         val levels = ArrayList<Float>()
+        val highBandLevels = ArrayList<Float>()
     }
 
     /** Reads frames until the endpointer stops it, the source proves silent, or it is cancelled. */
@@ -217,8 +243,13 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
             }
             barrenReads = 0
 
-            val rms = appendAndMeasure(buffer, read, collected)
-            stats.levels.add(rms)
+            // The meter and the dead-source check read the level as recorded; the endpointer
+            // reads it above 400 Hz and above 1.5 kHz, where a vent's rumble is mostly gone.
+            val meter = stats.meter
+            meter.measure(buffer, read, collected)
+            val rms = meter.raw
+            stats.levels.add(meter.voiceBand)
+            stats.highBandLevels.add(meter.highBand)
             stats.frames++
             if (rms > stats.peak) stats.peak = rms
             trySend(CaptureEvent.Level(displayLevel(rms)))
@@ -241,7 +272,7 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
                 trySend(CaptureEvent.Snapshot(collected.toFloatArray()))
             }
 
-            when (val verdict = endpointer.accept(rms)) {
+            when (val verdict = endpointer.accept(meter.voiceBand, meter.highBand)) {
                 FrameVerdict.Continue -> Unit
 
                 FrameVerdict.SpeechBegan -> {
@@ -268,17 +299,6 @@ class VoiceRecorder(private val onCaptured: ((Captured) -> Unit)? = null) {
 
     /** How a [pump] ended: normally (an endpoint or a cancel), or with a silent source. */
     private enum class PumpResult { NORMAL, SILENT }
-
-    /** Converts one frame to float, accumulates it, and returns its RMS. */
-    private fun appendAndMeasure(buffer: ShortArray, read: Int, into: MutableList<Float>): Float {
-        var sumSquares = 0.0
-        for (i in 0 until read) {
-            val sample = buffer[i] / Short.MAX_VALUE.toFloat()
-            into.add(sample)
-            sumSquares += (sample * sample).toDouble()
-        }
-        return sqrt(sumSquares / read).toFloat()
-    }
 
     /**
      * An initialised recorder on one [source], or null after the retries are spent.

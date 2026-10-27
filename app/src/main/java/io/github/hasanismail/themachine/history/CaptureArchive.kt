@@ -12,6 +12,8 @@ package io.github.hasanismail.themachine.history
 import android.content.Context
 import android.util.Log
 import io.github.hasanismail.themachine.BuildConfig
+import io.github.hasanismail.themachine.audio.Captured
+import io.github.hasanismail.themachine.audio.FrameMeter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -23,22 +25,34 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-/** One microphone capture as the endpointer saw it: how it ended, and every frame's RMS. */
+/**
+ * One microphone capture as the endpointer saw it: how it ended, and every frame's levels,
+ * exactly as the endpointer was given them.
+ *
+ * Records written before the endpointer listened above 400 Hz hold the raw RMS in [levels] and
+ * nothing in [highBandLevels]; they decode with [levelsFrontEnd] set to [CaptureArchive.RAW_LEVELS].
+ */
 @Serializable
 data class CaptureRecord(
     val atEpochMillis: Long,
     val reason: String,
     val source: Int,
     val frameMillis: Long,
-    /** The WAV of this capture, in the same folder as the index. */
+    /** The WAV of this capture, in the same folder as the index: the audio as recorded, unfiltered. */
     val recording: String,
+    /** Per frame, the RMS above 400 Hz: the level the endpointer judges speech on. */
     val levels: List<Float>,
+    /** Per frame, the RMS above 1.5 kHz: the endpointer's second input. */
+    val highBandLevels: List<Float> = emptyList(),
+    /** How [levels] and [highBandLevels] were measured ([FrameMeter.FRONT_END] for new records). */
+    val levelsFrontEnd: String = CaptureArchive.RAW_LEVELS,
 )
 
 /**
- * Keeps recent captures on the device: each one's audio as a WAV, and every frame's level
+ * Keeps recent captures on the device: each one's audio as a WAV, and every frame's levels
  * in an index beside them, so a capture that ran on can be listened to and its levels
- * replayed through the endpointer offline.
+ * replayed through the endpointer offline. The levels are kept as the endpointer had them,
+ * unrounded, so a replay reaches the same decisions the phone did.
  *
  * Temporary, and debug builds only. Added on 2026-10-26 at the user's request while
  * end-of-speech detection is being fixed; once it works this goes, or becomes a setting.
@@ -55,19 +69,22 @@ class CaptureArchive(private val dir: File, val enabled: Boolean, private val ke
     private val json = Json { encodeDefaults = true }
 
     @Synchronized
-    fun save(atEpochMillis: Long, samples: FloatArray, levels: FloatArray, reason: String, source: Int) {
+    fun save(atEpochMillis: Long, capture: Captured) {
         if (!enabled) return
         runCatching {
             dir.mkdirs()
+            val reason = capture.reason.name
             val name = "${STAMP.format(Instant.ofEpochMilli(atEpochMillis))}-${reason.lowercase()}.wav"
-            File(dir, name).writeBytes(wav(samples))
+            File(dir, name).writeBytes(wav(capture.samples))
             val record = CaptureRecord(
                 atEpochMillis = atEpochMillis,
                 reason = reason,
-                source = source,
+                source = capture.source,
                 frameMillis = FRAME_MILLIS,
                 recording = name,
-                levels = levels.map { (it * LEVEL_SCALE).roundToInt() / LEVEL_SCALE },
+                levels = capture.levels.toList(),
+                highBandLevels = capture.highBandLevels.toList(),
+                levelsFrontEnd = FrameMeter.FRONT_END,
             )
             File(dir, INDEX).appendText(json.encodeToString(record) + "\n")
             prune()
@@ -90,14 +107,17 @@ class CaptureArchive(private val dir: File, val enabled: Boolean, private val ke
         const val DIR_NAME = "captures"
         const val INDEX = "captures.jsonl"
 
-        /** About 75 MB of ordinary commands; 320 MB if every one of them ran to the 20 s cap. */
+        /**
+         * About 75 MB of ordinary commands; 320 MB if every one of them ran to the 20 s cap. The
+         * index adds about 1.3 KB per second of capture: two levels a frame, unrounded.
+         */
         const val KEEP = 500
 
         /** The recorder's frame, which every level stands for. */
         const val FRAME_MILLIS = 20L
 
-        /** Levels are kept to five decimals: a quiet room is about 0.002, speech 0.01 and up. */
-        private const val LEVEL_SCALE = 100_000f
+        /** [CaptureRecord.levelsFrontEnd] of records whose levels are the raw RMS. */
+        const val RAW_LEVELS = "raw"
 
         private val STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneId.systemDefault())
 

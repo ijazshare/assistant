@@ -122,9 +122,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private val recorder = VoiceRecorder(
         onCaptured = if (captures.enabled) {
             { c ->
-                teardown.launch {
-                    captures.save(System.currentTimeMillis(), c.samples, c.levels, c.reason.name, c.source)
-                }
+                teardown.launch { captures.save(System.currentTimeMillis(), c) }
             }
         } else {
             null
@@ -361,11 +359,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // dismissal alike — so the "listening" notification never outlives the listening.
         MicForegroundService.start(context)
         // The endpointer ignores the first few frames, which are the microphone opening
-        // rather than anything in the room.
-        val endpointer = Endpointer(leadInMillis = Endpointer.MIC_SETTLE_MILLIS)
+        // rather than anything in the room. The recorder makes one for each source it opens.
+        val newEndpointer = { Endpointer(leadInMillis = Endpointer.MIC_SETTLE_MILLIS) }
         var finished: CaptureEvent.Finished? = null
         try {
-            recorder.capture(endpointer).collect { event ->
+            recorder.capture(newEndpointer).collect { event ->
                 when (event) {
                     is CaptureEvent.Level -> updateListening { it.copy(level = event.amplitude) }
                     CaptureEvent.SpeechStarted -> updateListening { it.copy(heardSpeech = true) }
