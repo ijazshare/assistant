@@ -335,7 +335,7 @@ class VoiceCheckLayerTest {
     }
 
     @Test
-    fun `after a reset an identical capture gives an identical result, and the model is reset too`() {
+    fun `a new layer on the same frames gives an identical result, and resets the model again`() {
         val random = Random(2)
         val frames = Array(200) { FloatArray(frame) { (random.nextGaussian() * 0.02).toFloat() } }
         val model = StubModel { if (it % 40 < 3) 0.99f else 0f }
@@ -343,14 +343,13 @@ class VoiceCheckLayerTest {
         val layer = layer(energy, model)
         val first = run(layer, 200, samples = { frames[it - 1] })
         val armedFirst = layer.armedFrame
-        energy.frames = 0
-        layer.reset()
-        assertThat(layer.stoppedBy).isNull()
-        val second = run(layer, 200, samples = { frames[it - 1] })
+        val again = layer(Scripted(began = 16), model)
+        assertThat(again.stoppedBy).isNull()
+        val second = run(again, 200, samples = { frames[it - 1] })
 
         assertThat(second.toString()).isEqualTo(first.toString())
-        assertThat(layer.armedFrame).isEqualTo(armedFirst)
-        assertThat(model.resets).isEqualTo(2) // when built, and by the reset
+        assertThat(again.armedFrame).isEqualTo(armedFirst)
+        assertThat(model.resets).isEqualTo(2) // once per layer built
     }
 
     @Test

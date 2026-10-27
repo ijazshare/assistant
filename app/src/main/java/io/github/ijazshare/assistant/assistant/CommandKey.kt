@@ -36,11 +36,6 @@ object CommandKey {
         "september", "october", "november", "december", "weekend",
     )
 
-    /** Every run of digits in a key, for checking that a number the model emitted was said. */
-    fun numbersIn(key: String): Set<String> = DIGITS.findAll(key).map { it.value }.toSet()
-
-    private val DIGITS = Regex("""\d+""")
-
     private val UNITS = mapOf(
         "min" to "minutes", "mins" to "minutes", "minute" to "minutes",
         "sec" to "seconds", "secs" to "seconds", "second" to "seconds",

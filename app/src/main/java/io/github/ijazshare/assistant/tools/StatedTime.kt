@@ -27,6 +27,14 @@ import java.time.LocalDateTime
  */
 object StatedTime {
 
+    private val AFTER_TOMORROW = Regex("(?<![a-z])after[^a-z]+tomorrow(?![a-z])", RegexOption.IGNORE_CASE)
+
+    /**
+     * Whether the transcript asks for a day past tomorrow ("the day after tomorrow"). The alarm and
+     * reminder tools only have today and tomorrow, so the model cannot say it either way.
+     */
+    fun beyondTomorrow(transcript: String): Boolean = AFTER_TOMORROW.containsMatchIn(transcript)
+
     /** A time the words state outright; [tomorrow] is null when they name some other day, left to the model. */
     data class At(val hour: Int, val minute: Int, val tomorrow: Boolean?)
 
@@ -67,8 +75,8 @@ object StatedTime {
         // the model's "tomorrow" without the word is a day it made up, and "at 4.15 pm" said at 12:24
         // went to the next day. Another day named is the model's, as it always was. "The day after
         // tomorrow" is two days on, which neither this nor the tools can say: the caller declines it
-        // first (see [TimeWords.beyondTomorrow]).
-        val dayAfter = TimeWords.beyondTomorrow(transcript)
+        // first (see [beyondTomorrow]).
+        val dayAfter = beyondTomorrow(transcript)
         val tomorrow = when {
             "tomorrow" in words && !dayAfter -> true
             words.any { it in OTHER_DAYS } -> null

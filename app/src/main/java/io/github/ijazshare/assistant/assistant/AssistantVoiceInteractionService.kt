@@ -9,9 +9,7 @@
  */
 package io.github.ijazshare.assistant.assistant
 
-import android.os.Bundle
 import android.service.voice.VoiceInteractionService
-import android.util.Log
 
 /**
  * Declaring this is what makes the app appear under *Default digital assistant app*.
@@ -24,38 +22,4 @@ import android.util.Log
  * The service itself does almost nothing: the platform keeps it alive as the assistant,
  * and hands actual interactions to the session service named in the metadata XML.
  */
-class AssistantVoiceInteractionService : VoiceInteractionService() {
-
-    override fun onReady() {
-        super.onReady()
-        instance = this
-        Log.i(TAG, "voice interaction service ready")
-    }
-
-    override fun onShutdown() {
-        instance = null
-        super.onShutdown()
-    }
-
-    companion object {
-        private const val TAG = "Assistant"
-
-        /**
-         * The live service, or null when this app is not the current assistant.
-         *
-         * The platform keeps exactly one of these bound, and showSession on it is the
-         * same door the side button comes through — which is what the wake word needs,
-         * rather than a second way in that would drift from the first.
-         */
-        @Volatile
-        private var instance: AssistantVoiceInteractionService? = null
-
-        /** Opens the assistant. False if this app is not the assistant right now. */
-        fun showSessionNow(): Boolean {
-            val service = instance ?: return false
-            return runCatching { service.showSession(Bundle(), 0) }
-                .onFailure { Log.w(TAG, "could not show the session", it) }
-                .isSuccess
-        }
-    }
-}
+class AssistantVoiceInteractionService : VoiceInteractionService()

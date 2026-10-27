@@ -33,7 +33,6 @@ class ModelRegistryTest {
 
     @Test
     fun `registry parses and is not empty`() {
-        assertThat(registry.version).isEqualTo(1)
         assertThat(registry.all).isNotEmpty()
     }
 

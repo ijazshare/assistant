@@ -52,7 +52,6 @@ import io.github.ijazshare.assistant.tools.MessageBody
 import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.StatedTime
 import io.github.ijazshare.assistant.tools.TimeResolver
-import io.github.ijazshare.assistant.tools.TimeWords
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
 import io.github.ijazshare.assistant.tools.ToolResult
@@ -660,7 +659,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      */
     private fun withSpokenTime(transcript: String, call: ToolCall): ToolCall {
         // The tools have only today and tomorrow, so the model cannot have a day past tomorrow right.
-        if (TimeWords.beyondTomorrow(transcript)) {
+        if (StatedTime.beyondTomorrow(transcript)) {
             Log.i(TAG, "declining a day past tomorrow in [$transcript]")
             return ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "I can only set that for today or tomorrow."))
         }

@@ -56,11 +56,7 @@ data class AssistantPermission(
     val mechanism: GrantMechanism,
     /** Android permission constants requested together; empty for special access. */
     val manifestPermissions: List<String> = emptyList(),
-    /** True when the app still works, just with less, if this is refused. */
-    val optional: Boolean = true,
-) {
-    val isRuntime: Boolean get() = mechanism == GrantMechanism.RUNTIME_DIALOG
-}
+)
 
 /**
  * The catalog. Ordered as onboarding presents it: the things the assistant cannot work
@@ -90,7 +86,6 @@ object AssistantPermissions {
             tier = PermissionTier.CORE,
             mechanism = GrantMechanism.RUNTIME_DIALOG,
             manifestPermissions = listOf(Manifest.permission.RECORD_AUDIO),
-            optional = false,
         ),
         AssistantPermission(
             id = NOTIFICATIONS,
@@ -99,7 +94,6 @@ object AssistantPermissions {
             tier = PermissionTier.CORE,
             mechanism = GrantMechanism.RUNTIME_DIALOG,
             manifestPermissions = listOf(Manifest.permission.POST_NOTIFICATIONS),
-            optional = false,
         ),
         AssistantPermission(
             id = EXACT_ALARMS,
@@ -108,7 +102,6 @@ object AssistantPermissions {
                 "system next feels like waking the app.",
             tier = PermissionTier.CORE,
             mechanism = GrantMechanism.SPECIAL_SETTINGS,
-            optional = false,
         ),
         AssistantPermission(
             id = ASSISTANT_ROLE,
@@ -116,7 +109,6 @@ object AssistantPermissions {
             rationale = "So holding the side button wakes this app instead of Google Assistant.",
             tier = PermissionTier.CORE,
             mechanism = GrantMechanism.SPECIAL_SETTINGS,
-            optional = false,
         ),
         AssistantPermission(
             id = ACCESSIBILITY,
@@ -196,7 +188,4 @@ object AssistantPermissions {
 
     fun byId(id: String): AssistantPermission =
         all.firstOrNull { it.id == id } ?: error("Unknown permission id: $id")
-
-    /** Everything that must be granted before the voice pipeline can run at all. */
-    val required: List<AssistantPermission> = all.filterNot { it.optional }
 }

@@ -70,7 +70,7 @@ data class VoiceCheckReport(
  *
  * Windows. The model takes exactly [WINDOW] samples every time: 64 it has already seen and 512
  * new, so a window completes every 512 samples. A wrong length does not throw: the native library
- * ends the whole process. Nothing is fed during the microphone's opening [leadInFrames].
+ * ends the whole process. Nothing is fed during the microphone's opening [LEAD_IN_FRAMES].
  *
  * One per capture, and per source opened: the filter and the model both start from silence.
  * Not thread-safe. The [model] must be this capture's own: two captures that share a model's
@@ -83,12 +83,11 @@ data class VoiceCheckReport(
 class VoiceCheckLayer(
     private val energy: (rms: Float, highBandRms: Float) -> FrameVerdict,
     private val model: VoiceModel?,
-    private val leadInFrames: Int = LEAD_IN_FRAMES,
 ) {
     /** Which part ended a capture. */
     enum class StoppedBy { ENERGY, VOICE }
 
-    private var filter = HighPass.voiceCheck()
+    private val filter = HighPass.voiceCheck()
     private val window = FloatArray(WINDOW)
     private var filled = 0
     private var frames = 0
@@ -113,24 +112,6 @@ class VoiceCheckLayer(
     val active: Boolean get() = !disabled
 
     init {
-        reset()
-    }
-
-    /**
-     * Back to the state of a microphone just opened, the model's memory included. The energy part
-     * is the caller's: a new capture gets a new one.
-     */
-    fun reset() {
-        filter = HighPass.voiceCheck()
-        filled = 0
-        frames = 0
-        armRun = 0
-        silentRun = 0
-        began = false
-        disabled = model == null
-        armedFrame = 0
-        stoppedBy = null
-        failure = null
         if (model != null) {
             try {
                 model.reset()
@@ -155,7 +136,7 @@ class VoiceCheckLayer(
         val counting = verdict !is FrameVerdict.Stop && began
         var ends = false
         if (!disabled) {
-            val feeding = frames > leadInFrames
+            val feeding = frames > LEAD_IN_FRAMES
             for (i in 0 until count) {
                 val y = filter.process(samples[i])
                 if (feeding) ends = feed(y, counting) || ends

@@ -9,7 +9,6 @@
  */
 package io.github.ijazshare.assistant.tools
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -78,10 +77,6 @@ class ToolExecutor(
             ToolResult.failed("I cannot do that yet.", call.string("reason"))
         },
     )
-
-    /** Tools declared to the model but not wired up here would fail silently at runtime. */
-    val unimplemented: List<String>
-        get() = AssistantTools.all.map { it.name }.filterNot { handlers.containsKey(it) }
 
     suspend fun execute(call: ToolCall): ToolResult = withContext(Dispatchers.Main) {
         Log.i(TAG, "tool ${call.tool} ${call.arguments}")
@@ -170,18 +165,16 @@ class ToolExecutor(
 
         return try {
             val sms = context.getSystemService(SmsManager::class.java)
-            when {
-                sms == null -> ToolResult.failed("This phone cannot send texts.")
-
-                else -> {
-                    val parts = sms.divideMessage(body)
-                    if (parts.size > 1) {
-                        sms.sendMultipartTextMessage(number, null, parts, null, null)
-                    } else {
-                        sms.sendTextMessage(number, null, body, null, null)
-                    }
-                    ToolResult.ok("Sent to $label.", body)
+            if (sms == null) {
+                ToolResult.failed("This phone cannot send texts.")
+            } else {
+                val parts = sms.divideMessage(body)
+                if (parts.size > 1) {
+                    sms.sendMultipartTextMessage(number, null, parts, null, null)
+                } else {
+                    sms.sendTextMessage(number, null, body, null, null)
                 }
+                ToolResult.ok("Sent to $label.", body)
             }
         } catch (e: SecurityException) {
             Log.w(TAG, "no SMS permission", e)
@@ -360,8 +353,5 @@ class ToolExecutor(
         /** Gesture endpoints as a fraction of screen height. */
         private const val SCROLL_FAR = 0.75f
         private const val SCROLL_NEAR = 0.30f
-
-        /** Declared so the permission is visible next to the code that needs it. */
-        const val SMS_PERMISSION = Manifest.permission.READ_SMS
     }
 }

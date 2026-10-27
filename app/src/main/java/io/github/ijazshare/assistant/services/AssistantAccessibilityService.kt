@@ -47,8 +47,6 @@ class AssistantAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "Assistant"
 
-        /** Roughly one frame at 60 Hz — long enough to register as a tap, not a hold. */
-        private const val TAP_DURATION_MS = 60L
         private const val SWIPE_DURATION_MS = 300L
         private const val GESTURE_TIMEOUT_MS = 5_000L
         private const val SCREENSHOT_TIMEOUT_MS = 4_000L
@@ -101,19 +99,7 @@ class AssistantAccessibilityService : AccessibilityService() {
 
     fun openQuickSettings(): Boolean = performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
 
-    fun lockScreen(): Boolean = performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
-
     // ---- Gestures ---------------------------------------------------------------
-
-    /** Taps a screen coordinate. Suspends until the gesture completes or times out. */
-    suspend fun tap(x: Float, y: Float): Boolean {
-        val path = Path().apply { moveTo(x, y) }
-        return dispatch(
-            GestureDescription.Builder()
-                .addStroke(GestureDescription.StrokeDescription(path, 0, TAP_DURATION_MS))
-                .build(),
-        )
-    }
 
     /** Drags from one point to another — scrolling, swiping between pages, dismissing. */
     suspend fun swipe(
@@ -121,7 +107,6 @@ class AssistantAccessibilityService : AccessibilityService() {
         fromY: Float,
         toX: Float,
         toY: Float,
-        durationMs: Long = SWIPE_DURATION_MS,
     ): Boolean {
         val path = Path().apply {
             moveTo(fromX, fromY)
@@ -129,7 +114,7 @@ class AssistantAccessibilityService : AccessibilityService() {
         }
         return dispatch(
             GestureDescription.Builder()
-                .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs))
+                .addStroke(GestureDescription.StrokeDescription(path, 0, SWIPE_DURATION_MS))
                 .build(),
         )
     }
@@ -169,14 +154,10 @@ class AssistantAccessibilityService : AccessibilityService() {
         // The app's window, not the active one: while a command is running the active
         // window is this assistant's own panel, which has no Send button in it.
         val root = foregroundRoot() ?: return false
-        return try {
-            val match = findNode(root) { node ->
-                node.isClickable && node.matchesText(text)
-            } ?: findClickableAncestorOfMatch(root, text)
-            match?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
-        } finally {
-            root.recycleCompat()
-        }
+        val match = findNode(root) { node ->
+            node.isClickable && node.matchesText(text)
+        } ?: findClickableAncestorOfMatch(root, text)
+        return match?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
     }
 
     /**
@@ -259,9 +240,7 @@ class AssistantAccessibilityService : AccessibilityService() {
 
                 else -> {
                     val root = window.root
-                    val ours = if (root?.packageName?.toString() == mine) contentTop(root) else null
-                    root?.recycleCompat()
-                    ours
+                    if (root?.packageName?.toString() == mine) contentTop(root) else null
                 }
             }
             if (top != null && top > 0) ceiling = minOf(ceiling, top)
@@ -288,7 +267,6 @@ class AssistantAccessibilityService : AccessibilityService() {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val childTop = contentTop(child)
-            child.recycleCompat()
             if (childTop != null) top = minOf(top ?: childTop, childTop)
         }
         return top
@@ -315,11 +293,7 @@ class AssistantAccessibilityService : AccessibilityService() {
     fun readScreenText(limit: Int = 200): List<String> {
         val root = foregroundRoot() ?: return emptyList()
         val out = ArrayList<String>()
-        try {
-            collectText(root, out, limit)
-        } finally {
-            root.recycleCompat()
-        }
+        collectText(root, out, limit)
         return out
     }
 
@@ -339,9 +313,7 @@ class AssistantAccessibilityService : AccessibilityService() {
                 // A window whose root cannot be read is not one worth reading; without
                 // this a null root counts as "not ours" and is chosen over the real app.
                 val root = window.root ?: return@firstOrNull false
-                val theirs = root.packageName?.toString() != mine
-                root.recycleCompat()
-                theirs
+                root.packageName?.toString() != mine
             }
     }
 
@@ -350,9 +322,6 @@ class AssistantAccessibilityService : AccessibilityService() {
         return foregroundWindow()?.root
             ?: rootInActiveWindow?.takeIf { it.packageName?.toString() != mine }
     }
-
-    /** The package currently in the foreground, for "what am I looking at". */
-    fun foregroundPackage(): String? = rootInActiveWindow?.packageName?.toString()
 
     // ---- Node traversal ---------------------------------------------------------
 
@@ -417,11 +386,4 @@ class AssistantAccessibilityService : AccessibilityService() {
             collectText(child, into, limit)
         }
     }
-
-    /**
-     * AccessibilityNodeInfo.recycle() is deprecated and a no-op from API 33, which is
-     * this app's floor. Kept as a named call so the intent is visible where nodes are
-     * finished with, rather than looking like a leak.
-     */
-    private fun AccessibilityNodeInfo.recycleCompat() = Unit
 }

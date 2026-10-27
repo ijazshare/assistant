@@ -16,7 +16,6 @@ import androidx.annotation.VisibleForTesting
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * Interface cues, synthesised from scratch at runtime.
@@ -41,9 +40,6 @@ object AssistantSounds {
     private const val CLICK_SQUARE_MIX = 0.6
     private const val CLICK_SINE_MIX = 0.4
     private const val CLICK_GAIN = 0.7
-
-    /** Peak amplitude of [sweep], left below full scale so the mix never clamps. */
-    private const val SWEEP_GAIN = 0.9
 
     private const val MILLIS_PER_SECOND = 1000
 
@@ -70,9 +66,6 @@ object AssistantSounds {
 
         /** Low buzz. Refused, unsupported, or failed. */
         REJECT,
-
-        /** Slow sweep upward. Cold start / first frame of the interface. */
-        BOOT,
     }
 
     private val trackLock = Any()
@@ -106,8 +99,6 @@ object AssistantSounds {
             tone(durationMs = 90, frequency = 196.0, decay = 9.0, harmonic = 0.5),
             tone(durationMs = 140, frequency = 147.0, decay = 7.0, harmonic = 0.5),
         )
-
-        Cue.BOOT -> sweep(durationMs = 620, fromHz = 180.0, toHz = 1320.0)
     }
 
     /**
@@ -198,23 +189,6 @@ object AssistantSounds {
             val square = if (sin(2 * PI * frequency * t) >= 0) 1.0 else -1.0
             val shaped = CLICK_SQUARE_MIX * square + CLICK_SINE_MIX * sin(2 * PI * frequency * t)
             out[i] = clip(shaped * exp(-decay * t) * attack(i, n) * CLICK_GAIN)
-        }
-        return out
-    }
-
-    /** Log-frequency sweep with a gentle bell envelope. */
-    private fun sweep(durationMs: Int, fromHz: Double, toHz: Double): ShortArray {
-        val n = samples(durationMs)
-        val out = ShortArray(n)
-        var phase = 0.0
-        for (i in 0 until n) {
-            val progress = i.toDouble() / n
-            // Sweeping the log of frequency keeps the rise perceptually even.
-            val f = fromHz * Math.pow(toHz / fromHz, progress)
-            phase += 2 * PI * f / SAMPLE_RATE
-            // Rise quickly, hold, fall away.
-            val envelope = sqrt(progress).coerceAtMost(1.0) * (1.0 - progress * progress)
-            out[i] = clip(sin(phase) * envelope * SWEEP_GAIN)
         }
         return out
     }

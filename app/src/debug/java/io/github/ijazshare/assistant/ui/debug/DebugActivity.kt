@@ -52,7 +52,6 @@ import io.github.ijazshare.assistant.nativebridge.NativeBuildInfo
 import io.github.ijazshare.assistant.ui.assistant.AssistantRule
 import io.github.ijazshare.assistant.ui.assistant.IndeterminateCells
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
-import io.github.ijazshare.assistant.ui.assistant.rememberSnapProgress
 import io.github.ijazshare.assistant.ui.assistant.scanlines
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantDump
@@ -192,9 +191,6 @@ private fun LanguageModelProbe() {
 
     TrackingBox(
         modifier = Modifier.fillMaxWidth(),
-        color = AssistantColors.Admin,
-        progress = rememberSnapProgress(locked = true),
-        filled = true,
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -253,14 +249,8 @@ private fun Panel(
     body: String,
     tone: Color,
 ) {
-    // Each panel locks on as it appears, the way the system frames anything it is
-    // reporting about.
-    val progress = rememberSnapProgress(locked = true, durationMillis = 220)
     TrackingBox(
         modifier = Modifier.fillMaxWidth(),
-        color = tone,
-        progress = progress,
-        filled = true,
     ) {
         Column(
             modifier = Modifier.padding(10.dp),

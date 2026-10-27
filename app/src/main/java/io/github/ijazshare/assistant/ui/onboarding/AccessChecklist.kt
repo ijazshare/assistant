@@ -47,7 +47,6 @@ import io.github.ijazshare.assistant.permissions.PermissionState
 import io.github.ijazshare.assistant.permissions.PermissionTier
 import io.github.ijazshare.assistant.ui.assistant.AssistantRule
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
-import io.github.ijazshare.assistant.ui.assistant.rememberSnapProgress
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
 import io.github.ijazshare.assistant.ui.theme.AssistantReadout
@@ -182,15 +181,11 @@ private fun AccessRow(
     val tone = state.tone()
     val actionable = state != PermissionState.GRANTED &&
         permission.mechanism != GrantMechanism.PER_USE_CONSENT
-    val progress = rememberSnapProgress(locked = state == PermissionState.GRANTED)
 
     TrackingBox(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (actionable) Modifier.clickable(onClick = onGrant) else Modifier),
-        color = tone,
-        progress = progress,
-        cornerLength = 10.dp,
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -249,8 +244,6 @@ private fun RestrictedSettingsNote(visible: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable { context.safeStart(inspector.appDetailsIntent()) },
-        color = AssistantColors.Admin,
-        cornerLength = 10.dp,
     ) {
         Column(
             modifier = Modifier.padding(8.dp),

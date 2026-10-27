@@ -16,8 +16,6 @@ internal object LlamaNative {
 
     external fun nativeFree(handle: Long)
 
-    external fun nativeDescribe(handle: Long): String
-
     /** True if llama.cpp accepts this GBNF. Used to isolate a bad rule. */
     external fun nativeValidateGrammar(handle: Long, grammar: String): Boolean
 

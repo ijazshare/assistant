@@ -44,10 +44,6 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
         @Volatile
         private var held: PendingSend? = null
 
-        fun hold(send: PendingSend) {
-            held = send
-        }
-
         private val dismissals = AtomicInteger()
 
         /** How many times the owner has walked away: what a command still running must not have outlived. */

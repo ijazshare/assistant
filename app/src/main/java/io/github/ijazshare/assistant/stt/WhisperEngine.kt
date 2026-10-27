@@ -17,11 +17,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /** A transcript plus how long it took to produce. */
-data class Transcription(val text: String, val durationMillis: Long, val audioMillis: Long) {
-    /** Below 1.0 means faster than real time. */
-    val realTimeFactor: Float
-        get() = if (audioMillis > 0) durationMillis.toFloat() / audioMillis else 0f
-}
+data class Transcription(val text: String, val durationMillis: Long)
 
 /**
  * Speech to text, on the device.
@@ -75,15 +71,14 @@ class WhisperEngine(private val context: Context) {
     suspend fun transcribe(samples: FloatArray): Transcription = withContext(Dispatchers.Default) {
         val current = handle
         if (current == 0L || samples.isEmpty()) {
-            return@withContext Transcription("", 0, 0)
+            return@withContext Transcription("", 0)
         }
-        val audioMillis = samples.size * MILLIS_PER_SECOND / SAMPLE_RATE
         val startedAt = System.nanoTime()
         val text = synchronized(this@WhisperEngine) {
             if (handle == 0L) "" else WhisperNative.nativeTranscribe(handle, samples, threadCount(), bias)
         }
         val elapsed = (System.nanoTime() - startedAt) / NANOS_PER_MILLI
-        Transcription(text.trim(), elapsed, audioMillis.toLong())
+        Transcription(text.trim(), elapsed)
     }
 
     /**
@@ -111,7 +106,6 @@ class WhisperEngine(private val context: Context) {
         /** Whisper is trained at 16 kHz; this is not a tunable. */
         const val SAMPLE_RATE = 16_000
 
-        private const val MILLIS_PER_SECOND = 1000
         private const val NANOS_PER_MILLI = 1_000_000
         private const val MAX_THREADS = 6
     }

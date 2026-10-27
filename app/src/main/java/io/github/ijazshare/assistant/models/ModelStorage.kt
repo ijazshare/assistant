@@ -12,6 +12,8 @@ package io.github.ijazshare.assistant.models
 import android.content.Context
 import android.os.StatFs
 import java.io.File
+import java.io.OutputStream
+import java.security.DigestInputStream
 import java.security.MessageDigest
 
 /** Where an asset stands right now. */
@@ -21,9 +23,6 @@ sealed interface ModelState {
 
     /** A partial file exists; the next attempt resumes from [downloadedBytes]. */
     data class Partial(val downloadedBytes: Long) : ModelState
-
-    /** Downloading now. [downloadedBytes] of [totalBytes]. */
-    data class Downloading(val downloadedBytes: Long, val totalBytes: Long) : ModelState
 
     /** Bytes are on disk and hashed correctly. */
     data object Ready : ModelState
@@ -114,15 +113,10 @@ class ModelStorage(private val rootDir: File) {
 
     fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(BUFFER_BYTES)
-            while (true) {
-                val read = input.read(buffer)
-                if (read <= 0) break
-                digest.update(buffer, 0, read)
-            }
+        DigestInputStream(file.inputStream(), digest).use {
+            it.copyTo(OutputStream.nullOutputStream(), bufferSize = BUFFER_BYTES)
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return digest.digest().toHexString()
     }
 
     /** Removes the asset and anything unpacked from it. */
@@ -130,16 +124,6 @@ class ModelStorage(private val rootDir: File) {
         target(asset).delete()
         partial(asset).delete()
         extractedDir(asset).deleteRecursively()
-    }
-
-    fun bytesOnDisk(asset: ModelAsset): Long {
-        val file = target(asset)
-        val partial = partial(asset)
-        return when {
-            file.isFile -> file.length()
-            partial.isFile -> partial.length()
-            else -> 0
-        }
     }
 
     private companion object {

@@ -52,7 +52,9 @@ class LlamaEngine(private val context: Context) {
             if (handle != 0L) {
                 val cache = File(modelFile.parentFile, modelFile.name + CACHE_SUFFIX)
                 cacheFile = cache
-                if (PromptCacheGuard.isFresh(readStamp(cache), installStamp())) {
+                val stamp = installStamp()
+                // Reuse only a cache written by exactly this install (empty stamp: unknown).
+                if (stamp.isNotEmpty() && readStamp(cache) == stamp) {
                     LlamaNative.nativeLoadState(handle, cache.absolutePath)
                 } else {
                     // Written by a different build, whose prompt may not match this one's.
@@ -93,11 +95,6 @@ class LlamaEngine(private val context: Context) {
             .getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
             .lastUpdateTime.toString()
     }.getOrDefault("")
-
-    /** Model name, parameter count and context size, for the diagnostics screen. */
-    suspend fun describe(): String = withContext(Dispatchers.Default) {
-        synchronized(this@LlamaEngine) { if (handle == 0L) "" else LlamaNative.nativeDescribe(handle) }
-    }
 
     /**
      * Generates a completion, optionally constrained by a GBNF grammar.

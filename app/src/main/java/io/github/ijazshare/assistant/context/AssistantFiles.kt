@@ -69,7 +69,7 @@ class AssistantFiles(private val root: File) {
     fun writeIfUnchanged(spec: AssistantFile, loaded: String, content: String): Boolean =
         synchronized(TASK_FILE_LOCK) {
             if (read(spec) != loaded) return@synchronized false
-            file(spec).replaceText(content)
+            file(spec).writeAtomically(content)
             true
         }
 
@@ -188,27 +188,8 @@ class AssistantFiles(private val root: File) {
                 line
             }
         }
-        if (changed) target.replaceText(lines.joinToString("\n"))
+        if (changed) target.writeAtomically(lines.joinToString("\n"))
         changed
-    }
-
-    /**
-     * Writes a temporary file and renames it over this one, so a write cut short (the
-     * process killed, the battery dead) leaves the old file whole instead of half of the new.
-     */
-    private fun File.replaceText(text: String) {
-        val temp = File(parentFile, "$name.tmp")
-        FileOutputStream(temp).use {
-            it.write(text.toByteArray())
-            // On the disk before the rename, or a power cut can leave the name with no data.
-            it.fd.sync()
-        }
-        // A rename replaces the file in one step. If one is ever refused, a plain write is
-        // no worse than what was here before.
-        if (!temp.renameTo(this)) {
-            writeText(text)
-            temp.delete()
-        }
     }
 
     /** Everything the model should be told, concatenated in a stable order. */
@@ -326,7 +307,25 @@ class AssistantFiles(private val root: File) {
         )
 
         val ALL = listOf(PROFILE, MEMORIES, TASKS, NOTES)
+    }
+}
 
-        fun byId(id: String): AssistantFile? = ALL.firstOrNull { it.id == id }
+/**
+ * Writes a temporary file and renames it over this one, so a write cut short (the
+ * process killed, the battery dead) leaves the old file whole instead of half of the new.
+ */
+internal fun File.writeAtomically(text: String, sync: Boolean = true) {
+    val temp = File(parentFile, "$name.tmp")
+    FileOutputStream(temp).use {
+        it.write(text.toByteArray())
+        // On the disk before the rename, or a power cut can leave the name with no data.
+        // Skipped for files that can be rebuilt, where the wait would land on a hot path.
+        if (sync) it.fd.sync()
+    }
+    // A rename replaces the file in one step. If one is ever refused, a plain write is
+    // no worse than what was here before.
+    if (!temp.renameTo(this)) {
+        writeText(text)
+        temp.delete()
     }
 }

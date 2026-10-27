@@ -43,19 +43,7 @@ data class Tool(
     /** Written for the model, not for a docs page: short, concrete, and unambiguous. */
     val description: String,
     val params: List<ToolParam> = emptyList(),
-    /** Which capability this needs, so the assistant can say why it cannot comply. */
-    val requires: ToolCapability = ToolCapability.NONE,
 )
-
-/** What a tool needs from the system before it can run. */
-enum class ToolCapability {
-    NONE,
-    ACCESSIBILITY,
-    NOTIFICATION_ACCESS,
-    SMS,
-    CONTACTS,
-    EXACT_ALARM,
-}
 
 /** A tool call the model asked for. */
 data class ToolCall(val tool: String, val arguments: Map<String, String>) {

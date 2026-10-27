@@ -51,7 +51,6 @@ import io.github.ijazshare.assistant.context.AssistantFiles
 import io.github.ijazshare.assistant.settings.AssistantSettings
 import io.github.ijazshare.assistant.ui.assistant.AssistantRule
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
-import io.github.ijazshare.assistant.ui.assistant.rememberSnapProgress
 import io.github.ijazshare.assistant.ui.assistant.scanlines
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantDump
@@ -241,9 +240,6 @@ private fun SettingField(
 ) {
     TrackingBox(
         modifier = Modifier.fillMaxWidth(),
-        color = AssistantColors.Admin,
-        progress = rememberSnapProgress(locked = true),
-        cornerLength = 12.dp,
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -299,9 +295,6 @@ private fun FileEditor(
 ) {
     TrackingBox(
         modifier = Modifier.fillMaxWidth(),
-        color = AssistantColors.Irrelevant,
-        progress = rememberSnapProgress(locked = true),
-        cornerLength = 12.dp,
     ) {
         Column(
             modifier = Modifier.padding(10.dp),

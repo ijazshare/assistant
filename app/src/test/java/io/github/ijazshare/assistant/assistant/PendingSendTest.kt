@@ -45,7 +45,7 @@ class PendingSendTest {
     @Test
     fun `a dismissal forgets the send, so a later command is not texted`() {
         val now = 1_000_000L
-        PendingSend.hold(PendingSend("+15550101", "Sam Lee", now))
+        PendingSend.holdUnlessDismissed(PendingSend("+15550101", "Sam Lee", now), PendingSend.dismissals())
         PendingSend.dismiss()
         assertThat(PendingSend.take(now + 30_000L)).isNull()
     }
@@ -53,10 +53,10 @@ class PendingSendTest {
     @Test
     fun `a held send is used once, and only inside its window`() {
         val now = 1_000_000L
-        PendingSend.hold(PendingSend("+15550101", "Sam Lee", now))
+        PendingSend.holdUnlessDismissed(PendingSend("+15550101", "Sam Lee", now), PendingSend.dismissals())
         assertThat(PendingSend.take(now + 1_000L)?.display).isEqualTo("Sam Lee")
         assertThat(PendingSend.take(now + 2_000L)).isNull()
-        PendingSend.hold(PendingSend("+15550101", "Sam Lee", now))
+        PendingSend.holdUnlessDismissed(PendingSend("+15550101", "Sam Lee", now), PendingSend.dismissals())
         assertThat(PendingSend.take(now + PendingSend.WINDOW_MILLIS + 1)).isNull()
     }
 

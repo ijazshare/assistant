@@ -101,7 +101,6 @@ object AssistantTools {
                 ),
                 ToolParam("tomorrow", ParamType.BOOLEAN, "True if it is for tomorrow rather than today."),
             ),
-            requires = ToolCapability.EXACT_ALARM,
         ),
         Tool(
             name = SEND_MESSAGE,
@@ -110,7 +109,6 @@ object AssistantTools {
                 ToolParam("recipient", ParamType.STRING, "Contact name or phone number.", required = true),
                 ToolParam("body", ParamType.STRING, "The message to send.", required = true),
             ),
-            requires = ToolCapability.SMS,
         ),
         Tool(
             name = CALL_CONTACT,
@@ -118,7 +116,6 @@ object AssistantTools {
             params = listOf(
                 ToolParam("recipient", ParamType.STRING, "Contact name or phone number.", required = true),
             ),
-            requires = ToolCapability.CONTACTS,
         ),
         Tool(
             name = OPEN_APP,
@@ -146,7 +143,6 @@ object AssistantTools {
                     "What was asked about the screen. Omit to read it out word for word.",
                 ),
             ),
-            requires = ToolCapability.ACCESSIBILITY,
         ),
         Tool(
             name = TAKE_SCREENSHOT,
@@ -155,7 +151,6 @@ object AssistantTools {
             // Deliberately no parameters. A screenshot has no arguments, and every
             // optional slot is one more place a small model can invent a value — which is
             // exactly how a mumbled "50" became a three minute timer.
-            requires = ToolCapability.ACCESSIBILITY,
         ),
         Tool(
             name = TAP_TEXT,
@@ -163,7 +158,6 @@ object AssistantTools {
             params = listOf(
                 ToolParam("label", ParamType.STRING, "The visible text to tap.", required = true),
             ),
-            requires = ToolCapability.ACCESSIBILITY,
         ),
         Tool(
             name = SCROLL,
@@ -177,7 +171,6 @@ object AssistantTools {
                     values = listOf("up", "down"),
                 ),
             ),
-            requires = ToolCapability.ACCESSIBILITY,
         ),
         Tool(
             name = NAVIGATE,
@@ -191,12 +184,10 @@ object AssistantTools {
                     values = listOf("back", "home", "recents", "notifications", "quick_settings"),
                 ),
             ),
-            requires = ToolCapability.ACCESSIBILITY,
         ),
         Tool(
             name = READ_NOTIFICATIONS,
             description = "Waiting notifications: what did I miss.",
-            requires = ToolCapability.NOTIFICATION_ACCESS,
         ),
         Tool(
             name = ANSWER,
@@ -214,8 +205,6 @@ object AssistantTools {
             ),
         ),
     )
-
-    fun byName(name: String): Tool? = all.firstOrNull { it.name == name }
 
     /** The grammar the model is sampled against. Built once; it never changes at runtime. */
     val grammar: String by lazy { ToolGrammar.build(all) }

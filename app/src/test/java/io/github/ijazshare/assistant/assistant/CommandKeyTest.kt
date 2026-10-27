@@ -71,13 +71,6 @@ class CommandKeyTest {
     }
 
     @Test
-    fun `the numbers in a key are found wherever they sit`() {
-        assertThat(CommandKey.numbersIn("alarm 6:30")).containsExactly("6", "30")
-        assertThat(CommandKey.numbersIn("timer 10 minutes")).containsExactly("10")
-        assertThat(CommandKey.numbersIn("open spotify")).isEmpty()
-    }
-
-    @Test
     fun `phrases whose meaning is fixed are not`() {
         assertThat(CommandKey.isTimeRelative("set a timer for ten minutes")).isFalse()
         assertThat(CommandKey.isTimeRelative("what did I miss")).isFalse()

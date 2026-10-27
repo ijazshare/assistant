@@ -12,8 +12,6 @@ package io.github.ijazshare.assistant.tools
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
-import java.io.IOException
 
 /**
  * Re-arms every reminder after a reboot.
@@ -39,16 +37,8 @@ class ReminderBootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action !in REBUILD_ON) return
-        val pending = goAsync()
-        Thread {
-            try {
-                ReminderStore(context).rescheduleAll(afterBoot = intent.action == Intent.ACTION_BOOT_COMPLETED)
-            } catch (e: IOException) {
-                // An unreadable tasks file at boot must not become a crash on every boot.
-                Log.e("Assistant", "reminder reschedule failed", e)
-            } finally {
-                pending.finish()
-            }
-        }.start()
+        offMainThread {
+            ReminderStore(context).rescheduleAll(afterBoot = intent.action == Intent.ACTION_BOOT_COMPLETED)
+        }
     }
 }

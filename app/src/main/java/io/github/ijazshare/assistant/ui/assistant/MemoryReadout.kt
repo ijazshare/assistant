@@ -156,7 +156,7 @@ private fun MemoryBar(fraction: Float, tone: Color) {
 private const val HIGH_WATER = 80
 private const val PERCENT_F = 100f
 
-private fun formatBytes(bytes: Long): String = when {
+internal fun formatBytes(bytes: Long): String = when {
     bytes >= GB -> "%.1f GB".format(bytes.toDouble() / GB)
     else -> "%.0f MB".format(bytes.toDouble() / MB)
 }

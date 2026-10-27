@@ -221,9 +221,9 @@ class CommandCacheTest {
                 now = i.toLong(),
             )
         }
-        assertThat(cache.size).isEqualTo(CommandCache.MAX_ENTRIES)
+        assertThat(cache.all().size).isEqualTo(CommandCache.MAX_ENTRIES)
         cache.learn("read this", ToolCall(AssistantTools.READ_SCREEN, emptyMap()), now = 1_000_000)
-        assertThat(cache.size).isEqualTo(CommandCache.MAX_ENTRIES)
+        assertThat(cache.all().size).isEqualTo(CommandCache.MAX_ENTRIES)
         assertThat(cache.lookup("open appaa")).isNull()
         assertThat(cache.lookup("read this")).isNotNull()
     }
@@ -233,7 +233,7 @@ class CommandCacheTest {
         val file = File(folder.root, "cache.json")
         file.writeText("{ this is not json")
         val cache = CommandCache(file)
-        assertThat(cache.size).isEqualTo(0)
+        assertThat(cache.all().size).isEqualTo(0)
         assertThat(cache.learn("timer 10 minutes", timer)).isTrue()
     }
 
@@ -241,7 +241,7 @@ class CommandCacheTest {
     fun `a phrase can be forgotten`() {
         val cache = cache()
         cache.learn("timer 10 minutes", timer)
-        cache.forget("Timer, 10 minutes")
+        cache.forgetKey(CommandCache.Shape.of("Timer, 10 minutes")!!.key)
         assertThat(cache.lookup("timer 10 minutes")).isNull()
     }
 }

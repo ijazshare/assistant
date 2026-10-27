@@ -30,13 +30,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,12 +53,8 @@ import io.github.ijazshare.assistant.permissions.PermissionInspector
 import io.github.ijazshare.assistant.settings.AssistantSettings
 import io.github.ijazshare.assistant.tools.ReminderReceiver
 import io.github.ijazshare.assistant.ui.assistant.AssistantRule
-import io.github.ijazshare.assistant.ui.assistant.BootLine
-import io.github.ijazshare.assistant.ui.assistant.BootSequence
 import io.github.ijazshare.assistant.ui.assistant.MemoryReadout
-import io.github.ijazshare.assistant.ui.assistant.ScanSweep
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
-import io.github.ijazshare.assistant.ui.assistant.rememberSnapProgress
 import io.github.ijazshare.assistant.ui.assistant.scanlines
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
@@ -95,7 +92,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 internal fun HomeScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    var booted by remember { mutableStateOf(false) }
 
     var revision by remember { mutableIntStateOf(0) }
     LifecycleResumeEffect(Unit) {
@@ -129,8 +125,6 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
             .background(AssistantColors.Void)
             .scanlines(),
     ) {
-        ScanSweep(modifier = Modifier.fillMaxSize(), periodMillis = 4200)
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -147,19 +141,16 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
             }
             AssistantRule(Modifier.fillMaxWidth().height(1.dp))
 
-            Identity(locked = booted)
+            Identity()
 
-            BootSequence(
-                lines = remember {
-                    listOf(
-                        BootLine("INTERFACE", "ONLINE"),
-                        BootLine("NETWORK", "NOT REQUIRED", AssistantColors.Admin),
-                        BootLine("TELEMETRY", "NONE", AssistantColors.Admin),
-                    )
-                },
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                onComplete = { booted = true },
-            )
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ReadoutRow("INTERFACE", "ONLINE", AssistantColors.Asset)
+                ReadoutRow("NETWORK", "NOT REQUIRED", AssistantColors.Admin)
+                ReadoutRow("TELEMETRY", "NONE", AssistantColors.Admin)
+            }
 
             MemoryReadout(context = context, modifier = Modifier.fillMaxWidth())
 
@@ -207,12 +198,9 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
 
 /** The app's own name card, framed the way the system frames anything it tracks. */
 @Composable
-private fun Identity(locked: Boolean) {
+private fun Identity() {
     TrackingBox(
         modifier = Modifier.fillMaxWidth(),
-        color = AssistantColors.Admin,
-        progress = rememberSnapProgress(locked, durationMillis = 260),
-        cornerLength = 20.dp,
     ) {
         Column(
             modifier = Modifier.padding(vertical = 14.dp, horizontal = 6.dp),
@@ -243,9 +231,6 @@ private fun Door(
     val tone = if (complete) AssistantColors.Asset else AssistantColors.Admin
     TrackingBox(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        color = tone,
-        progress = rememberSnapProgress(locked = complete),
-        cornerLength = 12.dp,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
@@ -255,5 +240,24 @@ private fun Door(
             Text(label, style = AssistantLabel, color = AssistantColors.Bone)
             Text("$value   →", style = AssistantLabel, color = tone)
         }
+    }
+}
+
+/** A status line: a label on the left, a value on the right. */
+@Composable
+private fun ReadoutRow(label: String, value: String, tone: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = AssistantLabel,
+            color = AssistantColors.Dim,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(text = value, style = AssistantReadout, color = tone, maxLines = 1)
     }
 }

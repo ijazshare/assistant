@@ -234,9 +234,9 @@ class StatedTimeTest {
 
     @Test
     fun `a day past tomorrow is recognised so it can be declined`() {
-        assertThat(TimeWords.beyondTomorrow("remind me the day after tomorrow at 9 am")).isTrue()
-        assertThat(TimeWords.beyondTomorrow("remind me tomorrow at 9 am")).isFalse()
-        assertThat(TimeWords.beyondTomorrow("remind me at 9 after the meeting tomorrow")).isFalse()
+        assertThat(StatedTime.beyondTomorrow("remind me the day after tomorrow at 9 am")).isTrue()
+        assertThat(StatedTime.beyondTomorrow("remind me tomorrow at 9 am")).isFalse()
+        assertThat(StatedTime.beyondTomorrow("remind me at 9 after the meeting tomorrow")).isFalse()
     }
 
     @Test

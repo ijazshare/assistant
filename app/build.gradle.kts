@@ -157,7 +157,6 @@ android {
 
     testOptions {
         unitTests {
-            isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
     }
@@ -339,15 +338,11 @@ tasks.named("preBuild") { dependsOn(fetchPinnedAars) }
 
 dependencies {
     implementation(platform(libs.compose.bom))
-    androidTestImplementation(platform(libs.compose.bom))
 
     implementation(libs.androidx.core)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.compose.ui)
-    implementation(libs.compose.ui.graphics)
-    implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.kotlinx.coroutines.android)
 
@@ -358,7 +353,6 @@ dependencies {
 
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.documentfile)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.commons.compress)
@@ -367,20 +361,11 @@ dependencies {
     implementation(files(pinnedAars.map { aarFile(it) }))
 
     debugImplementation(libs.compose.ui.tooling)
-    debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
-    testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.androidx.test.core)
-    // androidx.test.ext:junit supplies the AndroidJUnit4 runner that Robolectric needs;
-    // androidx.test:core alone only provides ApplicationProvider.
-    testImplementation(libs.androidx.test.junit)
 
     androidTestImplementation(libs.truth)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation(libs.espresso.core)
-    androidTestImplementation(libs.compose.ui.test.junit4)
 }

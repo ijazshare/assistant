@@ -9,34 +9,13 @@
  */
 package io.github.ijazshare.assistant.ui
 
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.ijazshare.assistant.ui.context.ContextScreen
-import io.github.ijazshare.assistant.ui.theme.AssistantColors
-import io.github.ijazshare.assistant.ui.theme.AssistantTheme
 
 /** Your name and the Markdown files the assistant reads before every command. */
 @AndroidEntryPoint
-class ContextActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
-        super.onCreate(savedInstanceState)
-        setContent {
-            AssistantTheme {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = AssistantColors.Void,
-                ) { insets ->
-                    ContextScreen(modifier = Modifier.padding(insets))
-                }
-            }
-        }
-    }
+class ContextActivity : ScreenActivity() {
+    override val content: @Composable (Modifier) -> Unit = { ContextScreen(it) }
 }

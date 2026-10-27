@@ -10,6 +10,7 @@
 package io.github.ijazshare.assistant.assistant
 
 import android.util.Log
+import io.github.ijazshare.assistant.context.writeAtomically
 import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolParam
@@ -86,12 +87,6 @@ class CommandCache internal constructor(private val file: File) {
 
     @Volatile
     private var loaded = false
-
-    val size: Int
-        get() = synchronized(this) {
-            load()
-            entries.size
-        }
 
     /** The call a phrase has been seen to mean, or null if its shape has not been seen. */
     fun lookup(transcript: String, now: Long = System.currentTimeMillis()): ToolCall? {
@@ -199,12 +194,6 @@ class CommandCache internal constructor(private val file: File) {
         return value in range
     }
 
-    /** Drops one phrase, for when the assistant got it wrong. */
-    fun forget(transcript: String) {
-        val shape = Shape.of(transcript) ?: return
-        forgetKey(shape.key)
-    }
-
     /** Drops one remembered shape by its key, as the History screen lists it. */
     fun forgetKey(key: String) {
         synchronized(this) {
@@ -247,12 +236,7 @@ class CommandCache internal constructor(private val file: File) {
     private fun persist() {
         runCatching {
             file.parentFile?.mkdirs()
-            val temp = File(file.parentFile, file.name + ".tmp")
-            temp.writeText(json.encodeToString(Stored(entries.values.toList(), VOCABULARY)))
-            if (!temp.renameTo(file)) {
-                file.delete()
-                temp.renameTo(file)
-            }
+            file.writeAtomically(json.encodeToString(Stored(entries.values.toList(), VOCABULARY)), sync = false)
         }.onFailure { Log.w(TAG, "cache: could not persist", it) }
     }
 

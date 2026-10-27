@@ -31,8 +31,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 
@@ -47,21 +45,10 @@ private val RimBrush = Brush.verticalGradient(
 /** The Halo panel: corners chamfered off, more on one diagonal, for the UNSC/HUD angle. */
 private val HaloPanel = CutCornerShape(topStart = 14.dp, bottomEnd = 14.dp, topEnd = 3.dp, bottomStart = 3.dp)
 
-/**
- * A rounded glass card. This was the terminal "tracking box" of corner brackets; every
- * screen framed its rows with it, so redrawing it here as a soft raised panel re-skins
- * the whole app at once. The [color] and [progress] arguments are kept so existing
- * callers compile unchanged; a card does not need them.
- */
-@Suppress("UnusedParameter") // kept so the many call sites compile through the redesign
+/** A rounded glass card in the Halo panel shape; every screen frames its rows with it. */
 @Composable
 fun TrackingBox(
     modifier: Modifier = Modifier,
-    color: Color = AssistantColors.Irrelevant,
-    progress: Float = 1f,
-    cornerLength: Dp = 14.dp,
-    strokeWidth: Dp = 1.5.dp,
-    filled: Boolean = false,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     Box(
@@ -73,20 +60,6 @@ fun TrackingBox(
     )
 }
 
-/**
- * Kept so callers that animate a lock-on still compile. The card no longer draws the
- * snap, so this is just a settled value; harmless and cheap.
- */
-@Composable
-fun rememberSnapProgress(locked: Boolean, durationMillis: Int = 180): Float {
-    val progress by animateFloatAsState(
-        targetValue = if (locked) 1f else 0f,
-        animationSpec = tween(durationMillis, easing = LinearEasing),
-        label = "snap",
-    )
-    return progress
-}
-
 /** The hologram scanline wash — a faint cyan grille, the Cortana/HUD shimmer. */
 fun Modifier.scanlines(spacingDp: Float = 3f): Modifier = this then Modifier.drawWithContent {
     drawContent()
@@ -96,17 +69,6 @@ fun Modifier.scanlines(spacingDp: Float = 3f): Modifier = this then Modifier.dra
         drawRect(color = AssistantColors.Scanline, topLeft = Offset(0f, y), size = Size(size.width, 1f))
         y += spacing
     }
-}
-
-/** The old travelling scan bar, now off. Kept as a no-op composable. */
-@Suppress("UnusedParameter") // signature kept; the sweep is gone
-@Composable
-fun ScanSweep(
-    modifier: Modifier = Modifier,
-    color: Color = AssistantColors.Irrelevant,
-    periodMillis: Int = 2600,
-) {
-    Box(modifier)
 }
 
 /** Thin rule used to separate readout blocks. */
@@ -159,23 +121,6 @@ fun IndeterminateCells(
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
                 )
             }
-        },
-    )
-}
-
-/** A subtle outlined chip, e.g. a caption stamped on a card. */
-@Composable
-fun StampBorder(
-    modifier: Modifier = Modifier,
-    color: Color = AssistantColors.Admin,
-    strokeWidth: Dp = 1.dp,
-) {
-    Box(
-        modifier.drawBehind {
-            drawRect(
-                color = color,
-                style = Stroke(width = strokeWidth.toPx()),
-            )
         },
     )
 }

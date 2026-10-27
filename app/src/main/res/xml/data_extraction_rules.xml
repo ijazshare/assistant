@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   What leaves the phone through Android backup (minSdk 33, so this file is the one that
-  applies; backup_rules.xml repeats the cloud list for consistency).
+  applies).
 
   Cloud backup goes to Google's servers, so nothing the user said or wrote is sent:
     external history/   the query log (transcripts) and the debug capture archive (voice

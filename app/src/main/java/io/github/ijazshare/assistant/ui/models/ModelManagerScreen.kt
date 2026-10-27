@@ -46,23 +46,13 @@ import io.github.ijazshare.assistant.models.ModelStorage
 import io.github.ijazshare.assistant.ui.assistant.AssistantRule
 import io.github.ijazshare.assistant.ui.assistant.IndeterminateCells
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
-import io.github.ijazshare.assistant.ui.assistant.rememberSnapProgress
+import io.github.ijazshare.assistant.ui.assistant.formatBytes
 import io.github.ijazshare.assistant.ui.assistant.scanlines
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
 import io.github.ijazshare.assistant.ui.theme.AssistantReadout
 
-private const val BYTES_PER_MB = 1024.0 * 1024.0
-private const val BYTES_PER_GB = BYTES_PER_MB * 1024
 private const val PERCENT = 100
-
-/** GB past a gigabyte, MB below it — "3009 MB" reads as noise next to "2.9 GB". */
-private fun sizeLabel(bytes: Long): String =
-    if (bytes >= BYTES_PER_GB) {
-        "%.1f GB".format(bytes / BYTES_PER_GB)
-    } else {
-        "%.0f MB".format(bytes / BYTES_PER_MB)
-    }
 
 /**
  * Choose and download the speech, language and voice models.
@@ -101,7 +91,7 @@ fun ModelManagerScreen(modifier: Modifier = Modifier) {
         ) {
             Text("MODELS", style = AssistantLabel, color = AssistantColors.Admin)
             Text(
-                text = sizeLabel(storage.freeBytes()) + " FREE",
+                text = formatBytes(storage.freeBytes()) + " FREE",
                 style = AssistantLabel,
                 color = AssistantColors.Dim,
             )
@@ -204,20 +194,11 @@ private fun ModelRow(
 ) {
     val ready = state is ModelState.Ready
     val downloading = live != null
-    val tone = when {
-        error != null -> AssistantColors.Relevant
-        ready -> AssistantColors.Asset
-        downloading -> AssistantColors.Admin
-        else -> AssistantColors.Dim
-    }
 
     TrackingBox(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !downloading) { if (ready) onDelete() else onDownload() },
-        color = tone,
-        progress = rememberSnapProgress(locked = ready),
-        cornerLength = 12.dp,
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -237,7 +218,7 @@ private fun ModelRow(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = sizeLabel(asset.byteSize),
+                    text = formatBytes(asset.byteSize),
                     style = AssistantLabel,
                     color = AssistantColors.Dim,
                     softWrap = false,
@@ -260,7 +241,7 @@ private fun ModelRow(
                     // would otherwise be parsed as a format flag and throw
                     // DuplicateFormatFlagsException at runtime.
                     Text(
-                        text = "$pct%   ${sizeLabel(done)} / ${sizeLabel(total)}",
+                        text = "$pct%   ${formatBytes(done)} / ${formatBytes(total)}",
                         style = AssistantLabel,
                         color = AssistantColors.Admin,
                     )
@@ -278,7 +259,7 @@ private fun ModelRow(
 
                 state is ModelState.Partial -> {
                     Text(
-                        text = "PARTIAL ${sizeLabel(state.downloadedBytes)}  ·  TAP TO RESUME",
+                        text = "PARTIAL ${formatBytes(state.downloadedBytes)}  ·  TAP TO RESUME",
                         style = AssistantLabel,
                         color = AssistantColors.Admin,
                     )

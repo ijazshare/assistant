@@ -76,7 +76,5 @@ class LlmProbe(private val context: Context) {
         )
     }
 
-    suspend fun describe(): String = engine.describe()
-
     fun release() = engine.unload()
 }

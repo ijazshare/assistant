@@ -59,9 +59,6 @@ class ReminderStore(private val context: Context) {
             files.appendTask(task, due = null)
             return@withContext ToolResult.ok("I will remember: $task.")
         }
-        if (hour !in 0..HOUR_MAX || minute !in 0..MINUTE_MAX) {
-            return@withContext ToolResult.failed("That is not a time I can use.")
-        }
 
         val now = LocalDateTime.now()
         var due = now.withHour(hour).withMinute(minute).withSecond(0).withNano(0)
@@ -196,8 +193,6 @@ class ReminderStore(private val context: Context) {
 
     private companion object {
         const val TAG = "Assistant"
-        const val HOUR_MAX = 23
-        const val MINUTE_MAX = 59
         const val SNOOZE_MINUTES = 10L
         const val LATE_GRACE_SECONDS = 5L
         val SPOKEN_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")

@@ -326,13 +326,11 @@ Java_io_github_ijazshare_assistant_stt_WhisperNative_nativeTranscribe(
     // covers the padding whisper adds either way.
     const int frames = static_cast<int>((count * WHISPER_CTX_FRAMES) /
                                         (WHISPER_SAMPLE_RATE * WHISPER_CTX_SECONDS));
-    if (WHISPER_CTX_MIN > 0) {
-        const int wanted = std::max(WHISPER_CTX_MIN, frames + WHISPER_CTX_MARGIN);
-        // Rounded up to a whole block. The encoder convolves and downsamples in fixed
-        // steps, and a context that does not land on one is not obviously meaningful.
-        const int blocked = ((wanted + WHISPER_CTX_BLOCK - 1) / WHISPER_CTX_BLOCK) * WHISPER_CTX_BLOCK;
-        params.audio_ctx = std::min(WHISPER_CTX_FRAMES, blocked);
-    }
+    const int wanted = std::max(WHISPER_CTX_MIN, frames + WHISPER_CTX_MARGIN);
+    // Rounded up to a whole block. The encoder convolves and downsamples in fixed
+    // steps, and a context that does not land on one is not obviously meaningful.
+    const int blocked = ((wanted + WHISPER_CTX_BLOCK - 1) / WHISPER_CTX_BLOCK) * WHISPER_CTX_BLOCK;
+    params.audio_ctx = std::min(WHISPER_CTX_FRAMES, blocked);
 
     // A spoken command is a dozen tokens. Without a cap a decoder that starts repeating
     // itself runs to the segment limit: one utterance produced its own transcript
@@ -343,14 +341,7 @@ Java_io_github_ijazshare_assistant_stt_WhisperNative_nativeTranscribe(
     // unusual name is heard as the nearest English one ("Hasan" -> "Hudson"); seeding the
     // decoder with the actual names makes them candidates. Held in a local so the borrowed
     // char* stays valid until whisper_full returns.
-    std::string promptStr;
-    if (prompt != nullptr) {
-        const char *promptC = env->GetStringUTFChars(prompt, nullptr);
-        if (promptC != nullptr) {
-            promptStr.assign(promptC);
-            env->ReleaseStringUTFChars(prompt, promptC);
-        }
-    }
+    const std::string promptStr = scoped_utf8(env, prompt);
     if (!promptStr.empty()) {
         params.initial_prompt = promptStr.c_str();
     }
@@ -478,23 +469,6 @@ Java_io_github_ijazshare_assistant_llm_LlamaNative_nativeFree(
     if (session->ctx != nullptr)   llama_free(session->ctx);
     if (session->model != nullptr) llama_model_free(session->model);
     delete session;
-}
-
-JNIEXPORT jstring JNICALL
-Java_io_github_ijazshare_assistant_llm_LlamaNative_nativeDescribe(
-        JNIEnv *env, jobject /* this */, jlong handle) {
-    if (handle == 0) return env->NewStringUTF("");
-    auto *session = reinterpret_cast<llama_session *>(handle);
-    char buf[512];
-    llama_model_desc(session->model, buf, sizeof(buf));
-    std::string out = buf;
-    out += "  |  params ";
-    out += std::to_string(llama_model_n_params(session->model) / 1000000);
-    out += "M  |  ctx ";
-    out += std::to_string(session->n_ctx);
-    out += "  |  vocab ";
-    out += std::to_string(llama_vocab_n_tokens(session->vocab));
-    return to_jstring(env, out);
 }
 
 /**
@@ -713,11 +687,9 @@ Java_io_github_ijazshare_assistant_llm_LlamaNative_nativeGenerate(
     // it is reused as-is. One token is always left to decode, since a batch of nothing
     // produces no logits to sample from.
     size_t reuse = 0;
-    if (getenv("ASSISTANT_NO_PREFIX_REUSE") == nullptr) {
-        while (reuse < session->cached.size() && reuse + 1 < tokens.size() &&
-               session->cached[reuse] == tokens[reuse]) {
-            reuse++;
-        }
+    while (reuse < session->cached.size() && reuse + 1 < tokens.size() &&
+           session->cached[reuse] == tokens[reuse]) {
+        reuse++;
     }
     if (!llama_memory_seq_rm(llama_get_memory(session->ctx), 0,
                              static_cast<llama_pos>(reuse), -1)) {

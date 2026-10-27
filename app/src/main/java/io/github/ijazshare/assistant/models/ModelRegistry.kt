@@ -92,16 +92,11 @@ class ModelRegistry(registryJson: String) {
         Json { ignoreUnknownKeys = true }
             .decodeFromString(ModelRegistryFile.serializer(), registryJson)
 
-    val version: Int get() = parsed.registryVersion
-
     val all: List<ModelAsset> get() = parsed.assets
 
     fun byRole(role: ModelRole): List<ModelAsset> = all.filter { it.role == role }
 
     fun byId(id: String): ModelAsset? = all.firstOrNull { it.id == id }
-
-    /** What a fresh install downloads if the user just says yes. */
-    fun defaults(): List<ModelAsset> = all.filter { it.isDefault }
 
     /**
      * Whether every part of the pipeline has *something* it can run with.

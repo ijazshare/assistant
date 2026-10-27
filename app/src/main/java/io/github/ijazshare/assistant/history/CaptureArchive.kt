@@ -14,14 +14,13 @@ import android.util.Log
 import io.github.ijazshare.assistant.BuildConfig
 import io.github.ijazshare.assistant.audio.Captured
 import io.github.ijazshare.assistant.audio.FrameMeter
+import io.github.ijazshare.assistant.context.writeAtomically
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -129,14 +128,7 @@ class CaptureArchive(private val dir: File, val enabled: Boolean, private val ke
             .filter { it.name !in kept }
             .forEach { it.delete() }
         if (lines.size > keep) {
-            val temp = File(dir, "$INDEX.tmp")
-            temp.writeText(newest.joinToString("") { it.first + "\n" })
-            Files.move(
-                temp.toPath(),
-                index.toPath(),
-                StandardCopyOption.REPLACE_EXISTING,
-                StandardCopyOption.ATOMIC_MOVE,
-            )
+            index.writeAtomically(newest.joinToString("") { it.first + "\n" }, sync = false)
         }
     }
 

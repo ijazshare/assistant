@@ -64,25 +64,6 @@ class ReminderReceiver : BroadcastReceiver() {
         }
     }
 
-    /**
-     * File rewrites belong off the main thread, and a receiver is torn down as soon as
-     * onReceive returns unless it says otherwise.
-     */
-    private fun offMainThread(work: () -> Unit) {
-        val pending = goAsync()
-        Thread {
-            try {
-                work()
-            } catch (e: IOException) {
-                // A full disk while ticking a task off should lose the tick, not the
-                // process: this runs on a bare thread, where an escape is fatal.
-                Log.e(TAG, "reminder action failed", e)
-            } finally {
-                pending.finish()
-            }
-        }.start()
-    }
-
     private fun show(context: Context, id: String, task: String) {
         // Blocked notifications are dropped by the platform without a word; the store
         // warns at creation time, and this is the second chance to leave a trace.
@@ -157,4 +138,23 @@ class ReminderReceiver : BroadcastReceiver() {
         private const val SALT_DISMISS = 3
         private const val SALT_OPEN = 4
     }
+}
+
+/**
+ * File rewrites belong off the main thread, and a receiver is torn down as soon as
+ * onReceive returns unless it says otherwise.
+ */
+internal fun BroadcastReceiver.offMainThread(work: () -> Unit) {
+    val pending = goAsync()
+    Thread {
+        try {
+            work()
+        } catch (e: IOException) {
+            // A full disk while ticking a task off should lose the tick, not the
+            // process: this runs on a bare thread, where an escape is fatal.
+            Log.e("Assistant", "reminder action failed", e)
+        } finally {
+            pending.finish()
+        }
+    }.start()
 }

@@ -10,6 +10,7 @@
 package io.github.ijazshare.assistant.settings
 
 import android.content.Context
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -32,12 +33,7 @@ class AssistantSettings(private val context: Context) {
 
     suspend fun adminNameNow(): String = adminName.first()
 
-    suspend fun setAdminName(name: String) {
-        context.dataStore.edit { prefs ->
-            val trimmed = name.trim()
-            if (trimmed.isEmpty()) prefs.remove(ADMIN_NAME) else prefs[ADMIN_NAME] = trimmed
-        }
-    }
+    suspend fun setAdminName(name: String) = setOrClear(ADMIN_NAME, name)
 
     /**
      * The owner's own phone number, so "text me" has somewhere to go. Null until they
@@ -50,12 +46,7 @@ class AssistantSettings(private val context: Context) {
 
     suspend fun ownNumberNow(): String? = ownNumber.first()
 
-    suspend fun setOwnNumber(number: String) {
-        context.dataStore.edit { prefs ->
-            val trimmed = number.trim()
-            if (trimmed.isEmpty()) prefs.remove(OWN_NUMBER) else prefs[OWN_NUMBER] = trimmed
-        }
-    }
+    suspend fun setOwnNumber(number: String) = setOrClear(OWN_NUMBER, number)
 
     /**
      * An optional remote language model for general-knowledge answers, spoken to over the
@@ -64,14 +55,12 @@ class AssistantSettings(private val context: Context) {
      * recognition, tool routing and speech synthesis stay on the phone. Disabled — and
      * nothing leaves the device — until all three fields are filled in.
      */
-    val remoteLlm: Flow<RemoteLlmConfig?> = context.dataStore.data.map { prefs ->
+    suspend fun remoteLlmNow(): RemoteLlmConfig? = context.dataStore.data.first().let { prefs ->
         val url = prefs[REMOTE_LLM_URL]?.trim().orEmpty()
         val key = prefs[REMOTE_LLM_KEY]?.trim().orEmpty()
         val model = prefs[REMOTE_LLM_MODEL]?.trim().orEmpty()
         if (url.isEmpty() || key.isEmpty() || model.isEmpty()) null else RemoteLlmConfig(url, key, model)
     }
-
-    suspend fun remoteLlmNow(): RemoteLlmConfig? = remoteLlm.first()
 
     suspend fun remoteLlmFieldsNow(): Triple<String, String, String> {
         val prefs = context.dataStore.data.first()
@@ -86,7 +75,7 @@ class AssistantSettings(private val context: Context) {
     suspend fun setRemoteLlmKey(value: String) = setOrClear(REMOTE_LLM_KEY, value)
     suspend fun setRemoteLlmModel(value: String) = setOrClear(REMOTE_LLM_MODEL, value)
 
-    private suspend fun setOrClear(key: androidx.datastore.preferences.core.Preferences.Key<String>, value: String) {
+    private suspend fun setOrClear(key: Preferences.Key<String>, value: String) {
         context.dataStore.edit { prefs ->
             val trimmed = value.trim()
             if (trimmed.isEmpty()) prefs.remove(key) else prefs[key] = trimmed

@@ -22,7 +22,6 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import io.github.ijazshare.assistant.services.AssistantAccessibilityService
-import io.github.ijazshare.assistant.services.AssistantNotificationListener
 
 /** What the system currently thinks about one capability. */
 enum class PermissionState {
@@ -212,8 +211,4 @@ class PermissionInspector(private val context: Context) {
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri())
 
     private fun packageUri(): Uri = Uri.fromParts("package", context.packageName, null)
-
-    /** The notification listener component, for the per-service settings deep link. */
-    fun notificationListenerComponent(): ComponentName =
-        ComponentName(context, AssistantNotificationListener::class.java)
 }

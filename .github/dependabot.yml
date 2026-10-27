@@ -24,9 +24,6 @@ updates:
       test:
         patterns:
           - "junit*"
-          - "org.robolectric*"
-          - "io.mockk*"
-          - "app.cash.turbine*"
           - "com.google.truth*"
     ignore:
       # The Compose BOM pins a consistent library set; bump it deliberately, not per-artifact.
