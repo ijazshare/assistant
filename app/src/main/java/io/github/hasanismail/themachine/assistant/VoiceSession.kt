@@ -208,7 +208,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     /** Whether this session has already written its prompt cache. */
     private var cacheWritten = false
 
-    /** The caller's contact names for transcriber biasing, read once and reused. */
+    /** The caller's contact names for transcriber biasing, read once and reused; null until there are some. */
     private var contactBias: String? = null
 
     /** A messaging/calling command held while the user chooses among several contacts. */
@@ -278,10 +278,11 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
                 return@launch
             }
             // Bias the transcriber toward the caller's contacts, so a name like "Hasan" is
-            // heard as itself and not the nearest English word. Read once and reused.
+            // heard as itself and not the nearest English word. Read once and reused, unless
+            // it came back empty (no permission yet, no signal): that is tried again next time.
             whisper.setBias(
                 contactBias ?: withContext(Dispatchers.IO) { ContactNames(context).forBias() }
-                    .also { contactBias = it },
+                    .also { if (it.isNotEmpty()) contactBias = it },
             )
             // The voice is prepared in the background too. Unpacking it is a one-off
             // that costs a few seconds, and doing it here means the first reply is

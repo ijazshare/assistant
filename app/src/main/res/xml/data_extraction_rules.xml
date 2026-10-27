@@ -1,10 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  What leaves the phone through Android backup (minSdk 33, so this file is the one that
+  applies; backup_rules.xml repeats the cloud list for consistency).
+
+  Cloud backup goes to Google's servers, so nothing the user said or wrote is sent:
+    external history/   the query log (transcripts) and the debug capture archive (voice
+                        recordings, history/captures/)
+    external context/   the notes files
+    external crash/ and command-cache.json   reports and learned phrases
+    file datastore/     settings, which can hold a remote-model API key
+    external models/ and file prompt-cache/   large and re-downloadable
+  Screenshots are saved through MediaStore, outside the app's own storage, so no backup
+  rule reaches them. Reminders (the database domain) are not excluded.
+
+  Device transfer is phone to phone over a cable or local link, so settings and notes
+  come along, but recordings, the query log and the models do not.
+-->
 <data-extraction-rules>
     <cloud-backup>
+        <exclude domain="external" path="history/" />
+        <exclude domain="external" path="context/" />
+        <exclude domain="external" path="crash/" />
+        <exclude domain="external" path="command-cache.json" />
         <exclude domain="external" path="models/" />
+        <exclude domain="file" path="datastore/" />
         <exclude domain="file" path="prompt-cache/" />
     </cloud-backup>
     <device-transfer>
+        <exclude domain="external" path="history/" />
         <exclude domain="external" path="models/" />
         <exclude domain="file" path="prompt-cache/" />
     </device-transfer>

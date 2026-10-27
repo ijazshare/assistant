@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Models live in getExternalFilesDir(null)/models and are large, re-downloadable
-  artifacts — never back them up. Task data and settings are worth keeping.
+  Pre-Android 12 format. minSdk is 33, so data_extraction_rules.xml is what applies; this
+  mirrors its cloud-backup list so the two cannot disagree. See that file for the reasons.
 -->
 <full-backup-content>
+    <exclude domain="external" path="history/" />
+    <exclude domain="external" path="context/" />
+    <exclude domain="external" path="crash/" />
+    <exclude domain="external" path="command-cache.json" />
     <exclude domain="external" path="models/" />
+    <exclude domain="file" path="datastore/" />
     <exclude domain="file" path="prompt-cache/" />
 </full-backup-content>

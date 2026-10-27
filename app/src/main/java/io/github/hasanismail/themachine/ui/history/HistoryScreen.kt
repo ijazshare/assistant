@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.hasanismail.themachine.assistant.CommandCache
 import io.github.hasanismail.themachine.diagnostics.CrashLog
+import io.github.hasanismail.themachine.history.CaptureArchive
 import io.github.hasanismail.themachine.history.QueryLog
 import io.github.hasanismail.themachine.history.QueryRecord
 import io.github.hasanismail.themachine.history.QuerySource
@@ -57,6 +58,7 @@ import java.time.format.DateTimeFormatter
 fun HistoryScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val log = remember { QueryLog(context) }
+    val captures = remember { CaptureArchive(context) }
     val cache = remember {
         CommandCache.shared(File(context.getExternalFilesDir(null), CommandCache.FILE_NAME))
     }
@@ -89,6 +91,7 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
                         color = MachineColors.Relevant,
                         modifier = Modifier.clickable {
                             log.clear()
+                            captures.clear()
                             records = emptyList()
                         },
                     )
