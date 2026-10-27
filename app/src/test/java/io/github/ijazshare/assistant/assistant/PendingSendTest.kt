@@ -41,4 +41,49 @@ class PendingSendTest {
         assertThat(PendingSend.isCancel("I'll be late, never mind dinner")).isFalse()
         assertThat(PendingSend.isCancel("stop by the shop on your way")).isFalse()
     }
+
+    @Test
+    fun `a dismissal forgets the send, so a later command is not texted`() {
+        val now = 1_000_000L
+        PendingSend.hold(PendingSend("+15550101", "Sam Lee", now))
+        PendingSend.dismiss()
+        assertThat(PendingSend.take(now + 30_000L)).isNull()
+    }
+
+    @Test
+    fun `a held send is used once, and only inside its window`() {
+        val now = 1_000_000L
+        PendingSend.hold(PendingSend("+15550101", "Sam Lee", now))
+        assertThat(PendingSend.take(now + 1_000L)?.display).isEqualTo("Sam Lee")
+        assertThat(PendingSend.take(now + 2_000L)).isNull()
+        PendingSend.hold(PendingSend("+15550101", "Sam Lee", now))
+        assertThat(PendingSend.take(now + PendingSend.WINDOW_MILLIS + 1)).isNull()
+    }
+
+    @Test
+    fun `the common ways of cancelling are not messages`() {
+        listOf(
+            "Cancel that.", "No, cancel.", "Cancel it", "Don't send anything", "No.", "Nope",
+            "Never mind, don't send it.", "Do not send it", "No thanks, forget it",
+        ).forEach { assertThat(PendingSend.isCancel(it)).isTrue() }
+    }
+
+    @Test
+    fun `a message with words of its own is not a cancel`() {
+        assertThat(PendingSend.isCancel("No problem, see you at six")).isFalse()
+        assertThat(PendingSend.isCancel("I'm not coming")).isFalse()
+        assertThat(PendingSend.isCancel("Thanks")).isFalse()
+    }
+
+    @Test
+    fun `another order is a command, not the words for the first contact`() {
+        listOf("Text Bob", "No, text Bob instead", "Actually call Bob", "send an email to Bob", "Call Bob")
+            .forEach { assertThat(PendingSend.isNewCommand(it)).isTrue() }
+    }
+
+    @Test
+    fun `dictation that starts with a verb is still a message`() {
+        listOf("Call me when you land", "I'll text you later", "Send me the report", "See you at six", "Call you back")
+            .forEach { assertThat(PendingSend.isNewCommand(it)).isFalse() }
+    }
 }

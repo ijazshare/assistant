@@ -90,4 +90,17 @@ class MessageBodyTest {
         assertThat(MessageBody.isRequest("tell Sam to send me the report", "Sam")).isFalse()
         assertThat(MessageBody.isRequest("message Sam that I sent the file to Omar", "Sam")).isFalse()
     }
+
+    @Test
+    fun `a request with common filler is still a request`() {
+        listOf(
+            "Send a quick message to Sam",
+            "Can you send a text to Sam for me",
+            "Hey, text Sam",
+            "Send Sam a message right now",
+            "Send a real quick text to Sam",
+        ).forEach { assertThat(MessageBody.isRequest(it, "Sam")).isTrue() }
+        // Filler does not make dictation a request.
+        assertThat(MessageBody.isRequest("send me the report for tomorrow", "Sam")).isFalse()
+    }
 }

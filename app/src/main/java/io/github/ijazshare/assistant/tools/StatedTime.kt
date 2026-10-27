@@ -46,16 +46,27 @@ object StatedTime {
         }
         val words = clockWords(transcript)
         val (said, minutes) = when {
-            words.any { it == "noon" || it == "midday" } -> NOON to 0
+            // Only when it is the time asked for: "at 11 am ... before noon" is 11.
+            namesTime(words, NOONS) -> NOON to 0
 
-            "midnight" in words -> 0 to 0
+            namesTime(words, setOf("midnight")) -> 0 to 0
 
             else -> {
                 val reconciled = TimeResolver.reconcileHour(transcript, hour) ?: return null
-                reconciled to (minuteSaid(transcript, words) ?: minute ?: 0)
+                reconciled to (minuteSaid(transcript, words, reconciled) ?: minute ?: 0)
             }
         }
-        return At(said, minutes, tomorrow = if ("tomorrow" in words) true else null)
+        // "The day after tomorrow" is two days on, which only the model's own day can say.
+        val dayAfter = words.zipWithNext().any { it == "after" to "tomorrow" }
+        return At(said, minutes, tomorrow = if ("tomorrow" in words && !dayAfter) true else null)
+    }
+
+    /** Noon is the time when it is "at noon", or the only hour said: not "before noon" after an 11 am. */
+    private fun namesTime(words: List<String>, named: Set<String>): Boolean {
+        val at = words.indexOfFirst { it in named }
+        if (at < 0) return false
+        val otherHour = words.any { it !in NOONS && TimeResolver.clockHour(it) != null }
+        return !otherHour || words.getOrNull(at - 1) in AT_CUES
     }
 
     /**
@@ -63,17 +74,38 @@ object StatedTime {
      * is 0. Null when the words do not say, which leaves it to the model: "half past three pm"
      * says its minutes in words, and "3 pm" there is not o'clock.
      */
-    private fun minuteSaid(transcript: String, words: List<String>): Int? {
-        val digits = CLOCK_DIGITS.find(transcript.lowercase().replace(TimeResolver.DOTTED_MERIDIEM, "$1m"))
-        // Whichever of the two forms matched has its minutes in the one group that is not empty.
-        val minutes = digits?.groupValues?.drop(2)?.firstNotNullOfOrNull { it.toIntOrNull() }
+    private fun minuteSaid(transcript: String, words: List<String>, hour: Int): Int? {
+        val minutes = digitMinutes(transcript, hour)
         if (minutes != null) return minutes.takeIf { it <= LAST_MINUTE }
-        val oclock = words.zipWithNext().any { (hour, cue) -> TimeResolver.clockHour(hour) != null && cue in MERIDIEMS }
-        val inWords = words.windowed(size = MINUTES_PIVOT_HOUR).any { (minutesWord, pivot, hour) ->
-            TimeResolver.clockHour(hour) != null && TimeResolver.isMinutes(minutesWord) &&
+        // The hour itself before the cue, not minutes said after it: "seven ten pm" and "7 5 pm" are not 7 o'clock.
+        val oclock = words.indices.any { i ->
+            val before = words.getOrNull(i - 1)
+            words.getOrNull(i + 1) in MERIDIEMS && TimeResolver.clockHour(words[i]) != null &&
+                (before == null || (TimeResolver.clockHour(before) == null && before != "oh" && before != "o"))
+        }
+        val inWords = words.windowed(size = MINUTES_PIVOT_HOUR).any { (minutesWord, pivot, next) ->
+            TimeResolver.clockHour(next) != null && TimeResolver.isMinutes(minutesWord) &&
                 (pivot in TimeResolver.PAST_THE_HOUR || pivot in TimeResolver.TO_THE_HOUR)
         }
         return if (oclock && !inWords) 0 else null
+    }
+
+    /**
+     * The minutes of an H:MM, H.MM or "H MM am" that is the hour said, not any number in the sentence:
+     * "at 3 pm to pay the 12.50 bill" is 3:00. A bare dot needs the "at" or am/pm that makes it a time
+     * and not a price.
+     */
+    private fun digitMinutes(transcript: String, hour: Int): Int? {
+        val text = transcript.lowercase().replace(TimeResolver.DOTTED_MERIDIEM, "$1m")
+        val found = CLOCK_DIGITS.findAll(text).firstOrNull { match ->
+            val after = text.substring(match.range.last + 1).trimStart()
+            match.groupValues[1].toInt() % NOON == hour % NOON && (
+                !match.value.contains('.') || text.substring(0, match.range.first).trimEnd().endsWith(" at") ||
+                    after.startsWith("am") || after.startsWith("pm")
+                )
+        }
+        // Whichever of the two forms matched has its minutes in the one group that is not empty.
+        return found?.groupValues?.drop(2)?.firstNotNullOfOrNull { it.toIntOrNull() }
     }
 
     /**
@@ -83,7 +115,10 @@ object StatedTime {
      */
     fun relativeMinutes(transcript: String): Int? {
         val words = clockWords(transcript)
-        val minutes = words.indices.filter { words[it] == "in" }
+        // A clock time said first is the time asked for, and a later "in" is a phrasal verb or part of
+        // the task: "at 5 pm to put in 2 hours of overtime". Said after, the length is the time asked for.
+        val clock = words.indexOfFirst { it in MERIDIEMS || it in NOONS || it == "midnight" }
+        val minutes = words.indices.filter { words[it] == "in" && (clock < 0 || it < clock) }
             .firstNotNullOfOrNull { durationAt(words, it + 1) } ?: return null
         return minutes.roundToInt().takeIf { it in 1..MAX_RELATIVE_MINUTES }
     }
@@ -171,6 +206,8 @@ object StatedTime {
     // 9:35 and 9.35, or 9 35 with the am or pm that makes it a time and not two numbers.
     private val CLOCK_DIGITS = Regex("""\b(\d{1,2})(?:[:.](\d{2})(?!\d)|\s(\d{2})\s?(?:am|pm)\b)""")
     private val MERIDIEMS = setOf("am", "pm")
+    private val AT_CUES = setOf("at", "for")
+    private val NOONS = setOf("noon", "midday")
     private val ARTICLES = setOf("a", "an")
     private val HALVES = listOf(listOf("and", "half"), listOf("and", "a", "half"), listOf("and", "an", "half"))
 

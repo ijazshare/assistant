@@ -320,8 +320,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         listening?.cancel()
         // A dismissal abandons a pending contact choice too: the held command is gone, so
         // a later tap on a stale selector must not send anything.
-        // A pending send is deliberately kept: this runs for every hide, and for a typed reply to
-        // "What should I say?", so it cannot say whether the owner walked away. See [pendingSend].
+        // A pending send is kept: this also runs for the Type toggle, and a typed reply is still the
+        // answer. A dismissal ends it in [dismissed].
         pendingChoice = null
         // Give media back. A typed command re-takes focus in submitText, since it still
         // speaks a reply; a dismissal leaves it released, so the music resumes.
@@ -330,6 +330,12 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         if (current is SessionState.Listening || current is SessionState.Preparing) {
             _state.value = SessionState.Idle
         }
+    }
+
+    /** The overlay was dismissed: stops listening, and forgets the send waiting for its words. */
+    fun dismissed() {
+        PendingSend.dismiss()
+        stopListening()
     }
 
     /**
@@ -653,9 +659,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * it is a command again.
      */
     private suspend fun answeredPendingSend(transcript: String, sttMillis: Long): Boolean {
-        val waiting = pendingSend ?: return false
-        pendingSend = null
-        if (waiting.expired(System.currentTimeMillis())) return false
+        val waiting = PendingSend.take(System.currentTimeMillis()) ?: return false
+        // "No, text Bob" is the next order, not the words for the first contact.
+        if (PendingSend.isNewCommand(transcript)) return false
         val call = if (PendingSend.isCancel(transcript)) {
             ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it."))
         } else {
@@ -679,7 +685,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private suspend fun holdSendFor(call: ToolCall): Boolean {
         val spoken = call.string("recipient") ?: return false
         val number = withContext(Dispatchers.IO) { contacts.resolveNumber(spoken) } ?: return false
-        pendingSend = PendingSend(number, call.string("display") ?: spoken, System.currentTimeMillis())
+        PendingSend.hold(PendingSend(number, call.string("display") ?: spoken, System.currentTimeMillis()))
         return true
     }
 
@@ -960,17 +966,6 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
     private companion object {
         const val TAG = "Assistant"
-
-        /**
-         * The send waiting for its words, for [PendingSend.WINDOW_MILLIS].
-         *
-         * Held beside the session rather than in it: the window is hidden and the session can be
-         * rebuilt between the question and the answer. A hide cannot be told from a dismissal
-         * (the window never closes itself, and every hide reaches stopListening the same way),
-         * so only the expiry ends it, or the next transcript, whichever comes first.
-         */
-        @Volatile
-        var pendingSend: PendingSend? = null
 
         /** How long a new summon waits for the previous recorder to let go. */
         const val HANDOVER_MILLIS = 400L

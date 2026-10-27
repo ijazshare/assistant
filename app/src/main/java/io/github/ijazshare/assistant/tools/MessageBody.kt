@@ -52,7 +52,7 @@ object MessageBody {
         "now", "please", "ok", "okay", "then", "and", "can", "could", "you", "just", "go", "ahead",
         "it", "that", "this", "a", "an", "the", "to", "him", "her", "them", "over", "off", "again",
         "message", "messages", "text", "texts", "sms", "email", "whatsapp", "signal", "telegram", "dm",
-        "msg", "txt",
+        "msg", "txt", "quick", "quickly", "real", "right", "hey", "for", "me", "up",
     )
 
     /**

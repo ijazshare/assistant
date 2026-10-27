@@ -124,7 +124,7 @@ fun AssistantOverlay(showCount: Int, hideCount: Int, onDismiss: () -> Unit) {
     // behind whatever the user went back to, and an alarm they had changed their mind
     // about was still set and still spoken aloud.
     LaunchedEffect(hideCount) {
-        if (hideCount > 0) session.stopListening()
+        if (hideCount > 0) session.dismissed()
     }
     DisposableEffect(Unit) {
         onDispose { session.release() }

@@ -137,17 +137,19 @@ object TimeResolver {
      * With no part-of-day cue the model's hour stands, since "alarm at seven" does not say which
      * seven — unless it is not a seven at all. "Tomorrow at 7" came back as 3, and 3 is neither
      * of the sevens, so the hour said wins. Only the number straight after "at" counts, and not
-     * when it is the minutes of "at ten to six".
+     * when it is the minutes of "at ten to six". With two "at N" the model's hour stands.
      */
     private fun hourAfterAt(words: List<String>, resolved: Int): Int {
         // Padded so the last "at" still has a window of four.
-        val said = (words + List(PADDING) { "" }).windowed(size = 4).firstNotNullOfOrNull { window ->
+        val saids = (words + List(PADDING) { "" }).windowed(size = 4).mapNotNull { window ->
             val (at, hour, pivot) = window
             val after = window.last()
             val minutesFirst = isMinutes(hour) && (pivot in PAST_THE_HOUR || pivot in TO_THE_HOUR) &&
                 clockHour(after) != null
             if (at != "at" || minutesFirst) null else clockHour(hour)
         }
+        // Two of them and one is not a time: "look at 2 flats tomorrow at 6". Which is not said.
+        val said = saids.singleOrNull()
         return if (said == null || said % NOON == resolved % NOON) resolved else said
     }
 

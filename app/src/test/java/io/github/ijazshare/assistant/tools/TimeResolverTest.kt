@@ -135,4 +135,11 @@ class TimeResolverTest {
         assertThat(TimeResolver.minuteOf(30)).isEqualTo(30)
         assertThat(TimeResolver.minuteOf(60)).isNull()
     }
+
+    @Test
+    fun `an at that is not a time does not replace the model's hour`() {
+        assertThat(TimeResolver.reconcileHour("remind me to look at 2 flats tomorrow at 6", 6)).isEqualTo(6)
+        // One "at" and a wrong hour is still corrected.
+        assertThat(TimeResolver.reconcileHour("remind me tomorrow at 7 to call Ali", 3)).isEqualTo(7)
+    }
 }
