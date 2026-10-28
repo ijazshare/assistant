@@ -105,6 +105,12 @@ object MessageBody {
         }.eachCount().any { (app, said) -> said > dictated.count { it == app } }
     }
 
+    /** True if [body] is the whole of [transcript], request and all, as the model sometimes copies it. */
+    fun isEchoed(transcript: String, body: String): Boolean {
+        val said = transcript.trim().trimEnd('.', '!', '?')
+        return said.isNotEmpty() && body.trim().trimEnd('.', '!', '?').equals(said, ignoreCase = true)
+    }
+
     private fun spelledOut(text: String) = text.lowercase().replace(WHATS_APP, "whatsapp").replace(E_MAIL, "email")
 
     private fun appsIn(text: String) = spelledOut(text).split(WORD).filter { it in OTHER_APPS }

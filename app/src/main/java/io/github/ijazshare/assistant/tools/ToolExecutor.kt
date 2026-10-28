@@ -133,11 +133,11 @@ class ToolExecutor(
 
     private suspend fun createReminder(call: ToolCall): ToolResult {
         val task = call.string("task")?.takeIf { it.isNotBlank() }
-            ?: return ToolResult.failed("What should I remind you about?")
+            ?: return ToolResult.failed(ASK_TASK)
         // The model sometimes copies a tool-name token into the task ("set_reminder").
         // Speech never contains underscores, so one marks a hallucinated task, not a real
         // thing to be reminded of. Refuse — which also stops the bad parse being learned.
-        if ('_' in task) return ToolResult.failed("What should I remind you about?")
+        if ('_' in task) return ToolResult.failed(ASK_TASK)
         val hour = TimeResolver.hourOf(call.int("hour"))
         val minute = TimeResolver.minuteOf(call.int("minute")) ?: 0
         // A time that is exactly now is the model echoing the clock, not a time the user
@@ -146,7 +146,7 @@ class ToolExecutor(
         // "Set a reminder for 5 minutes" names no task, and the model fills the slot with the request.
         // With a time it is still a reminder; with none there is nothing to keep.
         val untitled = StatedTime.isUntitled(task)
-        if (untitled && dueHour == null) return ToolResult.failed("What should I remind you about?")
+        if (untitled && dueHour == null) return ToolResult.failed(ASK_TASK)
         return reminders.create(task.takeUnless { untitled }, dueHour, minute, call.bool("tomorrow"))
     }
 
@@ -347,6 +347,8 @@ class ToolExecutor(
     private fun plural(count: Int, unit: String) = if (count == 1) "one $unit" else "$count ${unit}s"
 
     companion object {
+        /** Asked when a reminder has nothing to remind about; the session takes the next words as the answer. */
+        const val ASK_TASK = "What should I remind you about?"
         private const val TAG = "Assistant"
         private const val NOON = 12
         private const val SECONDS_PER_MINUTE = 60

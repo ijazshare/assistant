@@ -344,6 +344,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     /** The overlay was dismissed: stops listening, and forgets the send waiting for its words. */
     fun dismissed() {
         PendingSend.dismiss()
+        PendingReminder.dismiss()
         stopListening()
         // The command in flight is abandoned too. stopListening only ends the capture, so a "Text Sam"
         // dismissed while Thinking went on to ask for the words, hold the send and reopen the microphone.
@@ -532,7 +533,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * condition.
      */
     private suspend fun act(transcript: String, sttMillis: Long) {
-        if (answeredPendingSend(transcript, sttMillis)) return
+        if (answeredPendingSend(transcript, sttMillis) || answeredPendingReminder(transcript, sttMillis)) return
         if (answeredWithoutTheModel(transcript, sttMillis)) return
 
         if (!ensureLanguageModel()) {
@@ -603,7 +604,18 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
                 )
             }
         }
-        carryOut(transcript, call, sttMillis, llmMillis, Resolution.MODEL)
+        carryOut(transcript, withoutEchoedRequest(transcript, call), sttMillis, llmMillis, Resolution.MODEL)
+    }
+
+    /**
+     * The model sometimes copies the whole sentence into a message body: "Text me to check the
+     * email" would go out as that. It is not the message, and which words are cannot be told safely
+     * ("Text Sam please" is not "Please"), so the body is dropped and the words are asked for.
+     */
+    private fun withoutEchoedRequest(transcript: String, call: ToolCall): ToolCall {
+        val echoed = call.tool == AssistantTools.SEND_MESSAGE &&
+            MessageBody.isEchoed(transcript, call.arguments["body"].orEmpty())
+        return if (echoed) call.copy(arguments = call.arguments - "body") else call
     }
 
     /**
@@ -755,6 +767,23 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     }
 
     /**
+     * If a reminder is waiting for what it is about, this transcript is the answer, or a change of
+     * mind. The answer completes the request it was asked for ("Set a reminder" and then "to book
+     * tickets at 6 pm"), and the two run as the one command they make, time and all.
+     */
+    private suspend fun answeredPendingReminder(transcript: String, sttMillis: Long): Boolean {
+        val waiting = PendingReminder.take(System.currentTimeMillis()) ?: return false
+        if (PendingSend.isCancel(transcript)) {
+            // Resolution.CACHE: no model was involved, and nothing here is learned.
+            val call = ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, no reminder."))
+            carryOut(transcript, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
+        } else {
+            act("${waiting.request.trim().trimEnd('.', '!', '?')} ${transcript.trim()}", sttMillis)
+        }
+        return true
+    }
+
+    /**
      * Notes who a "What should I say to X?" was asked for, if X is one person.
      *
      * An unknown name or one that matched several (the contact chooser has run by now, and
@@ -846,6 +875,9 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // The executor asked for the words; remember who they are for.
         val askedForWords = ready.tool == AssistantTools.SEND_MESSAGE && !result.success &&
             ready.string("body") == null && holdSendFor(ready, dismissalsAtStart)
+        // The executor asked what the reminder is for; the next words are the answer.
+        val askedForTask = ready.tool == AssistantTools.CREATE_REMINDER && result.spoken == ToolExecutor.ASK_TASK &&
+            PendingReminder.holdUnlessDismissed(transcript, dismissalsAtStart)
 
         result = summarisedScreen(transcript, call, result)
 
@@ -904,7 +936,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         // spoken rather than after.
         piper.speak(result.spoken)
 
-        if (askedForWords) listenForAnswer()
+        if (askedForWords || askedForTask) listenForAnswer()
     }
 
     /**
@@ -955,6 +987,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         fail(message, actionable, transcript)
 
     private fun fail(message: String, actionable: String? = null, transcript: String = "") {
+        // An answer that never came: the next command must not be taken for what the reminder is about.
+        PendingReminder.dismiss()
         // Recorded, not just spoken. The history held eleven entries and zero failures
         // over a period with more than a hundred failed summons, so the one log the user
         // can actually see was the one place the trouble never showed up.

@@ -99,6 +99,14 @@ class MessageBodyTest {
     }
 
     @Test
+    fun aBodyCopiedWholeIsNotTheMessage() {
+        assertThat(MessageBody.isEchoed("Text me to check the email", "Text me to check the email.")).isTrue()
+        assertThat(MessageBody.isEchoed("Text Sam please", "text sam please")).isTrue()
+        assertThat(MessageBody.isEchoed("Text Sam I'm late", "I'm late")).isFalse()
+        assertThat(MessageBody.isEchoed("Text Sam", "")).isFalse()
+    }
+
+    @Test
     fun aShortWordIsNotFoundInsideALongerOne() {
         // "ok" is inside "okay", and "in" inside "running": neither was said.
         assertThat(MessageBody.isTraceable("okay text Dad please", "ok", "Dad")).isFalse()

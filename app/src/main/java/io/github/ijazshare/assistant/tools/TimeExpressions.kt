@@ -57,7 +57,8 @@ internal object TimeExpressions {
         // "For 2 hours" is how long, not when, except in the request itself: after "remind",
         // "reminder" or "alarm" and before any "to" that starts the task, "a reminder for 5
         // minutes" is five minutes from now, and "remind me to study for 2 hours" is not.
-        words[at] == "for" && durationAt(words, at + 1) != null ->
+        // "For" is often heard as "of".
+        (words[at] == "for" || words[at] == "of") && durationAt(words, at + 1) != null ->
             durationAt(words, at + 1)?.takeIf { words.take(at).let { it.any(TIMED::contains) && "to" !in it } }
                 ?.let { (minutes, next) -> Expression(Kind.LENGTH, minutes.roundToInt()) to next }
 

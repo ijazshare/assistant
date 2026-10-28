@@ -162,4 +162,20 @@ class PendingSendTest {
         assertThat(held.expired(now + PendingSend.CONFIRM_MILLIS + 1)).isTrue()
         assertThat(held.copy(body = null).expired(now + PendingSend.CONFIRM_MILLIS + 1)).isFalse()
     }
+
+    @Test
+    fun `a reminder waits a minute for what it is about, once`() {
+        val reminder = "Set a reminder"
+        val now = 5_000_000L
+        assertThat(PendingReminder.holdUnlessDismissed(reminder, PendingSend.dismissals(), now)).isTrue()
+        assertThat(PendingReminder.take(now + 59_000L)?.request).isEqualTo(reminder)
+        // Used once: the transcript after the answer is a command again.
+        assertThat(PendingReminder.take(now + 60_000L)).isNull()
+        PendingReminder.holdUnlessDismissed(reminder, PendingSend.dismissals(), now)
+        assertThat(PendingReminder.take(now + PendingSend.WINDOW_MILLIS + 1)).isNull()
+        // Not held if the overlay was dismissed while the command ran.
+        val before = PendingSend.dismissals()
+        PendingSend.dismiss()
+        assertThat(PendingReminder.holdUnlessDismissed(reminder, before, now)).isFalse()
+    }
 }

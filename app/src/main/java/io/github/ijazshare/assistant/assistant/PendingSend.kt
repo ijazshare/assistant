@@ -168,3 +168,37 @@ data class PendingSend(val number: String, val display: String, val askedAtMilli
         fun isYes(transcript: String): Boolean = wordsOf(transcript).joinToString(" ") in YES
     }
 }
+
+/**
+ * A reminder waiting for what it is about: "What should I remind you about?" was just asked of
+ * [request], and the next words within [PendingSend.WINDOW_MILLIS] complete it.
+ */
+data class PendingReminder(val request: String, val askedAtMillis: Long) {
+    companion object {
+        @Volatile
+        private var held: PendingReminder? = null
+
+        /** Not if the overlay was dismissed since the command began, as for a send. */
+        @Synchronized
+        fun holdUnlessDismissed(
+            request: String,
+            dismissalsBefore: Int,
+            now: Long = System.currentTimeMillis(),
+        ): Boolean {
+            if (PendingSend.dismissals() != dismissalsBefore) return false
+            held = PendingReminder(request, now)
+            return true
+        }
+
+        /** Used once, expired or not, so the transcript after it is a command again. */
+        fun take(now: Long): PendingReminder? {
+            val waiting = held
+            held = null
+            return waiting?.takeIf { now - it.askedAtMillis <= PendingSend.WINDOW_MILLIS }
+        }
+
+        fun dismiss() {
+            held = null
+        }
+    }
+}
