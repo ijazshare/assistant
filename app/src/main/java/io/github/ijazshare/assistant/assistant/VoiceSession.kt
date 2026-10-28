@@ -478,7 +478,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
                 )
             }
         }
-        carryOut(transcript, CallChecks.withoutEchoedRequest(transcript, call), sttMillis, llmMillis, Resolution.MODEL)
+        carryOut(transcript, CallChecks.withMessageFromWords(transcript, call), sttMillis, llmMillis, Resolution.MODEL)
     }
 
     /**

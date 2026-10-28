@@ -68,12 +68,14 @@ Summarised from `git log --since=2026-09-03`.
   large ones wrong and switched between words and digits.
 - **VoiceSession split (27 Oct).** 1,123 lines into its parts: VoiceSession (the conductor),
   SpeechCapture, CallChecks (pure, now unit-tested) and FollowUps; a pure move, reviewed for drift.
-- **Next, planned: a message's words from the transcript, not the model.** Take send_message's
-  body out of the 1B's grammar; the session takes the words after the recipient (or after
-  "that", "saying", "say"), asks "What should I say to X?" when nothing follows, and keeps only
-  the check that a reply of pure politeness ("Text Sam please") is no message. That removes the
-  invented-body and echo checks rather than adding to them. It changes the router's tool list,
-  so RoutingBenchmarkTest is run on the phone before and after.
+- **A message's words from the transcript (27 Oct).** send_message's body is out of the
+  model's grammar and prompt example; the model only picks the tool and the recipient. The words
+  are taken in code (`MessageBody.fromWords`) from the plain shape only: a request, the contact's
+  name, an optional "a text" and one of "that", "saying", "say", "to", then the words. Anything
+  else, or nothing after the name, or pure politeness ("Text Sam please"), gives no body and the
+  assistant asks "What should I say to X?". That removed the invented-body and echo checks
+  (`isTraceable`, `isEchoed`) rather than adding to them. The routing benchmark still has to be run
+  on the phone, since the tool list the router sees changed.
 - **Audit cleanup (27 Oct).** A read-only over-engineering audit, each cut checked twice,
   removed about 1,100 lines net: dead code, no-op UI left from the redesign, unused
   dependencies, the experimental FunctionGemma path with its prompt-dialect layer, and Hilt

@@ -10,36 +10,18 @@
 package io.github.ijazshare.assistant.tools
 
 /**
- * Guards against a fabricated message body.
+ * Where a text's words come from: what the user said, never the model.
  *
- * A message body is an unconstrained string, and asked to text someone with no words to
- * send, the model fills the slot anyway — "hello how are you" for a bare "text Dad". A
- * text is one of the few actions with no undo, so an invented body must never be sent.
- * The words of a real message are the words the user actually said; a body whose words
- * are mostly absent from the transcript was not dictated, it was invented.
+ * The small router model fills a message body whatever was said, and a text is one of the few
+ * actions with no undo: it invented "hello how are you" for a bare "text Dad", copied the request
+ * ("Text Sam please") or the whole sentence. So the model only picks send_message and the
+ * recipient, and [fromWords] takes the message out of the transcript, from the plain shape only.
  */
 object MessageBody {
 
-    /** Below this fraction of body words found in the transcript, the body was invented. */
-    private const val TRACEABLE_FRACTION = 0.5f
-
-    /** Shorter body words must appear whole in the transcript, not inside another word. */
-    private const val MIN_INFIX = 4
-
     private val WORD = Regex("[^\\p{L}\\p{N}]+")
+    private val SPACES = Regex("\\s+")
     private val FOR_ME = Regex("\\bfor me\\b")
-
-    /**
-     * Words every messaging command carries, whatever the message: never evidence of one.
-     * The apps and the little words around them too, since the model echoes the request
-     * itself as the body: "Send an email", "WhatsApp", "Message my brother".
-     */
-    private val COMMAND_WORDS = setOf(
-        "text", "texts", "message", "messages", "send", "sms", "tell",
-        "reply", "write", "say", "saying", "that", "to",
-        "email", "emails", "whatsapp", "signal", "telegram", "dm", "msg", "txt", "ping",
-        "an", "the", "my",
-    )
 
     /** Apps a message could be meant for other than SMS, which is all this can send. */
     private val OTHER_APPS = setOf(
@@ -74,8 +56,8 @@ object MessageBody {
      * True if [body] is the request to send rather than words to send: "Now send that message
      * to Sam Lee", "send it to Sam", "text Sam", "send Sam a message".
      *
-     * The model hands back the request as the body when none was dictated, and it passes
-     * [isTraceable] because the user did say those words. A request is a command verb, then
+     * The model handed back the request as the body when none was dictated, and the user did say
+     * those words, as the command and not as the message. A request is a command verb, then
      * nothing but the recipient and the little words of asking; dictation after "text Sam"
      * has words of its own, so "text Sam I'll be late" is untouched (its body, "I'll be
      * late", never starts with a verb), and so is "send me the report".
@@ -105,42 +87,95 @@ object MessageBody {
         }.eachCount().any { (app, said) -> said > dictated.count { it == app } }
     }
 
-    /** True if [body] is the whole of [transcript], request and all, as the model sometimes copies it. */
-    fun isEchoed(transcript: String, body: String): Boolean {
-        val said = transcript.trim().trimEnd('.', '!', '?')
-        return said.isNotEmpty() && body.trim().trimEnd('.', '!', '?').equals(said, ignoreCase = true)
-    }
-
     private fun spelledOut(text: String) = text.lowercase().replace(WHATS_APP, "whatsapp").replace(E_MAIL, "email")
 
     private fun appsIn(text: String) = spelledOut(text).split(WORD).filter { it in OTHER_APPS }
 
+    /** Words of pure politeness: a reply made only of them ("Text Sam please") is no message. */
+    private val POLITENESS = setOf(
+        "please", "now", "thanks", "thank", "you", "ok", "okay", "quick", "quickly", "real", "right", "just",
+        "for", "me",
+    )
+
+    /** What may come between the recipient and the words: "a text", "a quick message". */
+    private val MESSAGE_NOUNS = setOf("text", "message", "sms", "msg", "note")
+    private val ARTICLES = setOf("a", "an")
+
+    /** The one word that may introduce the words themselves: "text Sam that ...", "tell Sam to ...". */
+    private val JOINERS = setOf("that", "saying", "say", "to")
+
+    /** What may stand before the recipient: the request, and "my" as in "text my wife". */
+    private val BEFORE_RECIPIENT = REQUEST_WORDS + REQUEST_VERBS + "my"
+
+    private const val WITH_COUNTRY_CODE = 11
+
     /**
-     * True if [body] looks like something the user actually said in [transcript] when
-     * texting [recipient].
+     * The message the user dictated for [recipient], or null when there is none, so the executor
+     * asks what to say.
      *
-     * A body with no word of two letters or more (a smiley, "k") has nothing to fabricate
-     * and is allowed through. Otherwise at least half its real words must appear in the
-     * transcript — enough to pass an ordinary paraphrase ("I'm" heard as "I am") while
-     * catching a body the model wrote out of nothing. A body that is nothing but the
-     * recipient and the command was invented outright.
+     * Safe by construction: it acts only on the plain shape, a request, the recipient, an
+     * optional "a text" and one of "that", "saying", "say", "to", then the words. "Text Sam I'm
+     * late", "Send a message to Sam saying hi" and "Tell Sam to call me" give the words after the
+     * name; "Let Sam know I'm late" and "Sam I'm late" are not that shape and give null, as does a
+     * request with nothing after the name or only politeness ("Text Sam please").
      */
-    fun isTraceable(transcript: String, body: String, recipient: String = ""): Boolean {
-        val all = body.lowercase().split(WORD).filter { it.length >= 2 }
-        if (all.isEmpty()) return true
-        // The recipient's name is in every "text <name>" transcript, so finding it proves
-        // nothing: "Text Hasan" with an invented "Hello Hasan" was half "found" and sent.
-        // Nor do the command's own words: the model also echoes "Text Hasan" as the body.
-        // Both leave the transcript as well, or "hi" is found inside "Ibrahim".
-        val named = recipient.lowercase().split(WORD).toSet() + COMMAND_WORDS
-        val words = all.filterNot { it in named }
-        if (words.isEmpty()) return false
-        val heard = transcript.lowercase().split(WORD).filterNot { it in named }
-        // A long word may be found inside a longer one ("late" in "later"); a short one only
-        // whole, or an invented "ok" was found in "okay" and sent.
-        val found = words.count { word ->
-            if (word.length < MIN_INFIX) word in heard else heard.any { it.contains(word) }
+    fun fromWords(transcript: String, recipient: String): String? {
+        val tokens = transcript.trim().split(SPACES).filter { it.isNotEmpty() }
+        val said = tokens.map(::bare)
+        val run = recipientRun(said, recipient) ?: return null
+        // Before the recipient only the request may stand, and it needs a verb: "Can you text my ...".
+        val before = said.subList(0, run.first)
+        if (before.none { it in REQUEST_VERBS } || before.any { it !in BEFORE_RECIPIENT }) return null
+        val noun = afterMessageNoun(said, run.last + 1)
+        // Past one optional "that", "saying", "say" or "to".
+        val from = if (said.getOrNull(noun) in JOINERS) noun + 1 else noun
+        val rest = said.drop(from).filter { it.isNotEmpty() }
+        if (rest.isEmpty() || rest.all { it in POLITENESS }) return null
+        return tokens.drop(from).joinToString(" ").replaceFirstChar { it.uppercaseChar() }
+    }
+
+    /** A token as compared: lowercase, with the punctuation round it stripped; "I'm" stays whole. */
+    private fun bare(token: String) = token.lowercase().trim { !it.isLetterOrDigit() }
+
+    /** The first place, at index 1 or later, where the recipient is said; null if nowhere. */
+    private fun recipientRun(said: List<String>, recipient: String): IntRange? {
+        val isNumber = recipient.any(Char::isDigit) && recipient.none(Char::isLetter)
+        for (start in 1 until said.size) {
+            val end = if (isNumber) numberEnd(said, start, recipient) else nameEnd(said, start, recipient)
+            if (end != null) return start..end
         }
-        return found.toFloat() / words.size >= TRACEABLE_FRACTION
+        return null
+    }
+
+    /** The last index of the recipient's words in order from [start], or null if they are not there. */
+    private fun nameEnd(said: List<String>, start: Int, recipient: String): Int? {
+        val words = recipient.lowercase().split(WORD).filter { it.isNotEmpty() }
+        val fits = words.isNotEmpty() && start + words.size <= said.size &&
+            words.indices.all { said[start + it] == words[it] }
+        return if (fits) start + words.size - 1 else null
+    }
+
+    /**
+     * The last index of the shortest run of tokens from [start] that bear digits and whose digits
+     * join up to the number, a leading 1 the model added allowed, as in [ContactMatch.numberSaid].
+     */
+    private fun numberEnd(said: List<String>, start: Int, number: String): Int? {
+        val digits = number.filter(Char::isDigit)
+        val wanted = setOf(digits, digits.takeIf { it.length == WITH_COUNTRY_CODE }?.removePrefix("1") ?: digits)
+        var heard = ""
+        for (at in start until said.size) {
+            val here = said[at].filter(Char::isDigit)
+            if (here.isEmpty() || heard.length + here.length > digits.length) return null
+            heard += here
+            if (heard in wanted) return at
+        }
+        return null
+    }
+
+    /** Past an optional "a text", "an sms", "a quick message". */
+    private fun afterMessageNoun(said: List<String>, from: Int): Int {
+        if (said.getOrNull(from) !in ARTICLES) return from
+        val noun = if (said.getOrNull(from + 1) == "quick") from + 2 else from + 1
+        return if (said.getOrNull(noun) in MESSAGE_NOUNS) noun + 1 else from
     }
 }

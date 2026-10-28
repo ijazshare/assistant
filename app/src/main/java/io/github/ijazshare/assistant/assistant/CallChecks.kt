@@ -23,19 +23,20 @@ internal object CallChecks {
     private const val TAG = "Assistant"
 
     /**
-     * The model sometimes copies the whole sentence into a message body: "Text me to check the
-     * email" would go out as that. It is not the message, and which words are cannot be told safely
-     * ("Text Sam please" is not "Please"), so the body is dropped and the words are asked for.
+     * A text's words are the user's own, taken from the transcript, never the model's: it only
+     * picked the tool and the recipient, and what it wrote as a body was invented or copied. With
+     * no message in the plain shape ("Text Sam", "Text Sam please") there is no body, and the
+     * executor asks what to say.
      */
-    internal fun withoutEchoedRequest(transcript: String, call: ToolCall): ToolCall {
-        val echoed = call.tool == AssistantTools.SEND_MESSAGE &&
-            MessageBody.isEchoed(transcript, call.arguments["body"].orEmpty())
-        return if (echoed) call.copy(arguments = call.arguments - "body") else call
+    internal fun withMessageFromWords(transcript: String, call: ToolCall): ToolCall {
+        if (call.tool != AssistantTools.SEND_MESSAGE) return call
+        val body = MessageBody.fromWords(transcript, call.arguments["recipient"].orEmpty())
+        return call.copy(arguments = if (body == null) call.arguments - "body" else call.arguments + ("body" to body))
     }
 
     /**
      * Checks the model's call against the words it was given: declines a screen read
-     * nobody asked for, drops a message body nobody said, and corrects an hour the model
+     * nobody asked for, drops a message body that is only the request, and corrects an hour the model
      * converted badly.
      *
      * The only place the transcript and the resolved call are both in hand, which is
@@ -120,11 +121,10 @@ internal object CallChecks {
     }
 
     /**
-     * A message body the user never said is invented, not dictated; drop it so the executor
-     * asks for the words rather than sending "hello how are you" to someone. So is one that is
-     * the request itself ("Now send that message to Sam"), which the user did say, but as the
-     * command and not as the message. And only texts can be sent: words meant for Signal or
-     * WhatsApp are declined rather than sent as an SMS.
+     * A message body that is the request itself ("Now send that message to Sam") was said, but
+     * as the command and not as the message; drop it so the executor asks for the words. The
+     * body comes from the transcript ([withMessageFromWords]), so it is never invented. And only
+     * texts can be sent: words meant for Signal or WhatsApp are declined rather than sent as an SMS.
      */
     private fun checkedMessage(transcript: String, call: ToolCall): ToolCall {
         val body = call.arguments["body"].orEmpty()
@@ -134,10 +134,8 @@ internal object CallChecks {
             Log.i(TAG, "declining a message for another app in [$transcript]")
             return ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "I can only send texts for now."))
         }
-        if (body.isNotBlank() &&
-            (MessageBody.isRequest(body, named) || !MessageBody.isTraceable(transcript, body, recipient))
-        ) {
-            Log.i(TAG, "dropping invented body \"$body\" for [$transcript]")
+        if (body.isNotBlank() && MessageBody.isRequest(body, named)) {
+            Log.i(TAG, "dropping body \"$body\", it is the request, for [$transcript]")
             return call.copy(arguments = call.arguments - "body")
         }
         return call

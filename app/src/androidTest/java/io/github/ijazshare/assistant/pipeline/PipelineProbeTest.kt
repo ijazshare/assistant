@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.github.ijazshare.assistant.assistant.CallChecks
 import io.github.ijazshare.assistant.llm.LlamaEngine
 import io.github.ijazshare.assistant.llm.PromptBuilder
 import io.github.ijazshare.assistant.llm.ToolCallParser
@@ -26,7 +27,6 @@ import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.ContactLookup
 import io.github.ijazshare.assistant.tools.ContactRecency
 import io.github.ijazshare.assistant.tools.ContactResolution
-import io.github.ijazshare.assistant.tools.MessageBody
 import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
@@ -72,14 +72,10 @@ class PipelineProbeTest {
         Log.i(PIPE, "input=[${smsto ?: runcmd}] -> tool=${call?.tool} args=${call?.arguments}")
         if (call == null) return
 
-        // Mirror the session's guard: never send a body the user did not actually say.
-        if (call.tool == AssistantTools.SEND_MESSAGE && runcmd != null) {
-            val body = call.arguments["body"].orEmpty()
-            val recipient = call.arguments["recipient"].orEmpty()
-            if (body.isNotBlank() && !MessageBody.isTraceable(runcmd, body, recipient)) {
-                Log.i(PIPE, "dropped invented body \"$body\"")
-                call = call.copy(arguments = call.arguments - "body")
-            }
+        // Mirror the session: the model only picks the tool and the recipient; the words are the user's.
+        if (runcmd != null) {
+            call = CallChecks.withMessageFromWords(runcmd, call)
+            Log.i(PIPE, "after message words: args=${call.arguments}")
         }
 
         if (!live) {

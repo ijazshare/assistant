@@ -15,59 +15,6 @@ import org.junit.Test
 class MessageBodyTest {
 
     @Test
-    fun keepsADictatedMessage() {
-        assertThat(MessageBody.isTraceable("text Sarah I am on my way", "I am on my way")).isTrue()
-    }
-
-    @Test
-    fun keepsAParaphrasedContraction() {
-        // "I'm" heard, "I am" written: most words still line up.
-        assertThat(MessageBody.isTraceable("text Dad I'm running late", "I am running late")).isTrue()
-    }
-
-    @Test
-    fun dropsAnInventedBody() {
-        // The bug from testing: a bare "text Dad" produced "hello how are you".
-        assertThat(MessageBody.isTraceable("text Dad", "hello how are you")).isFalse()
-    }
-
-    @Test
-    fun allowsATinyReply() {
-        // Nothing to fabricate in "ok"; do not block it.
-        assertThat(MessageBody.isTraceable("reply ok", "ok")).isTrue()
-    }
-
-    @Test
-    fun theRecipientsNameIsNotEvidence() {
-        // "Text Hasan" must not go out as "Hello Hasan".
-        assertThat(MessageBody.isTraceable("Text Hasan", "Hello Hasan", "Hasan")).isFalse()
-        assertThat(MessageBody.isTraceable("Text Hasan", "Hasan", "Hasan")).isFalse()
-        assertThat(MessageBody.isTraceable("Text Hasan I'm on my way", "I'm on my way", "Hasan")).isTrue()
-        // Nor is anything hidden inside it: "hi" is in "Ibrahim".
-        assertThat(MessageBody.isTraceable("Text Ibrahim", "Hi Ibrahim", "Ibrahim")).isFalse()
-        assertThat(MessageBody.isTraceable("Text my brother", "Hey bro", "my brother")).isFalse()
-    }
-
-    @Test
-    fun theCommandItselfIsNotEvidence() {
-        // The model echoes the command as the message: "Text Hasan" would be sent to Hasan.
-        assertThat(MessageBody.isTraceable("Text Hasan", "Text Hasan", "Hasan")).isFalse()
-        assertThat(MessageBody.isTraceable("Text Fatima that", "Text Fatima that", "Fatima")).isFalse()
-        assertThat(MessageBody.isTraceable("Tell Sara that I'm late", "that I'm late", "Sara")).isTrue()
-        assertThat(MessageBody.isTraceable("Text Mum I'll text you later", "I'll text you later", "Mum")).isTrue()
-        assertThat(MessageBody.isTraceable("Send an email to Margaret", "Send an email", "Margaret")).isFalse()
-        assertThat(MessageBody.isTraceable("send John Smith an email", "Email", "John Smith")).isFalse()
-        assertThat(MessageBody.isTraceable("WhatsApp Yusuf", "What's up?", "Yusuf")).isFalse()
-        assertThat(MessageBody.isTraceable("Message my brother", "Message my brother", "brother")).isFalse()
-        assertThat(MessageBody.isTraceable("Text Dad the car is ready", "The car is ready", "Dad")).isTrue()
-    }
-
-    @Test
-    fun dropsABodyAboutSomethingElse() {
-        assertThat(MessageBody.isTraceable("message mum", "the meeting is at three")).isFalse()
-    }
-
-    @Test
     fun aMessageForAnotherAppIsNotAText() {
         assertThat(
             MessageBody.namesAnotherApp("Send a signal message to Sam", "Send a signal message to Sam", "Sam"),
@@ -96,23 +43,6 @@ class MessageBodyTest {
         ).isFalse()
         assertThat(MessageBody.namesAnotherApp("text Sam I sent you an email", "I sent you an email", "Sam")).isFalse()
         assertThat(MessageBody.namesAnotherApp("text Sam I'm late", "I'm late", "Sam")).isFalse()
-    }
-
-    @Test
-    fun aBodyCopiedWholeIsNotTheMessage() {
-        assertThat(MessageBody.isEchoed("Text me to check the email", "Text me to check the email.")).isTrue()
-        assertThat(MessageBody.isEchoed("Text Sam please", "text sam please")).isTrue()
-        assertThat(MessageBody.isEchoed("Text Sam I'm late", "I'm late")).isFalse()
-        assertThat(MessageBody.isEchoed("Text Sam", "")).isFalse()
-    }
-
-    @Test
-    fun aShortWordIsNotFoundInsideALongerOne() {
-        // "ok" is inside "okay", and "in" inside "running": neither was said.
-        assertThat(MessageBody.isTraceable("okay text Dad please", "ok", "Dad")).isFalse()
-        assertThat(MessageBody.isTraceable("text Dad running", "in on", "Dad")).isFalse()
-        // A longer word still matches its own inflection.
-        assertThat(MessageBody.isTraceable("text Dad running later", "running late", "Dad")).isTrue()
     }
 
     @Test
@@ -158,5 +88,55 @@ class MessageBodyTest {
             .forEach { assertThat(MessageBody.isRequest(it, "Sam")).isFalse() }
         // "For me" is still only politeness.
         assertThat(MessageBody.isRequest("Can you send a text to Sam for me", "Sam")).isTrue()
+    }
+
+    @Test
+    fun `the words are what follows the contact's name`() {
+        assertThat(MessageBody.fromWords("Text Sam I'm running late", "Sam")).isEqualTo("I'm running late")
+        assertThat(MessageBody.fromWords("Text Sam that the meeting moved", "Sam")).isEqualTo("The meeting moved")
+        assertThat(MessageBody.fromWords("Send a message to Sam saying hi", "Sam")).isEqualTo("Hi")
+        assertThat(MessageBody.fromWords("Send Sam a text saying I'm late", "Sam")).isEqualTo("I'm late")
+        assertThat(MessageBody.fromWords("Text me to check the email", "me")).isEqualTo("Check the email")
+        assertThat(MessageBody.fromWords("Tell Sam to call me", "Sam")).isEqualTo("Call me")
+        assertThat(MessageBody.fromWords("Text Sam Lee that I'm late.", "Sam Lee")).isEqualTo("I'm late.")
+    }
+
+    @Test
+    fun `a name inside the message is not the recipient`() {
+        assertThat(MessageBody.fromWords("Text Will will you grab milk", "Will")).isEqualTo("Will you grab milk")
+        assertThat(MessageBody.fromWords("Tell Sam me and Ali are late", "Sam")).isEqualTo("Me and Ali are late")
+    }
+
+    @Test
+    fun `my before the contact is part of the request`() {
+        assertThat(MessageBody.fromWords("Can you text my wife I'm on my way", "wife")).isEqualTo("I'm on my way")
+        assertThat(
+            MessageBody.fromWords("Send a message to my assistant that everything seems to be working", "Assistant"),
+        ).isEqualTo("Everything seems to be working")
+    }
+
+    @Test
+    fun `a number said in digits is the recipient`() {
+        assertThat(MessageBody.fromWords("Text 555 0123 I'm outside", "5550123")).isEqualTo("I'm outside")
+        // A leading 1 the model added.
+        assertThat(MessageBody.fromWords("Text 555 0123456 I'm outside", "15550123456")).isEqualTo("I'm outside")
+    }
+
+    @Test
+    fun `no message gives null`() {
+        assertThat(MessageBody.fromWords("Text Sam", "Sam")).isNull()
+        assertThat(MessageBody.fromWords("Text Sam please", "Sam")).isNull()
+        assertThat(MessageBody.fromWords("Text Sam for me", "Sam")).isNull()
+        assertThat(MessageBody.fromWords("Text Sam real quick", "Sam")).isNull()
+        assertThat(MessageBody.fromWords("Text Sam a message", "Sam")).isNull()
+        assertThat(MessageBody.fromWords("Text my assistant", "Assistant")).isNull()
+    }
+
+    @Test
+    fun `anything but the plain shape gives null`() {
+        assertThat(MessageBody.fromWords("Let Sam know I'm late", "Sam")).isNull()
+        assertThat(MessageBody.fromWords("Sam I'm late", "Sam")).isNull()
+        assertThat(MessageBody.fromWords("Text Bob I'm late", "Sam")).isNull()
+        assertThat(MessageBody.fromWords("Text Sam I'm late", "")).isNull()
     }
 }

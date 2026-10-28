@@ -93,7 +93,7 @@ object PromptBuilder {
         // to set_alarm. A distinct name and body, so the shape transfers, not the words.
         appendLine(
             """text Sara I'll be late -> """ +
-                """{"tool":"send_message","arguments":{"recipient":"Sara","body":"I'll be late"}}""",
+                """{"tool":"send_message","arguments":{"recipient":"Sara"}}""",
         )
         appendLine("""timer for three minutes -> {"tool":"set_timer","arguments":{"minutes":3}}""")
         // With a time on it, since a reminder without one was the only example and the

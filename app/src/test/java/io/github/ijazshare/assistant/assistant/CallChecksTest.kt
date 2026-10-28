@@ -65,18 +65,39 @@ class CallChecksTest {
     }
 
     @Test
-    fun `a body equal to the whole transcript is dropped as an echo`() {
-        val transcript = "Text me to check the email"
-        val call = ToolCall(AssistantTools.SEND_MESSAGE, mapOf("recipient" to "me", "body" to transcript))
+    fun `a message body is set from the words said, not the model's`() {
+        val transcript = "Text Sam I'm running late"
+        val call = ToolCall(AssistantTools.SEND_MESSAGE, mapOf("recipient" to "Sam", "body" to "hello how are you"))
 
-        val checked = CallChecks.withoutEchoedRequest(transcript, call)
+        val checked = CallChecks.withMessageFromWords(transcript, call)
 
-        assertThat(checked.arguments).doesNotContainKey("body")
-        assertThat(checked.arguments["recipient"]).isEqualTo("me")
+        assertThat(checked.arguments["body"]).isEqualTo("I'm running late")
+        assertThat(checked.arguments["recipient"]).isEqualTo("Sam")
     }
 
     @Test
-    fun `a model body that is the request is dropped`() {
+    fun `a message call with no message loses its body`() {
+        val transcript = "Text me to check the email"
+        val call = ToolCall(AssistantTools.SEND_MESSAGE, mapOf("recipient" to "Sam", "body" to transcript))
+
+        val checked = CallChecks.withMessageFromWords("Text Sam please", call)
+
+        assertThat(checked.arguments).doesNotContainKey("body")
+        assertThat(checked.arguments["recipient"]).isEqualTo("Sam")
+        // And a call the model made with no body at all gets one when words were said.
+        val bare = ToolCall(AssistantTools.SEND_MESSAGE, mapOf("recipient" to "me"))
+        assertThat(CallChecks.withMessageFromWords(transcript, bare).arguments["body"]).isEqualTo("Check the email")
+    }
+
+    @Test
+    fun `other tools are left alone by the message words`() {
+        val call = ToolCall(AssistantTools.CALL_CONTACT, mapOf("recipient" to "Sam"))
+
+        assertThat(CallChecks.withMessageFromWords("Call Sam", call)).isEqualTo(call)
+    }
+
+    @Test
+    fun `a body that is the request is dropped`() {
         val call = ToolCall(AssistantTools.SEND_MESSAGE, mapOf("recipient" to "Sam", "body" to "Text Sam please"))
 
         val checked = CallChecks.reconciled("Text Sam please", call)

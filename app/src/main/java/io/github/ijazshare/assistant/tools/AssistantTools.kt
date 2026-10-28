@@ -107,7 +107,6 @@ object AssistantTools {
             description = "Text or message someone.",
             params = listOf(
                 ToolParam("recipient", ParamType.STRING, "Contact name or phone number.", required = true),
-                ToolParam("body", ParamType.STRING, "The message to send.", required = true),
             ),
         ),
         Tool(
