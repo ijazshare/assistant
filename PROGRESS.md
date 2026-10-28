@@ -51,6 +51,16 @@ Summarised from `git log --since=2026-09-03`.
   after a reboot, and a cold start no longer alerts twice. Ticked-off tasks no longer fill the
   answer model's context. A short word in a message body must have been said whole ("ok" is
   not in "okay"). Contact and app lookups and the voice's teardown are off the main thread.
+- **Only what was said (27 Oct).** A number to text or call is used only if its digits were
+  said, and tap_text taps only words that were said, matched as whole words on screen ("tap OK"
+  no longer presses "Book"); otherwise the assistant asks. A text is reported as "Sending", since
+  nothing confirms delivery.
+- **Next, planned: a message's words from the transcript, not the model.** Take send_message's
+  body out of the 1B's grammar; the session takes the words after the recipient (or after
+  "that", "saying", "say"), asks "What should I say to X?" when nothing follows, and keeps only
+  the check that a reply of pure politeness ("Text Sam please") is no message. That removes the
+  invented-body and echo checks rather than adding to them. It changes the router's tool list,
+  so RoutingBenchmarkTest is run on the phone before and after.
 - **Audit cleanup (27 Oct).** A read-only over-engineering audit, each cut checked twice,
   removed about 1,100 lines net: dead code, no-op UI left from the redesign, unused
   dependencies, the experimental FunctionGemma path with its prompt-dialect layer, and Hilt

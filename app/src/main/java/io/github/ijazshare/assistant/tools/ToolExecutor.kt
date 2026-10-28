@@ -178,7 +178,8 @@ class ToolExecutor(
                 } else {
                     sms.sendTextMessage(number, null, body, null, null)
                 }
-                ToolResult.ok("Sent to $label.", body)
+                // Handed to the radio; nothing reports whether it went, so it is not called sent.
+                ToolResult.ok("Sending to $label.", body)
             }
         } catch (e: SecurityException) {
             Log.w(TAG, "no SMS permission", e)

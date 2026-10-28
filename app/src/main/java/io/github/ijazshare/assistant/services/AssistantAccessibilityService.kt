@@ -22,6 +22,7 @@ import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import io.github.ijazshare.assistant.assistant.ScreenQuestion
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -325,10 +326,11 @@ class AssistantAccessibilityService : AccessibilityService() {
 
     // ---- Node traversal ---------------------------------------------------------
 
-    private fun AccessibilityNodeInfo.matchesText(needle: String): Boolean {
-        val haystack = listOfNotNull(text?.toString(), contentDescription?.toString())
-        return haystack.any { it.contains(needle, ignoreCase = true) }
-    }
+    // Whole words: "tap OK" must not press "Book".
+    private fun AccessibilityNodeInfo.matchesText(needle: String): Boolean =
+        listOfNotNull(text?.toString(), contentDescription?.toString()).any {
+            ScreenQuestion.containsPhrase(it, needle)
+        }
 
     private fun collectNodes(
         node: AccessibilityNodeInfo,

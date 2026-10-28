@@ -54,6 +54,23 @@ object ScreenQuestion {
             word in POINTING || TEXT_ONLY.any { word.startsWith(it) }
         }
 
+    /**
+     * True if [phrase] is in [text] as whole words, spacing and hyphens aside: "Wi-Fi" is in "tap
+     * wifi", and "OK" is not in "Book". Used for what was said and for what is on screen.
+     */
+    fun containsPhrase(text: String, phrase: String): Boolean {
+        val target = squashed(phrase)
+        val words = text.lowercase().split(NOT_WORD).filter { it.isNotEmpty() }
+        return target.isNotEmpty() && (1..minOf(words.size, MAX_PHRASE_WORDS)).any { size ->
+            words.windowed(size).any { squashed(it.joinToString("")) == target }
+        }
+    }
+
+    private fun squashed(text: String) = text.lowercase().filter(Char::isLetterOrDigit)
+
+    private val NOT_WORD = Regex("[^\\p{L}\\p{N}]+")
+    private const val MAX_PHRASE_WORDS = 8
+
     private val POINTING = setOf("this", "these", "here", "screen", "page", "read", "say", "says")
 
     /**

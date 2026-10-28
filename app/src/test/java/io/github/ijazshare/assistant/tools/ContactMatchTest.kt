@@ -59,4 +59,15 @@ class ContactMatchTest {
         assertThat(ContactMatch.isSelf("Myself")).isTrue()
         assertThat(ContactMatch.isSelf("mum")).isFalse()
     }
+
+    @Test
+    fun `a number is used only if it was said`() {
+        assertThat(ContactMatch.numberSaid("text 555 0123 I'm outside", "5550123")).isTrue()
+        assertThat(ContactMatch.numberSaid("call five five five oh one two three", "5550123")).isTrue()
+        // The model may add the country code; the user did not say it.
+        assertThat(ContactMatch.numberSaid("text 555 555 0123", "+15555550123")).isTrue()
+        // A number nobody said.
+        assertThat(ContactMatch.numberSaid("text Sam", "5550123")).isFalse()
+        assertThat(ContactMatch.numberSaid("call 555 0124", "5550123")).isFalse()
+    }
 }

@@ -47,6 +47,7 @@ import io.github.ijazshare.assistant.stt.WhisperEngine
 import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.Contact
 import io.github.ijazshare.assistant.tools.ContactLookup
+import io.github.ijazshare.assistant.tools.ContactMatch
 import io.github.ijazshare.assistant.tools.ContactRecency
 import io.github.ijazshare.assistant.tools.ContactResolution
 import io.github.ijazshare.assistant.tools.MessageBody
@@ -627,18 +628,46 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * what this needs: the executor sees a call and never the sentence behind it.
      */
     private fun reconciled(transcript: String, call: ToolCall): ToolCall {
-        // Nobody asked about the screen, so reading it out answers nothing; a decline at
-        // least says so. Unsuccessful, so the guess is never learned either.
-        if (call.tool == AssistantTools.READ_SCREEN && !ScreenQuestion.pointsAtScreen(transcript)) {
-            Log.i(TAG, "declining read_screen, nothing points at the screen in [$transcript]")
-            return ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "For the screen, say \"read this\"."))
-        }
+        val unsaid = unsaid(transcript, call)
+        return when {
+            // Nobody asked about the screen, so reading it out answers nothing; a decline at
+            // least says so. Unsuccessful, so the guess is never learned either.
+            call.tool == AssistantTools.READ_SCREEN && !ScreenQuestion.pointsAtScreen(transcript) -> {
+                Log.i(TAG, "declining read_screen, nothing points at the screen in [$transcript]")
+                ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "For the screen, say \"read this\"."))
+            }
 
-        if (call.tool == AssistantTools.SEND_MESSAGE) return checkedMessage(transcript, call)
-        if (call.tool == AssistantTools.SET_ALARM || call.tool == AssistantTools.CREATE_REMINDER) {
-            return withSpokenTime(transcript, withoutInventedTime(transcript, call))
+            // Dropped, so the executor asks who to text or what to tap.
+            unsaid != null -> {
+                Log.i(TAG, "dropping $unsaid \"${call.arguments[unsaid]}\", never said in [$transcript]")
+                call.copy(arguments = call.arguments - unsaid)
+            }
+
+            call.tool == AssistantTools.SEND_MESSAGE -> checkedMessage(transcript, call)
+
+            call.tool == AssistantTools.SET_ALARM || call.tool == AssistantTools.CREATE_REMINDER ->
+                withSpokenTime(transcript, withoutInventedTime(transcript, call))
+
+            else -> call
         }
-        return call
+    }
+
+    /**
+     * The argument holding a number to text or call, or words to tap, that the user never said.
+     * The model fills both whatever was said, and neither a text to a stranger nor a press on the
+     * wrong button can be taken back. A number the session chose itself (a contact picked from a
+     * list, a send held for its words) comes with the contact's name and is not checked.
+     */
+    private fun unsaid(transcript: String, call: ToolCall): String? {
+        val dialled = call.tool == AssistantTools.SEND_MESSAGE || call.tool == AssistantTools.CALL_CONTACT
+        val number = call.arguments["recipient"]
+            ?.takeIf { dialled && "display" !in call.arguments && it.any(Char::isDigit) && it.none(Char::isLetter) }
+        val label = call.arguments["label"]?.takeIf { call.tool == AssistantTools.TAP_TEXT }
+        return when {
+            number != null && !ContactMatch.numberSaid(transcript, number) -> "recipient"
+            label != null && !ScreenQuestion.containsPhrase(transcript, label) -> "label"
+            else -> null
+        }
     }
 
     /**

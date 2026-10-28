@@ -82,4 +82,14 @@ class ScreenQuestionTest {
         assertThat(ScreenQuestion.pointsAtScreen("Thanks for watching, and I'll see you in the next one.")).isFalse()
         assertThat(ScreenQuestion.pointsAtScreen("Could you explain the meaning of exorbitant?")).isFalse()
     }
+
+    @Test
+    fun `a phrase is found as whole words only`() {
+        assertThat(ScreenQuestion.containsPhrase("tap OK", "OK")).isTrue()
+        assertThat(ScreenQuestion.containsPhrase("Book", "OK")).isFalse()
+        assertThat(ScreenQuestion.containsPhrase("tap wifi", "Wi-Fi")).isTrue()
+        assertThat(ScreenQuestion.containsPhrase("Sign in with Google", "sign in")).isTrue()
+        assertThat(ScreenQuestion.containsPhrase("press accept", "Decline")).isFalse()
+        assertThat(ScreenQuestion.containsPhrase("tap", "")).isFalse()
+    }
 }

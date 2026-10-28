@@ -35,6 +35,24 @@ object ContactMatch {
         return queryWords.isNotEmpty() && queryWords.all { it in words }
     }
 
+    /**
+     * True if [number]'s digits were said, in order and together: "text 555 0123", or digit by
+     * digit in words. The model writes a number into the recipient whatever was said, and a text
+     * or a call to a number nobody said cannot be taken back. A leading 1 it added is allowed.
+     */
+    fun numberSaid(transcript: String, number: String): Boolean {
+        val digits = number.filter(Char::isDigit)
+        val wanted = if (digits.length == WITH_COUNTRY_CODE && digits.startsWith('1')) digits.drop(1) else digits
+        val heard = transcript.lowercase().split(SEP).joinToString("") { DIGIT_WORDS[it] ?: it.filter(Char::isDigit) }
+        return wanted.isNotEmpty() && wanted in heard
+    }
+
+    private const val WITH_COUNTRY_CODE = 11
+    private val DIGIT_WORDS = mapOf(
+        "zero" to "0", "oh" to "0", "one" to "1", "two" to "2", "three" to "3", "four" to "4",
+        "five" to "5", "six" to "6", "seven" to "7", "eight" to "8", "nine" to "9",
+    )
+
     /** Names for the user themselves, which must resolve to their own number, not a contact. */
     fun isSelf(spoken: String): Boolean =
         spoken.lowercase().trim() in setOf("me", "myself", "my number", "my phone", "my cell")
