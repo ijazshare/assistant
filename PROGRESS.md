@@ -58,6 +58,10 @@ Summarised from `git log --since=2026-09-03`.
   sum the calculator cannot read no longer becomes a timer) and for navigate (only a target that
   was said: "Navigate to work" pressed Home, "How far is New York from Chicago?" opened Quick
   Settings).
+- **Contacts tagged in their notes (27 Oct).** When no name matches, a contact whose note has a
+  line that is exactly the word said is used: the owner tagged "Hasan IT" with the note
+  "Assistant", so "text my assistant" reaches him without Whisper having to hear the name, one of
+  21 contacts with "Hasan" in it. Whole lines only, and resolved like a name.
 - **Sums worked out in code (27 Oct).** A sentence that is nothing but a sum is answered by
   `Arithmetic` before any model, exactly and in digits ("96,000 times 30,000 is
   2,880,000,000"); the small model had turned sums into real timers, and the answer model got

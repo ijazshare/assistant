@@ -53,6 +53,16 @@ object ContactMatch {
         "five" to "5", "six" to "6", "seven" to "7", "eight" to "8", "nine" to "9",
     )
 
+    /**
+     * True if a contact's [note] tags it as what was [spoken]: a line of the note that is exactly
+     * the word, "Assistant" for "text my assistant". A whole line only, never a word inside a
+     * sentence: a note mentioning "Sam's dad" must not make "text Sam" his father.
+     */
+    fun taggedAs(note: String, spoken: String): Boolean {
+        val tag = spoken.trim().lowercase().removePrefix("my ").trim()
+        return tag.isNotEmpty() && note.lines().any { it.trim().lowercase() == tag }
+    }
+
     /** Names for the user themselves, which must resolve to their own number, not a contact. */
     fun isSelf(spoken: String): Boolean =
         spoken.lowercase().trim() in setOf("me", "myself", "my number", "my phone", "my cell")

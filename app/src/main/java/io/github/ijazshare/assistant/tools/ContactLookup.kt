@@ -61,7 +61,7 @@ class ContactLookup(
 
             !hasContactsPermission() -> ContactResolution.None
 
-            else -> lookupByName(trimmed)
+            else -> lookupByName(trimmed).takeUnless { it == ContactResolution.None } ?: lookupByTag(trimmed)
         }
     }
 
@@ -97,6 +97,42 @@ class ContactLookup(
             1 -> ContactResolution.One(matches.first().number)
             else -> ContactResolution.Many(matches.take(MAX_OPTIONS))
         }
+    }
+
+    /**
+     * Contacts the owner tagged with what was said, in their notes: a note line "Assistant" makes
+     * "text my assistant" that contact, a word Whisper hears where a name like "Hasan" was misheard.
+     * Tried only when no name matched, and resolved like a name: one is used, several are a choice.
+     */
+    private fun lookupByTag(spoken: String): ContactResolution {
+        val tagged = LinkedHashSet<Long>()
+        context.contentResolver.query(
+            ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data.CONTACT_ID, ContactsContract.CommonDataKinds.Note.NOTE),
+            "${ContactsContract.Data.MIMETYPE} = ?",
+            arrayOf(ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE),
+            null,
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                if (ContactMatch.taggedAs(cursor.getString(1).orEmpty(), spoken)) tagged += cursor.getLong(0)
+            }
+        }
+        val contacts = tagged.mapNotNull(::firstNumberOf)
+        return when (contacts.size) {
+            0 -> ContactResolution.None
+            1 -> ContactResolution.One(contacts.first().number)
+            else -> ContactResolution.Many(contacts.take(MAX_OPTIONS))
+        }
+    }
+
+    private fun firstNumberOf(contactId: Long): Contact? = context.contentResolver.query(
+        ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+        arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME),
+        "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+        arrayOf(contactId.toString()),
+        null,
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) cursor.getString(0)?.let { Contact(cursor.getString(1).orEmpty(), it) } else null
     }
 
     private fun collectMatches(filterKey: String, name: String, into: MutableMap<Long, Contact>) {

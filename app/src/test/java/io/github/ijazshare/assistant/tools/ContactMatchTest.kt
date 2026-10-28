@@ -70,4 +70,15 @@ class ContactMatchTest {
         assertThat(ContactMatch.numberSaid("text Sam", "5550123")).isFalse()
         assertThat(ContactMatch.numberSaid("call 555 0124", "5550123")).isFalse()
     }
+
+    @Test
+    fun `a note tags a contact only by a whole line`() {
+        assertThat(ContactMatch.taggedAs("Assistant", "my assistant")).isTrue()
+        assertThat(ContactMatch.taggedAs("Assistant", "assistant")).isTrue()
+        assertThat(ContactMatch.taggedAs("met at the conference\nPlumber", "plumber")).isTrue()
+        // A word inside a sentence is not a tag: "text Sam" must not reach Sam's dad.
+        assertThat(ContactMatch.taggedAs("Sam's dad", "Sam")).isFalse()
+        assertThat(ContactMatch.taggedAs("Assistant manager at the bank", "assistant")).isFalse()
+        assertThat(ContactMatch.taggedAs("Assistant", "my")).isFalse()
+    }
 }
