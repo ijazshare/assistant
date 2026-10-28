@@ -41,7 +41,7 @@ audio/        AudioRecord capture (16 kHz mono), energy-based endpointing, high-
 context/      AssistantFiles: profile.md, memories.md, tasks.md, notes.md under getExternalFilesDir(null)/context
 diagnostics/  CrashLog: uncaught-exception traces kept on the device (shown in History), never uploaded
 history/      QueryLog (every command, on the device) and CaptureArchive (saved recordings on debug builds)
-llm/          LlamaEngine (JNI wrapper), ModelRouter (which model answers), prompt builder, tool-call parser, answer and screen prompts, RemoteAnswerer (opt-in), prompt-cache guard
+llm/          LlamaEngine (JNI wrapper), ModelRouter (which model answers), prompt builder, tool-call parser, answer and screen prompts, RemoteAnswerer (opt-in)
 models/       ModelRegistry, ModelStorage, ModelDownloader + WorkManager worker (resumable, SHA-256 verified), archive unpacking
 nativebridge/ NativeBridge: loads `libassistant.so` and registers ggml's CPU backends
 ocr/          ScreenReader (accessibility tree first, OCR when it has little text) and TesseractEngine
@@ -73,7 +73,7 @@ One model in memory at a time. Latency budget on the reference device, warm: **<
 The 1B's single grammar-constrained tool call is the routing decision. The tool list lives in `tools/AssistantTools.kt`; the GBNF grammar is built from it in `tools/ToolGrammar.kt`. Fifteen tools: `set_alarm`, `set_timer`, `show_alarms`, `create_reminder`, `send_message`, `call_contact`, `open_app`, `read_screen`, `take_screenshot`, `tap_text`, `scroll`, `navigate`, `read_notifications`, `answer`, `unsupported`. Learned phrases (`assistant/CommandCache.kt`) can skip the model for the cacheable tools only: alarms, timers, show_alarms, create_reminder, open_app, read_screen, take_screenshot, read_notifications, scroll, navigate. It never caches `answer`, `unsupported`, `send_message`, `call_contact` or `tap_text`.
 
 - **Never trust LLM date math.** The model only reports what it heard (hour, minute, hours/minutes/seconds, "tomorrow"); code decides the rest. `TimeResolver` totals durations and validates and reconciles the hour against am/pm and part of day. `StatedTime` replaces the model's time with the one the words state ("in 30 minutes" is now plus 30 minutes; "at 9:35" is 9:35) when the transcript states exactly one. A day beyond tomorrow is declined, and a reminder time equal to the current minute is treated as no time. Past times roll to the next day in `ReminderStore`. All heavily unit-tested.
-- Context size 2048; the prompt cache (`.prompt-cache` beside each model) saves prefill, and is tied to the install that wrote it (`PromptCacheGuard`).
+- Context size 2048; the prompt cache (`.prompt-cache` beside each model) saves prefill, and is tied to the install that wrote it (a stamp checked in `LlamaEngine.load`).
 
 ### Tool execution
 
@@ -81,8 +81,8 @@ No Room database.
 
 - `set_alarm` → `AlarmClock.ACTION_SET_ALARM` with `EXTRA_HOUR/MINUTES/MESSAGE` and `EXTRA_SKIP_UI=true` (stay in overlay). `set_timer` → `ACTION_SET_TIMER` with `EXTRA_LENGTH`. `show_alarms` → `ACTION_SHOW_ALARMS`.
 - `create_reminder` → a line in `tasks.md` via `ReminderStore`; with a time, `AlarmManager.setExactAndAllowWhileIdle` (inexact fallback). `ReminderReceiver` posts the notification with Done and Snooze 10 min actions. `ReminderBootReceiver` re-arms every reminder on `BOOT_COMPLETED`, timezone change and time change, and after a reboot shows once more a reminder that fired but was never answered (Done, Snooze, swiped or opened): a fired reminder's line carries a `delivered` flag in place of its due time. Ticked-off tasks are left out of the answer model's context.
-- `send_message` → `SmsManager`, never without a body the user said; `call_contact` → `TelecomManager.placeCall` (falls back to the dialler). Contacts must match whole words of a display name.
-- `open_app` → `AppLookup` and the app's launch intent; no accessibility needed. `tap_text`, `scroll`, `navigate`, `take_screenshot`, `read_screen` → the accessibility service (`read_screen` falls back to Tesseract OCR, if installed, when the tree has fewer than 3 lines or 40 characters of text). `read_notifications` → the notification listener.
+- `send_message` → `SmsManager`, never without a body the user said; `call_contact` → `TelecomManager.placeCall` (falls back to the dialler). Contacts must match whole words of a display name, a number is used only if its digits were said, and a sent text is reported as "Sending" because nothing confirms delivery.
+- `open_app` → `AppLookup` and the app's launch intent; no accessibility needed. `tap_text` taps only words that were said, matched as whole words on screen. `tap_text`, `scroll`, `navigate`, `take_screenshot`, `read_screen` → the accessibility service (`read_screen` falls back to Tesseract OCR, if installed, when the tree has fewer than 3 lines or 40 characters of text). `read_notifications` → the notification listener.
 
 ### Model management
 

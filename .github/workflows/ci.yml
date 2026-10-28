@@ -17,7 +17,6 @@ permissions:
 
 env:
   # Gradle runs on 21 while the app still emits Java 17 bytecode (see app/build.gradle.kts).
-  # Robolectric needs a 21 JVM to emulate recent SDK levels.
   JAVA_VERSION: "21"
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dkotlin.incremental=false
 

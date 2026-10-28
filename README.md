@@ -148,9 +148,8 @@ Point the build at your SDK with a `local.properties` containing `sdk.dir=...`, 
 | `./gradlew lintDebug` | Android lint (warnings are errors) |
 | `./gradlew connectedDebugAndroidTest` | Instrumented tests (needs a device) |
 
-Gradle runs on JDK 21 while the app compiles to Java 17 bytecode. That split is deliberate:
-Robolectric needs a 21 JVM to emulate recent SDK levels, and Java 17 is the well-trodden
-bytecode target for Android.
+Gradle runs on JDK 21 while the app compiles to Java 17 bytecode, the well-trodden bytecode
+target for Android.
 
 ### Release signing
 
