@@ -14,8 +14,8 @@ package io.github.ijazshare.assistant.tools
  *
  * The small router model fills a message body whatever was said, and a text is one of the few
  * actions with no undo: it invented "hello how are you" for a bare "text Dad", copied the request
- * ("Text Sam please") or the whole sentence. So the model only picks send_message and the
- * recipient, and [fromWords] takes the message out of the transcript, from the plain shape only.
+ * ("Text Sam please") or the whole sentence. So the model's body is thrown away, and [fromWords]
+ * takes the message out of the transcript, from the plain shape only.
  */
 object MessageBody {
 

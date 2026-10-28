@@ -23,8 +23,8 @@ internal object CallChecks {
     private const val TAG = "Assistant"
 
     /**
-     * A text's words are the user's own, taken from the transcript, never the model's: it only
-     * picked the tool and the recipient, and what it wrote as a body was invented or copied. With
+     * A text's words are the user's own, taken from the transcript, never the model's: what it
+     * writes as a body is invented or copied, and is replaced here. With
      * no message in the plain shape ("Text Sam", "Text Sam please") there is no body, and the
      * executor asks what to say.
      */

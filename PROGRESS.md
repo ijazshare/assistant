@@ -68,14 +68,15 @@ Summarised from `git log --since=2026-09-03`.
   large ones wrong and switched between words and digits.
 - **VoiceSession split (27 Oct).** 1,123 lines into its parts: VoiceSession (the conductor),
   SpeechCapture, CallChecks (pure, now unit-tested) and FollowUps; a pure move, reviewed for drift.
-- **A message's words from the transcript (27 Oct).** send_message's body is out of the
-  model's grammar and prompt example; the model only picks the tool and the recipient. The words
-  are taken in code (`MessageBody.fromWords`) from the plain shape only: a request, the contact's
-  name, an optional "a text" and one of "that", "saying", "say", "to", then the words. Anything
-  else, or nothing after the name, or pure politeness ("Text Sam please"), gives no body and the
-  assistant asks "What should I say to X?". That removed the invented-body and echo checks
-  (`isTraceable`, `isEchoed`) rather than adding to them. The routing benchmark still has to be run
-  on the phone, since the tool list the router sees changed.
+- **A message's words from the transcript (27-28 Oct).** The body the model writes is thrown
+  away; the words are taken in code (`MessageBody.fromWords`) from the plain shape only: a
+  request, the contact's name, an optional "a text", an optional "that", "saying", "to say" or
+  "that says", then the words. Anything else gives no body and the assistant asks "What should I
+  say to X?": nothing after the name, pure politeness ("Text Sam please"), or words that carry the
+  request on ("Text Sam back", "Text Sam on WhatsApp ...", which is declined). That removed the
+  invented-body and echo checks (`isTraceable`, `isEchoed`) rather than adding to them. The body
+  stays in the model's grammar and example: taken out, the 1B put the date in as the recipient of
+  "Text me, I'm testing" on the phone, so the prompt is unchanged and routing with it.
 - **Audit cleanup (27 Oct).** A read-only over-engineering audit, each cut checked twice,
   removed about 1,100 lines net: dead code, no-op UI left from the redesign, unused
   dependencies, the experimental FunctionGemma path with its prompt-dialect layer, and Hilt
