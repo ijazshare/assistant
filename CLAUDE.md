@@ -23,10 +23,16 @@ Assistant is a fully offline Android voice assistant that replaces Google Assist
    requested through onboarding first; features land on them incrementally.
    The original rule read: *"declared, permission-gated, and surfaced in settings — but no-op stubs in
    v1 … do not invent features on top of them."* It was reversed deliberately, not drifted past.
-   Constraints that survive the change and are **not** negotiable: no telemetry; the network is used
-   only for model downloads and the opt-in remote model, which is sent only the question text, fixed
-   instructions and the current time; and anything read from the device (screen, notifications,
-   contacts, messages) stays on the device.
+   Constraints that survive the change and are **not** negotiable. They cover Assistant's own data:
+   what it hears, reads, keeps and sends itself. No telemetry; audio never leaves the phone; Assistant
+   itself uses the network only for model downloads and the opt-in remote model, which is sent only
+   the question text, fixed instructions and the current time; and anything read from the device
+   (screen, notifications, contacts, messages) stays on the device. When a command needs another app
+   or service on the phone (the clock, calls and texts, or an integration the owner has turned on),
+   Assistant hands it only what that command needs, never audio; what that app does next, including
+   sending it off the phone, falls under that app's own policy, not this one. Integrations stay off
+   until the owner turns them on. (Made general by the owner on 2026-10-28, so a new integration does
+   not need this rule changed. Assistant itself talking to a server would.)
 10. **Model delivery:** APK ships without models. The Models screen downloads each asset with progress UI, SHA-256 verification and resume. Sources are Hugging Face (Whisper, Gemma GGUFs) and GitHub (the Piper voice from sherpa-onnx releases, Tesseract data, the Silero voice check). There is no manual import.
 11. **Wake word:** v2. Do not add always-listening anything in v1.
 12. **CI/CD:** GitHub Actions — build/lint/test on PR, signed release APK attached to GitHub Release on `v*` tags.
@@ -47,9 +53,9 @@ nativebridge/ NativeBridge: loads `libassistant.so` and registers ggml's CPU bac
 ocr/          ScreenReader (accessibility tree first, OCR when it has little text) and TesseractEngine
 permissions/  permission catalog and inspector used by onboarding
 services/     AssistantAccessibilityService (tap, scroll, navigate, read screen, screenshot) and AssistantNotificationListener
-settings/     DataStore-backed settings: admin name, own number, remote model URL/key/name
+settings/     DataStore-backed settings: admin name, own number, remote model URL/key/name, Home Assistant key and trigger word
 stt/          WhisperEngine (JNI wrapper), contact-name bias, contact ranking, junk-transcript filter
-tools/        AssistantTools (the tool list), ToolGrammar, ToolExecutor, time resolution, contact and app lookup, ReminderStore and its receivers
+tools/        AssistantTools (the tool list), ToolGrammar, ToolExecutor, time resolution, contact and app lookup, ReminderStore and its receivers, HomeCommand and HomeLink (the Home Assistant link)
 tts/          PiperEngine (sherpa-onnx)
 ui/           Compose screens: main, models, permissions/onboarding, context editor, history, the assistant overlay frame
 app/src/main/cpp/  CMakeLists, whisper.cpp + llama.cpp submodules, assistant_jni.cpp
@@ -61,7 +67,7 @@ app/src/main/cpp/  CMakeLists, whisper.cpp + llama.cpp submodules, assistant_jni
 side button → VoiceInteractionSession opens (overlay over current app)
 → record until 860 ms of trailing quiet, 2.6 s with nothing well above the room, or 2 s with nothing near the speaker's own level (cap 20 s; levels from a 400 Hz high-pass, and sounds almost entirely above 1.5 kHz never count as the speaker; an optional Silero voice check can only end a capture sooner; see audio/Endpointer.kt for known limits), live waveform + partial UI
 → whisper transcribe → show transcript
-→ a pending "what should I say" answer, or a learned phrase (CommandCache), runs without the model; otherwise the 1B makes one grammar-constrained tool call
+→ a pending "what should I say" answer, a home command (the trigger word first, with the Home Assistant link on), or a learned phrase (CommandCache), runs without the model; otherwise the 1B makes one grammar-constrained tool call
 → if the tool is `answer`: unload the 1B, then the larger on-device model or the remote model (if configured) answers; the on-device one is freed straight after
 → ToolExecutor runs the call → TTS speaks the result → session auto-dismisses after speech
 ```
@@ -70,7 +76,7 @@ One model in memory at a time. Latency budget on the reference device, warm: **<
 
 ### Tools
 
-The 1B's single grammar-constrained tool call is the routing decision. The tool list lives in `tools/AssistantTools.kt`; the GBNF grammar is built from it in `tools/ToolGrammar.kt`. Fifteen tools: `set_alarm`, `set_timer`, `show_alarms`, `create_reminder`, `send_message`, `call_contact`, `open_app`, `read_screen`, `take_screenshot`, `tap_text`, `scroll`, `navigate`, `read_notifications`, `answer`, `unsupported`. Learned phrases (`assistant/CommandCache.kt`) can skip the model for the cacheable tools only: alarms, timers, show_alarms, create_reminder, open_app, read_screen, take_screenshot, read_notifications, scroll, navigate. It never caches `answer`, `unsupported`, `send_message`, `call_contact` or `tap_text`.
+The 1B's single grammar-constrained tool call is the routing decision. The tool list lives in `tools/AssistantTools.kt`; the GBNF grammar is built from it in `tools/ToolGrammar.kt`. Fifteen tools: `set_alarm`, `set_timer`, `show_alarms`, `create_reminder`, `send_message`, `call_contact`, `open_app`, `read_screen`, `take_screenshot`, `tap_text`, `scroll`, `navigate`, `read_notifications`, `answer`, `unsupported`. Learned phrases (`assistant/CommandCache.kt`) can skip the model for the cacheable tools only: alarms, timers, show_alarms, create_reminder, open_app, read_screen, take_screenshot, read_notifications, scroll, navigate. It never caches `answer`, `unsupported`, `send_message`, `call_contact` or `tap_text`. A sixteenth, `home`, is never offered to the model: `HomeCommand` reads it from the words.
 
 - **Never trust LLM date math.** The model only reports what it heard (hour, minute, hours/minutes/seconds, "tomorrow"); code decides the rest. `TimeResolver` totals durations and validates and reconciles the hour against am/pm and part of day. `StatedTime` replaces the model's time with the one the words state ("in 30 minutes" is now plus 30 minutes; "at 9:35" is 9:35) when the transcript states exactly one. A day beyond tomorrow is declined, and a reminder time equal to the current minute is treated as no time. Past times roll to the next day in `ReminderStore`. All heavily unit-tested.
 - Context size 2048; the prompt cache (`.prompt-cache` beside each model) saves prefill, and is tied to the install that wrote it (a stamp checked in `LlamaEngine.load`).
@@ -82,6 +88,7 @@ No Room database.
 - `set_alarm` → `AlarmClock.ACTION_SET_ALARM` with `EXTRA_HOUR/MINUTES/MESSAGE` and `EXTRA_SKIP_UI=true` (stay in overlay). `set_timer` → `ACTION_SET_TIMER` with `EXTRA_LENGTH`, only if a unit or "timer" was said (numbers alone are not a length). `show_alarms` → `ACTION_SHOW_ALARMS`. `navigate` acts only on a target that was said ("Navigate to work" must not press Home).
 - `create_reminder` → a line in `tasks.md` via `ReminderStore`; with a time, `AlarmManager.setExactAndAllowWhileIdle` (inexact fallback). `ReminderReceiver` posts the notification with Done and Snooze 10 min actions. `ReminderBootReceiver` re-arms every reminder on `BOOT_COMPLETED`, timezone change and time change, and after a reboot shows once more a reminder that fired but was never answered (Done, Snooze, swiped or opened): a fired reminder's line carries a `delivered` flag in place of its due time. Ticked-off tasks are left out of the answer model's context.
 - `send_message` → `SmsManager`; the message is the user's words after the contact's name, taken from the transcript (the body the model writes is thrown away), and the assistant asks when it cannot tell; `call_contact` → `TelecomManager.placeCall` (falls back to the dialler), only when the whole sentence asks for a call (call, phone, ring or dial and the name, or "give Mum a ring", with only words of asking around them) and never to "me" or "my phone" (the owner's own number); anything else is declined, never made a text ("Tell me to call me back" rang the owner's phone). Contacts must match whole words of a display name (or, when no name matches, a note line that tags them: "Assistant" for "text my assistant"), a number is used only if its digits were said, and a sent text is reported as "Sending" because nothing confirms delivery.
+- `home` → `HomeLink`: an explicit `ACTION_SEND` to the Home Assistant app's share screen, in a task of its own, with the owner's key as `EXTRA_SUBJECT` and `{"do","name","id"}` as `EXTRA_TEXT` (`do` is `turn_on`, `turn_off` or `state`). A receiver registered only for the wait takes the automation's reply (`command_broadcast_intent`, action `io.github.ijazshare.assistant.HA_REPLY`), and only for the id just sent, within 15 s (Home Assistant re-sends an unconfirmed local reply through its push relay after 10 s). Only `done` is said as done; `unsure`, `refused`, `ambiguous` (two allowed devices share the name) and silence each say so. A question's yes or no is worked out on the phone from the reported state, and only the opposite state is a no; any other state is reported as it is. The word asked about is never sent.
 - `open_app` → `AppLookup` and the app's launch intent; no accessibility needed. `tap_text` taps only words that were said, matched as whole words on screen. `tap_text`, `scroll`, `navigate`, `take_screenshot`, `read_screen` → the accessibility service (`read_screen` falls back to Tesseract OCR, if installed, when the tree has fewer than 3 lines or 40 characters of text). `read_notifications` → the notification listener.
 
 ### Model management
@@ -127,7 +134,7 @@ No Room database.
   until the user opens App info → ⋮ → *Allow restricted settings*. Onboarding must walk through this
   explicitly; a plain deep link to accessibility settings lands on a disabled toggle and looks broken.
 - Onboarding checklist screen (`ui/onboarding/AccessChecklist.kt`, catalog in `permissions/AssistantPermissions.kt`): mic → notifications → exact alarms → default assistant, then the optional control tier (accessibility, display over other apps, notification access, screen capture) and data tier (camera, location, contacts, messages and calls), each with a plain-language reason. Accessibility and notification access are used by the tools (tap, scroll, navigate, screenshots, reading the screen and notifications), so they are no longer "reserved".
-- **Privacy invariants:** no analytics, no crash-reporting SDKs. The network is used only for model downloads (`ModelDownloader`) and the opt-in remote model (`RemoteAnswerer`; off until URL, key and model are all set), which receives only the question text, fixed instructions and the current time, never audio, the user's name, their notes or anything read from the device. Crash traces stay on the device (`CrashLog`). CI fails if a telemetry dependency appears. State this in README.
+- **Privacy invariants:** no analytics, no crash-reporting SDKs. The network is used only for model downloads (`ModelDownloader`) and the opt-in remote model (`RemoteAnswerer`; off until URL, key and model are all set), which receives only the question text, fixed instructions and the current time, never audio, the user's name, their notes or anything read from the device. Crash traces stay on the device (`CrashLog`). CI fails if a telemetry dependency appears. A hand-off to another app on the phone carries only what the command needs, never audio (decision 9): the Home Assistant link hands the Home Assistant app a short command and the owner's key, and opens no connection of its own. State this in README.
 
 ## Build, test, style
 
@@ -143,9 +150,14 @@ No Room database.
 - `release.yml`: on `v*` tag (or a manual run naming an existing tag) → a preflight stops if any signing secret is missing, then builds the signed release APK using `SIGNING_KEYSTORE_B64`, `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`, and attaches the APK and its `.sha256` to a GitHub Release with generated notes. It ran successfully for v0.1.0 on the upstream repo (the original author's, linked from the README) on 2026-09-03; this repo has no signing secrets and no release yet. README documents the one-time keystore setup.
 - Repo hygiene: `.gitignore`, `LICENSE` (AGPL-3.0), README (features, screenshots later, install, model licenses/attribution for Gemma/Whisper/Piper), issue templates, `dependabot.yml` (gradle + actions).
 
-## Next integration: Home Assistant (owner's choice, 2026-10-28)
+## Home Assistant link (owner's design, 2026-10-28)
 
-Not started; plan it with the owner before writing code. It lives in this app on the phone, not as an add-on on the Home Assistant server, and it must be airtight: act only on devices the owner exposed, never guess a device, and confirm anything that unlocks or opens (locks, garage, alarm). The proposal so far (PROGRESS.md, "Next"): opt-in and off by default, the exact words forwarded to HA Assist, through the Home Assistant app on the phone if it accepts them from other apps, otherwise the HA API directly. Either way the words leave the phone for the owner's own server, so locked decision 9 and the privacy invariants are changed first, explicitly, by the owner.
+Opt-in: off until the owner makes a key on the Context screen. It lives in this app and the Home Assistant app on the phone, not on the server, and it must stay airtight.
+- A sentence that starts with the trigger word ("homie", a setting) is read by `HomeCommand`'s fixed grammar, never by the model, and never learned: a switch (turn or switch, on or off, a name, in either order) or a question ("is/are the name on/off/open/closed/locked/unlocked", "what is the name"). Anything else after the trigger word is declined with a hint. It runs before the follow-ups and ends them, since the trigger word is never dictation.
+- `HomeLink` hands the command to the HA app's share screen, which fires `mobile_app.share` on the owner's server over its own connection, at home or away. Assistant needs no URL, token or network access for it.
+- The owner's automation (README) runs only for the key and the phone's HA user. It acts on exactly one entity whose name, lower-cased with punctuation dropped, is exactly the one said: a switch only on a light, switch or fan labelled `assistant`; a question on anything labelled `assistant` or `assistant_read`. It replies `done` (with the translated state for a question), `unsure` or `refused`; the reply carries no device name.
+- Only on and off. Anything that unlocks or opens (locks, garage doors, gates, the alarm) gets `assistant_read` at most; acting on more needs the owner first.
+- Rejected: forwarding the words to HA Assist (the HA app takes no text for Assist, and Assist confirms nothing and guesses near-miss names), and a token in Assistant (HA tokens cannot be scoped).
 
 ## Out of scope for v1 (v2+ backlog — do not start unasked)
 

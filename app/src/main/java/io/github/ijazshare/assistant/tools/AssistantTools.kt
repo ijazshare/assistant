@@ -38,6 +38,12 @@ object AssistantTools {
     const val ANSWER = "answer"
     const val UNSUPPORTED = "unsupported"
 
+    /**
+     * Switches a device through the owner's Home Assistant. Never in [all]: the model is never offered
+     * it, and only words that start with the trigger word reach it ([HomeCommand]).
+     */
+    const val HOME = "home"
+
     val all: List<Tool> = listOf(
         Tool(
             name = SET_ALARM,

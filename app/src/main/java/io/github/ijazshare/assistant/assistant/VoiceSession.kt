@@ -41,6 +41,7 @@ import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.Contact
 import io.github.ijazshare.assistant.tools.ContactLookup
 import io.github.ijazshare.assistant.tools.ContactRecency
+import io.github.ijazshare.assistant.tools.HomeCommand
 import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
@@ -407,7 +408,13 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
      * condition.
      */
     internal suspend fun act(transcript: String, sttMillis: Long) {
-        if (answeredPendingSend(transcript, sttMillis) || answeredPendingReminder(transcript, sttMillis)) return
+        // Left to right, and only until one answers: a home command first, then a follow-up's answer.
+        if (answeredHome(transcript, sttMillis) ||
+            answeredPendingSend(transcript, sttMillis) ||
+            answeredPendingReminder(transcript, sttMillis)
+        ) {
+            return
+        }
         if (answeredWithoutTheModel(transcript, sttMillis)) return
 
         if (!ensureLanguageModel()) {
@@ -503,6 +510,25 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
         val known = withContext(Dispatchers.IO) { cache.lookup(transcript) } ?: return false
         Log.i(TAG, "cache hit [$transcript] -> ${known.tool} ${known.arguments}")
         carryOut(transcript, known, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
+        return true
+    }
+
+    /**
+     * With the Home Assistant link on, a sentence that starts with the trigger word is for the home:
+     * read by code ([HomeCommand]), never by the model, never learned, and declined with a hint when
+     * the words are not a command. Without the link, the trigger word is just a word.
+     *
+     * Ahead of the follow-ups, and it ends them: the trigger word is never dictation, and "Homie, turn
+     * off the light" said while a text waited for its words was otherwise sent to the contact.
+     */
+    private suspend fun answeredHome(transcript: String, sttMillis: Long): Boolean {
+        if (settings.homeKeyNow() == null) return false
+        val trigger = settings.homeTriggerNow()
+        if (!HomeCommand.addressed(transcript, trigger)) return false
+        PendingSend.dismiss()
+        PendingReminder.dismiss()
+        val call = HomeCommand.parse(transcript, trigger)?.toCall() ?: ToolCall(AssistantTools.HOME, emptyMap())
+        carryOut(transcript, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
         return true
     }
 

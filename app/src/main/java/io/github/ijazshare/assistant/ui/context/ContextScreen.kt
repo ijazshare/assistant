@@ -10,9 +10,12 @@
 package io.github.ijazshare.assistant.ui.context
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
+import android.os.PersistableBundle
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,6 +52,7 @@ import androidx.core.content.getSystemService
 import io.github.ijazshare.assistant.context.AssistantFile
 import io.github.ijazshare.assistant.context.AssistantFiles
 import io.github.ijazshare.assistant.settings.AssistantSettings
+import io.github.ijazshare.assistant.tools.HomeLink
 import io.github.ijazshare.assistant.ui.assistant.AssistantRule
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
 import io.github.ijazshare.assistant.ui.assistant.scanlines
@@ -81,6 +85,8 @@ fun ContextScreen(modifier: Modifier = Modifier) {
     var remoteUrl by remember { mutableStateOf("") }
     var remoteKey by remember { mutableStateOf("") }
     var remoteModel by remember { mutableStateOf("") }
+    var homeKey by remember { mutableStateOf("") }
+    var homeTrigger by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         adminName = settings.adminNameNow()
         ownNumber = settings.ownNumberNow().orEmpty()
@@ -88,6 +94,9 @@ fun ContextScreen(modifier: Modifier = Modifier) {
         remoteUrl = url
         remoteKey = key
         remoteModel = model
+        val (home, trigger) = settings.homeFieldsNow()
+        homeKey = home
+        homeTrigger = trigger
     }
 
     val drafts = remember { mutableStateMapOf<String, String>() }
@@ -177,6 +186,48 @@ fun ContextScreen(modifier: Modifier = Modifier) {
             onChange = { model ->
                 remoteModel = model
                 scope.launch { settings.setRemoteLlmModel(model) }
+            },
+        )
+        SettingField(
+            label = "HOME ASSISTANT · KEY",
+            help = "Optional. Off while blank. A command that starts with the trigger word goes, with this key, " +
+                "to the Home Assistant app on this phone, which passes it to your Home Assistant. Your automation " +
+                "there acts only on this key. Only the command is handed over, never audio.",
+            value = homeKey,
+            onChange = { key ->
+                homeKey = key
+                scope.launch { settings.setHomeKey(key) }
+            },
+            kind = FieldKind.SECRET,
+        )
+        Text(
+            text = if (homeKey.isBlank()) "MAKE A KEY AND COPY IT" else "COPY THE KEY",
+            style = AssistantLabel,
+            color = AssistantColors.Admin,
+            modifier = Modifier
+                .clickable {
+                    val key = homeKey.ifBlank { HomeLink.newKey() }
+                    homeKey = key
+                    scope.launch { settings.setHomeKey(key) }
+                    // Marked sensitive, so the clipboard preview does not show it.
+                    val clip = ClipData.newPlainText("Home Assistant key", key).apply {
+                        description.extras = PersistableBundle().apply {
+                            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                        }
+                    }
+                    context.getSystemService<ClipboardManager>()?.setPrimaryClip(clip)
+                    Toast.makeText(context, "Key copied. Paste it into your automation.", Toast.LENGTH_SHORT).show()
+                }
+                .padding(vertical = 4.dp),
+        )
+        SettingField(
+            label = "HOME ASSISTANT · TRIGGER WORD",
+            help = "A sentence that starts with this is a home command: \"${AssistantSettings.DEFAULT_HOME_TRIGGER}, " +
+                "turn off the kitchen light\". Defaults to \"${AssistantSettings.DEFAULT_HOME_TRIGGER}\".",
+            value = homeTrigger,
+            onChange = { trigger ->
+                homeTrigger = trigger
+                scope.launch { settings.setHomeTrigger(trigger) }
             },
         )
 
@@ -276,7 +327,7 @@ private fun SettingField(
             val blankHint = when (kind) {
                 FieldKind.NAME -> "Defaults to \"${AssistantSettings.DEFAULT_ADMIN_NAME}\"."
                 FieldKind.NUMBER -> "Not set — \"text me\" will say it has nowhere to send."
-                FieldKind.SECRET -> "Not set — the remote model is off and everything stays on the phone."
+                FieldKind.SECRET -> "Not set, so this is off and nothing is sent."
                 FieldKind.TEXT -> null
             }
             if (value.isBlank() && blankHint != null) {

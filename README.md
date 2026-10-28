@@ -77,13 +77,16 @@ What it does today:
   notifications.
 - **Questions.** The small model decides a request is a question; a larger on-device model
   (or a remote one you configure) answers in a sentence.
+- **Home Assistant (optional, off by default).** "Homie, turn off the kitchen light" and
+  "Homie, is the garage door open?" go through the Home Assistant app on your phone to your own
+  Home Assistant, which acts only on the devices you labelled. See
+  [Home Assistant](#home-assistant).
 - **Learned phrases.** A phrase whose meaning is fixed is learned on first success and runs
   without the model afterwards.
 - **No telemetry.** No analytics, no crash reporting, no ad SDK, no account.
 
 Out of scope for now (and not accidentally, see `CLAUDE.md`): wake word, multi-turn chat,
-multilingual recognition, and user-defined automations. Next up: optional Home Assistant
-control (see [PROGRESS.md](PROGRESS.md)).
+multilingual recognition, and user-defined automations.
 
 ## Requirements
 
@@ -127,6 +130,11 @@ These are enforced, not just promised:
   endpoint (OpenRouter, or your own llama.cpp server at home). It is off until you enter
   a URL, key and model, and it only ever receives the transcript text of a question, fixed instructions and the
   current time — never your name or your notes.
+- When a command needs another app on the phone (the clock, calls and texts, or the Home
+  Assistant link if you turn it on), Assistant hands it only what that command needs, never
+  audio. What that app does next is covered by its own privacy policy. The Home Assistant link
+  hands the Home Assistant app a short command (on, off or "state", and the device's name) with
+  your key; Assistant opens no connection for it.
 - Audio is never transmitted, with or without the remote model. Release builds process it
   in memory only. Debug builds, for now, also keep the last 500 recordings on the device
   (`history/captures/` in the app's external files folder, `Android/data/<package>/files`,
@@ -136,6 +144,161 @@ These are enforced, not just promised:
 - Android cloud backup excludes everything you said or wrote: the query log, recordings,
   notes, reminders, learned phrases, settings (which can hold the remote model's key) and
   the models.
+
+## Home Assistant
+
+Optional, and off until you make a key. Assistant never talks to your Home Assistant server
+itself: it hands a short command to the Home Assistant app on the same phone, which sends it
+to your server over the connection it already has, at home or away. An automation on your
+server checks the command and answers.
+
+What you can say, starting with the trigger word (default "homie", a word you never say by
+accident):
+
+- "Homie, turn on the porch light", "Homie, switch the desk fan off". Lights, switches and
+  fans labelled `assistant` only, on or off only.
+- "Homie, is the garage door open?", "Homie, is the front door locked?", "Homie, what's the
+  thermostat set to?". Anything labelled `assistant` or `assistant_read`.
+
+The name must be the device's name in Home Assistant, said exactly (case and punctuation
+don't matter). Nothing is guessed: no match, or two devices with the same name, and nothing
+happens. Assistant says "done" only when Home Assistant saw the new state.
+
+Setup:
+
+1. In Assistant's Context screen, under HOME ASSISTANT · KEY, tap **Make a key and copy it**.
+2. In Home Assistant, create the labels `assistant` (may be switched) and `assistant_read`
+   (may only be asked about), and put them on the entities themselves, not on their devices.
+   Never give `assistant` to a lock, a garage door, a gate, or a switch that drives one; use
+   `assistant_read` for those.
+3. Find your phone's user id: Developer tools → Events, listen to `mobile_app.share`, then
+   share any text to the Home Assistant app; it is `context.user_id`.
+4. Create an automation, switch it to YAML, and paste the one below. Replace the key, the user
+   id and `notify.mobile_app_YOUR_PHONE`. A debug build of Assistant is
+   `io.github.ijazshare.assistant.debug`.
+5. In the Home Assistant app, set Persistent connection to "Always" (or "On home network
+   only") so replies don't go through Google's push service.
+
+It needs Home Assistant 2025.7 or newer. Optional: leave `mobile_app.share` out of the
+recorder (`recorder: exclude: event_types:`), so the key isn't stored with every command.
+
+```yaml
+alias: Assistant commands
+description: >-
+  Commands from Assistant on the phone, through the Home Assistant app. Runs only for
+  Assistant's key and this phone's user. Switches only lights, switches and fans labelled
+  "assistant"; tells the state of anything labelled "assistant" or "assistant_read".
+mode: queued
+triggers:
+  - trigger: event
+    event_type: mobile_app.share
+    event_data:
+      subject: "PASTE_THE_KEY_FROM_ASSISTANT"
+    context:
+      user_id: YOUR_PHONE_USER_ID
+variables:
+  phone: notify.mobile_app_YOUR_PHONE
+  cmd: "{{ trigger.event.data.text | default('') | string | from_json(default={}) }}"
+  want: "{{ cmd.do if cmd is mapping and cmd.do is string else '' }}"
+  wanted: >-
+    {{ (cmd.name if cmd is mapping and cmd.name is string else '')
+       | lower | regex_replace('[^a-z0-9]+', ' ') | trim }}
+  reply_id: "{{ (cmd.id if cmd is mapping and cmd.id is string else '') | urlencode }}"
+  ok: "{{ reply_id | regex_match('^i[0-9a-f]{16}$') and wanted | string != '' }}"
+  switchable: >-
+    {%- set ns = namespace(ids=[]) -%}
+    {%- for e in label_entities('assistant')
+        if e.split('.')[0] in ['light', 'switch', 'fan']
+        and (state_attr(e, 'friendly_name') or '') | lower | regex_replace('[^a-z0-9]+', ' ') | trim
+            | regex_replace('^(the|my) ', '') == wanted | string -%}
+      {%- set ns.ids = ns.ids + [e] -%}
+    {%- endfor -%}
+    {{ ns.ids }}
+  readable: >-
+    {%- set ns = namespace(ids=[]) -%}
+    {%- for e in (label_entities('assistant') + label_entities('assistant_read')) | unique
+        if (state_attr(e, 'friendly_name') or '') | lower | regex_replace('[^a-z0-9]+', ' ') | trim
+            | regex_replace('^(the|my) ', '') == wanted | string -%}
+      {%- set ns.ids = ns.ids + [e] -%}
+    {%- endfor -%}
+    {{ ns.ids }}
+actions:
+  - choose:
+      - alias: Tell the state
+        conditions: "{{ ok and want == 'state' and readable | count == 1 }}"
+        sequence:
+          - variables:
+              extras: >-
+                {%- set e = readable[0] -%}
+                {%- set ex = ['id:' ~ reply_id ~ ':String.urlencoded', 'status:done:String',
+                    'state:' ~ (state_translated(e) | string | urlencode) ~ ':String.urlencoded'] -%}
+                {%- set u = state_attr(e, 'unit_of_measurement') -%}
+                {%- set t = state_attr(e, 'current_temperature') -%}
+                {%- set g = state_attr(e, 'temperature') if e.startswith('climate.') else none -%}
+                {%- if u is not none -%}{%- set ex = ex + ['unit:' ~ (u | string | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
+                {%- if t is not none -%}{%- set ex = ex + ['temperature:' ~ (t | string | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
+                {%- if g is not none -%}{%- set ex = ex + ['target:' ~ (g | string | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
+                {{ ex | join(',') }}
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "{{ extras }}"
+                ttl: 10000
+                priority: high
+      - alias: Switch it
+        conditions: "{{ ok and want in ['turn_on', 'turn_off'] and switchable | count == 1 }}"
+        sequence:
+          - if: "{{ want == 'turn_on' }}"
+            then:
+              - action: homeassistant.turn_on
+                continue_on_error: true
+                target:
+                  entity_id: "{{ switchable[0] }}"
+            else:
+              - action: homeassistant.turn_off
+                continue_on_error: true
+                target:
+                  entity_id: "{{ switchable[0] }}"
+          - wait_template: "{{ is_state(switchable[0], 'on' if want == 'turn_on' else 'off') }}"
+            timeout: 5
+            continue_on_timeout: true
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "id:{{ reply_id }}:String.urlencoded,status:{{ 'done' if wait.completed else 'unsure' }}:String"
+                ttl: 10000
+                priority: high
+      - alias: More than one has that name
+        conditions: >-
+          {{ ok and ((want == 'state' and readable | count > 1)
+                     or (want in ['turn_on', 'turn_off'] and switchable | count > 1)) }}
+        sequence:
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "id:{{ reply_id }}:String.urlencoded,status:ambiguous:String"
+                ttl: 10000
+                priority: high
+    default:
+      - action: "{{ phone }}"
+        data:
+          message: command_broadcast_intent
+          data:
+            intent_package_name: io.github.ijazshare.assistant
+            intent_action: io.github.ijazshare.assistant.HA_REPLY
+            intent_extras: "id:{{ reply_id }}:String.urlencoded,status:refused:String"
+            ttl: 10000
+            priority: high
+```
 
 ## Building
 

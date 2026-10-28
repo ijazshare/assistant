@@ -75,6 +75,28 @@ class AssistantSettings(private val context: Context) {
     suspend fun setRemoteLlmKey(value: String) = setOrClear(REMOTE_LLM_KEY, value)
     suspend fun setRemoteLlmModel(value: String) = setOrClear(REMOTE_LLM_MODEL, value)
 
+    /**
+     * The Home Assistant link, off until a key is set. A sentence that starts with the trigger word is
+     * then a home command, handed with this key to the Home Assistant app on the phone; the owner's
+     * automation acts only on shares that carry the same key.
+     */
+    suspend fun homeKeyNow(): String? = context.dataStore.data.first()[HOME_KEY]?.takeIf { it.isNotBlank() }
+
+    // A trigger with no letter or digit the grammar can read would switch the link off unseen.
+    suspend fun homeTriggerNow(): String =
+        context.dataStore.data.first()[HOME_TRIGGER]?.takeIf {
+            it.lowercase().any { c -> c in 'a'..'z' || c in '0'..'9' }
+        }
+            ?: DEFAULT_HOME_TRIGGER
+
+    suspend fun homeFieldsNow(): Pair<String, String> {
+        val prefs = context.dataStore.data.first()
+        return prefs[HOME_KEY].orEmpty() to prefs[HOME_TRIGGER].orEmpty()
+    }
+
+    suspend fun setHomeKey(value: String) = setOrClear(HOME_KEY, value)
+    suspend fun setHomeTrigger(value: String) = setOrClear(HOME_TRIGGER, value)
+
     private suspend fun setOrClear(key: Preferences.Key<String>, value: String) {
         context.dataStore.edit { prefs ->
             val trimmed = value.trim()
@@ -92,7 +114,12 @@ class AssistantSettings(private val context: Context) {
         /** OpenRouter's OpenAI-compatible root; a home llama.cpp server is e.g. https://box.tailnet.ts.net/v1. */
         const val DEFAULT_REMOTE_LLM_URL = "https://openrouter.ai/api/v1"
 
+        /** A word nobody says in passing, so a home command is never started by accident. */
+        const val DEFAULT_HOME_TRIGGER = "homie"
+
         private val ADMIN_NAME = stringPreferencesKey("admin_name")
+        private val HOME_KEY = stringPreferencesKey("home_key")
+        private val HOME_TRIGGER = stringPreferencesKey("home_trigger")
         private val OWN_NUMBER = stringPreferencesKey("own_number")
         private val REMOTE_LLM_URL = stringPreferencesKey("remote_llm_url")
         private val REMOTE_LLM_KEY = stringPreferencesKey("remote_llm_key")

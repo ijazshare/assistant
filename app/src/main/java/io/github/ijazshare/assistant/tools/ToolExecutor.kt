@@ -54,6 +54,8 @@ class ToolExecutor(
     /** One per session, so the label scan of every installed app is paid once, not per command. */
     private val apps = AppLookup(context)
 
+    private val homeLink = HomeLink(context)
+
     private val handlers: Map<String, suspend (ToolCall) -> ToolResult> = mapOf(
         AssistantTools.SET_ALARM to { call -> setAlarm(call) },
         AssistantTools.SET_TIMER to { call -> setTimer(call) },
@@ -76,6 +78,7 @@ class ToolExecutor(
         AssistantTools.UNSUPPORTED to { call ->
             ToolResult.failed("I cannot do that yet.", call.string("reason"))
         },
+        AssistantTools.HOME to { call -> homeLink.run(call) },
     )
 
     suspend fun execute(call: ToolCall): ToolResult = withContext(Dispatchers.Main) {

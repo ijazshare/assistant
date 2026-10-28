@@ -96,14 +96,13 @@ Summarised from `git log --since=2026-09-03`.
 
 ## Next
 
-- **Home Assistant is the next integration (owner's choice, 28 Oct).** Not started. The owner's
-  terms: it lives in this app on the phone, not as an add-on on the Home Assistant server, and
-  it has to be airtight. Proposed, not yet agreed: opt-in and off by default; the exact words go
-  to Home Assistant's Assist, through the Home Assistant app on the phone if it accepts them
-  from other apps (to be checked), otherwise the Home Assistant API directly; only devices the
-  owner exposed to Assist, and a spoken confirmation for locks, the garage door and the alarm.
-  The words would leave the phone for the owner's own server, so the privacy invariants in
-  CLAUDE.md change with it, and only on the owner's say-so.
+- **Home Assistant link (28 Oct, in testing on the owner's phone).** Built to the owner's design: a
+  sentence that starts with "homie" is read by a fixed grammar (switch on/off, or ask a state), handed
+  with a key to the Home Assistant app's share screen, and answered by an automation on the owner's
+  server (README, "Home Assistant"). Switching: lights, switches and fans labelled `assistant`, on or
+  off only. Questions: anything labelled `assistant` or `assistant_read`. Assistant opens no connection;
+  locked decision 9 now covers Assistant's own data, and hand-offs to other apps carry only what the
+  command needs, never audio.
 - Later, also the owner's: "navigate to X" handed to Maps.
 
 ## Phase status
