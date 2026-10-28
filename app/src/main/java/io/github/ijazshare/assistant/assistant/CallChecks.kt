@@ -35,9 +35,9 @@ internal object CallChecks {
     }
 
     /**
-     * Checks the model's call against the words it was given: declines a screen read
-     * nobody asked for, drops a message body that is only the request, and corrects an hour the model
-     * converted badly.
+     * Checks the model's call against the words it was given: declines a screen read or a phone
+     * call nobody asked for, drops a message body that is only the request, and corrects an hour the
+     * model converted badly.
      *
      * The only place the transcript and the resolved call are both in hand, which is
      * what this needs: the executor sees a call and never the sentence behind it.
@@ -51,6 +51,8 @@ internal object CallChecks {
                 Log.i(TAG, "declining read_screen, nothing points at the screen in [$transcript]")
                 ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "For the screen, say \"read this\"."))
             }
+
+            call.tool == AssistantTools.CALL_CONTACT -> checkedCall(transcript, call)
 
             // Dropped, so the executor asks who to text, what to tap, where to go or how long for.
             unsaid.isNotEmpty() -> {
@@ -68,7 +70,7 @@ internal object CallChecks {
     }
 
     /**
-     * The arguments the user never said: a number to text or call, words to tap, where to go, or a
+     * The arguments the user never said: a number to text, words to tap, where to go, or a
      * timer's length. The model fills them whatever was said, and a text to a stranger, a press on
      * the wrong button, a jump to the home screen or a timer nobody asked for cannot be taken back:
      * "Navigate to work" pressed Home, and sums the calculator could not read set real timers. A
@@ -77,9 +79,9 @@ internal object CallChecks {
      */
     private fun unsaid(transcript: String, call: ToolCall): List<String> {
         val words = transcript.lowercase().split(NOT_LETTER).toSet()
-        val dialled = call.tool == AssistantTools.SEND_MESSAGE || call.tool == AssistantTools.CALL_CONTACT
+        val texted = call.tool == AssistantTools.SEND_MESSAGE
         val number = call.arguments["recipient"]
-            ?.takeIf { dialled && "display" !in call.arguments && it.any(Char::isDigit) && it.none(Char::isLetter) }
+            ?.takeIf { texted && "display" !in call.arguments && it.any(Char::isDigit) && it.none(Char::isLetter) }
         val label = call.arguments["label"]?.takeIf { call.tool == AssistantTools.TAP_TEXT }
         val target = call.arguments["target"]?.takeIf { call.tool == AssistantTools.NAVIGATE }
         return when {
@@ -92,6 +94,49 @@ internal object CallChecks {
     }
 
     private val NOT_LETTER = Regex("[^a-z]+")
+
+    /**
+     * A call rings at once and cannot be taken back, and the model calls whoever is named near a
+     * "call": "Tell me to call me back" rang the owner's own phone, and "Text Sam to call me"
+     * came back as a call to Sam. So a call is placed only when the whole sentence is a request
+     * for one ([CALL_ASKED]), and never to the owner's own number; anything else is declined,
+     * never made a text. A contact the session chose from a list comes with its name, and its
+     * command was checked before the list was shown.
+     */
+    private fun checkedCall(transcript: String, call: ToolCall): ToolCall {
+        if ("display" in call.arguments) return call
+        val recipient = call.arguments["recipient"].orEmpty()
+        // The sentence with the person written as "@", to be matched whole.
+        val said = transcript.lowercase().split(NOT_WORD).filter { it.isNotEmpty() }
+        val run = MessageBody.recipientRun(said, recipient)
+        val asked = run != null &&
+            CALL_ASKED.matches((said.take(run.first) + "@" + said.drop(run.last + 1)).joinToString(" "))
+        val reason = when {
+            ContactMatch.isSelf(recipient) -> "I cannot call your own number."
+            !asked -> "To make a call, say just \"call\" and the name."
+            else -> return call
+        }
+        Log.i(TAG, "declining call_contact: $reason [$transcript]")
+        return ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to reason))
+    }
+
+    private val NOT_WORD = Regex("[^\\p{L}\\p{N}]+")
+
+    // The parts of a request for a call, the person written as "@".
+    private const val ASKING =
+        "(?:(?:please|ok|okay|hey|just|now) )*(?:(?:can|could|would|will) you (?:please |just )*)?"
+    private const val CALLING =
+        "(?:(?:make|place) a (?:quick )?(?:phone )?)?(?:call|phone|ring|dial)(?: up| back)?(?: to)?(?: my| the)? @"
+    private const val GIVING = "give (?:my |the )?@ a (?:call|ring)"
+    private const val POLITE =
+        "(?: (?:please|now|back|again|up|for me|right now|right away|quickly|thanks|thank you))*"
+
+    /**
+     * A request for a call: "Can you please call my @", "Make a quick call to @", "Ring @ back",
+     * "Give @ a ring". Not "Tell me to call @", "Remind me to call @", "You can call @", "Don't
+     * call @", "Call @ later", "Video call @" or "Call @ and Mum".
+     */
+    private val CALL_ASKED = Regex("$ASKING(?:$CALLING|$GIVING)$POLITE")
 
     /** What has to be said for each place navigate can go: "quick" for quick settings, not "settings". */
     private val NAVIGATE_WORDS = mapOf(

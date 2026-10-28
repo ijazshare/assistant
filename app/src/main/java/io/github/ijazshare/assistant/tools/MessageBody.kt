@@ -180,7 +180,7 @@ object MessageBody {
     private fun bare(token: String) = token.lowercase().trim { !it.isLetterOrDigit() }
 
     /** The first place, at index 1 or later, where the recipient is said; null if nowhere. */
-    private fun recipientRun(said: List<String>, recipient: String): IntRange? {
+    internal fun recipientRun(said: List<String>, recipient: String): IntRange? {
         val isNumber = recipient.any(Char::isDigit) && recipient.none(Char::isLetter)
         for (start in 1 until said.size) {
             val end = if (isNumber) numberEnd(said, start, recipient) else nameEnd(said, start, recipient)

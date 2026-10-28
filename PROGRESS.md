@@ -79,6 +79,16 @@ Summarised from `git log --since=2026-09-03`.
   "Text me, I'm testing" on the phone, so the prompt is unchanged and routing with it (53/57 on
   the phone, the same as before). "Let me know when you're free" is a message; "tell him ..."
   is the request going on, and asks.
+- **Calls only when asked (28 Oct).** "Tell me to call me back" rang the owner's own phone, and
+  on the phone "Text Sam to call me" came back from the small model as a call to Sam: it picks
+  call_contact for almost any sentence with "call" and a name. A call is now placed only when
+  the whole sentence is a request for one: call, phone, ring or dial and the name, or "give
+  Mum a ring", with only the words of asking around them ("Can you please call my wife", "Make
+  a quick call to Sam", "Ring Sam back"). It is never placed to the owner's own number. Anything
+  else is declined, never made a text: "Remind me to call Sam", "You can call Sam", "Call Sam
+  later", "Video call Sam", "Call Sam on WhatsApp", or a name the model cut short ("Call Sam
+  Lee" heard as "Sam"). Declined too, though harmless: "Call Mum on speaker", "Call Mum's cell",
+  "Would you mind calling Mum", and numbers said as words.
 - **Audit cleanup (27 Oct).** A read-only over-engineering audit, each cut checked twice,
   removed about 1,100 lines net: dead code, no-op UI left from the redesign, unused
   dependencies, the experimental FunctionGemma path with its prompt-dialect layer, and Hilt

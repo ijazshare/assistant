@@ -72,10 +72,11 @@ class PipelineProbeTest {
         Log.i(PIPE, "input=[${smsto ?: runcmd}] -> tool=${call?.tool} args=${call?.arguments}")
         if (call == null) return
 
-        // Mirror the session: the model only picks the tool and the recipient; the words are the user's.
+        // Mirror the session: the model only picks the tool and the recipient; the words are the
+        // user's, and the call is checked against them before anything runs.
         if (runcmd != null) {
-            call = CallChecks.withMessageFromWords(runcmd, call)
-            Log.i(PIPE, "after message words: args=${call.arguments}")
+            call = CallChecks.reconciled(runcmd, CallChecks.withMessageFromWords(runcmd, call))
+            Log.i(PIPE, "after checks: tool=${call.tool} args=${call.arguments}")
         }
 
         if (!live) {
