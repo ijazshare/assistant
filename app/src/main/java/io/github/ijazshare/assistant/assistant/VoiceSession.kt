@@ -484,12 +484,13 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     /**
      * The two ways a command is answered with no model at all.
      *
-     * The clock first: the phone knows the time exactly, and the small model asked for it
-     * answered by reading out the notification shade — which was then learned, so it kept
-     * doing it. Then the remembered shapes, which is the whole point of remembering them.
+     * The clock and sums first. The phone knows the time exactly, and the small model asked
+     * for it answered by reading out the notification shade — which was then learned, so it
+     * kept doing it. A sum is worked out, not recalled. Then the remembered shapes, which is the
+     * whole point of remembering them.
      */
     private suspend fun answeredWithoutTheModel(transcript: String, sttMillis: Long): Boolean {
-        LocalAnswers.of(transcript)?.let { answer ->
+        (LocalAnswers.of(transcript) ?: Arithmetic.answer(transcript))?.let { answer ->
             carryOut(
                 transcript,
                 ToolCall(AssistantTools.ANSWER, mapOf("text" to answer)),
