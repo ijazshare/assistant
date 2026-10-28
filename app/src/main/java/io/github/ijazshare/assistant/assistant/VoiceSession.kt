@@ -48,7 +48,6 @@ import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.Contact
 import io.github.ijazshare.assistant.tools.ContactLookup
 import io.github.ijazshare.assistant.tools.ContactRecency
-import io.github.ijazshare.assistant.tools.ContactResolution
 import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
@@ -116,7 +115,7 @@ data class Timing(val sttMillis: Long, val llmMillis: Long) {
 // execute, speak — and its methods are small and sequential; splitting it by the function
 // count would scatter one flow across files rather than clarify it.
 @Suppress("TooManyFunctions")
-class VoiceSession(private val context: Context, private val scope: CoroutineScope) {
+class VoiceSession(private val context: Context, internal val scope: CoroutineScope) {
 
     // Debug builds keep every capture for diagnosing end-of-speech (CaptureArchive), written
     // off the microphone's thread; release builds skip even the copy.
@@ -142,8 +141,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * blocking: "text me" goes here, never to whichever contact fuzzily matched "me".
      */
     private var ownNumber: String? = null
-    private val contacts = ContactLookup(context) { ownNumber }
-    private val recency = ContactRecency(context)
+    internal val contacts = ContactLookup(context) { ownNumber }
+    internal val recency = ContactRecency(context)
     private val executor = ToolExecutor(context, ReminderStore(context), contacts)
 
     init {
@@ -168,27 +167,27 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private val history = QueryLog(context)
 
     /** Where the current command came from, for the record. */
-    private var source = QuerySource.VOICE
+    internal var source = QuerySource.VOICE
 
     /**
      * Counts every time the microphone was stopped on purpose, a dismissal, a switch to typing
      * or a typed command alike, so a reply that would reopen it can tell it was told not to.
      */
-    private var stops = 0
+    internal var stops = 0
 
     /**
      * [stops] and the dismissals as they stood when the current command began, not when the model
      * was done with it: a dismissal during transcription or inference is as much a stop as one
      * after, and must neither hold a send nor reopen the microphone.
      */
-    private var stopsAtStart = 0
-    private var dismissalsAtStart = 0
+    internal var stopsAtStart = 0
+    internal var dismissalsAtStart = 0
 
     /** The capture coroutine, kept so a typed command can stop the microphone. */
     private var listening: Job? = null
 
     /** Everything after the microphone closes: transcribe, parse, act, speak. */
-    private var processing: Job? = null
+    internal var processing: Job? = null
 
     /**
      * Serialises loading the language model. It is started in the background as soon as
@@ -223,15 +222,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     private var contactBias: String? = null
 
     /** A messaging/calling command held while the user chooses among several contacts. */
-    private var pendingChoice: PendingChoice? = null
-
-    private data class PendingChoice(
-        val transcript: String,
-        val call: ToolCall,
-        val sttMillis: Long,
-        val llmMillis: Long,
-        val resolution: Resolution,
-    )
+    internal var pendingChoice: PendingChoice? = null
 
     private val _state = MutableStateFlow<SessionState>(SessionState.Idle)
     val state: StateFlow<SessionState> = _state.asStateFlow()
@@ -528,7 +519,7 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
      * mean no grammar was applied, which is a programming error rather than a runtime
      * condition.
      */
-    private suspend fun act(transcript: String, sttMillis: Long) {
+    internal suspend fun act(transcript: String, sttMillis: Long) {
         if (answeredPendingSend(transcript, sttMillis) || answeredPendingReminder(transcript, sttMillis)) return
         if (answeredWithoutTheModel(transcript, sttMillis)) return
 
@@ -604,93 +595,6 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
     }
 
     /**
-     * If a send is waiting for its words, this transcript is them, or a change of mind. If one is
-     * waiting for its yes, this is the yes.
-     *
-     * Ahead of the cache and the router: "I'll be there at six" is a message here, and
-     * would be a reminder anywhere else. Used once, expired or not, so the transcript after
-     * it is a command again.
-     */
-    private suspend fun answeredPendingSend(transcript: String, sttMillis: Long): Boolean {
-        val now = System.currentTimeMillis()
-        val waiting = PendingSend.take(now) ?: return false
-        val send = ToolCall(
-            AssistantTools.SEND_MESSAGE,
-            mapOf(
-                "recipient" to waiting.number,
-                "display" to waiting.display,
-                "body" to (waiting.body ?: transcript.trim()),
-            ),
-        )
-        var readBack = false
-        val call = when {
-            waiting.body != null ->
-                if (PendingSend.isYes(transcript)) {
-                    send
-                } else {
-                    ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I didn't send it."))
-                }
-
-            PendingSend.isCancel(transcript, waiting.display) ->
-                ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it."))
-
-            // "No, Bob": the name was misheard, and the correction is not a message for the first contact.
-            PendingSend.isCorrection(transcript, waiting.display) ->
-                ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, I won't send it. Say the whole command again."))
-
-            // "Text Bob please" is an order that landed in the answer slot, and "Text me when you land" is
-            // dictation; which one it is cannot be told from the words, so it is read back, not sent.
-            PendingSend.startsWithVerb(transcript) -> {
-                val reply = transcript.trim()
-                readBack =
-                    PendingSend.holdUnlessDismissed(waiting.copy(body = reply, askedAtMillis = now), dismissalsAtStart)
-                ToolCall(AssistantTools.ANSWER, mapOf("text" to "Send \"$reply\" to ${waiting.display}?"))
-            }
-
-            else -> send
-        }
-        // A read-back answered yes sends the words that were read back, so they are checked against
-        // the dictation they came from: checked against the "yes", every word looks invented and is dropped.
-        val said = waiting.body?.takeIf { call === send } ?: transcript
-        // Resolution.CACHE: no model was involved, and nothing here is learned.
-        carryOut(said, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
-        if (readBack) listenForAnswer()
-        return true
-    }
-
-    /**
-     * If a reminder is waiting for what it is about, this transcript is the answer, or a change of
-     * mind. The answer completes the request it was asked for ("Set a reminder" and then "to book
-     * tickets at 6 pm"), and the two run as the one command they make, time and all.
-     */
-    private suspend fun answeredPendingReminder(transcript: String, sttMillis: Long): Boolean {
-        val waiting = PendingReminder.take(System.currentTimeMillis()) ?: return false
-        if (PendingSend.isCancel(transcript)) {
-            // Resolution.CACHE: no model was involved, and nothing here is learned.
-            val call = ToolCall(AssistantTools.ANSWER, mapOf("text" to "Okay, no reminder."))
-            carryOut(transcript, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
-        } else {
-            act("${waiting.request.trim().trimEnd('.', '!', '?')} ${transcript.trim()}", sttMillis)
-        }
-        return true
-    }
-
-    /**
-     * Notes who a "What should I say to X?" was asked for, if X is one person.
-     *
-     * An unknown name or one that matched several (the contact chooser has run by now, and
-     * what it picked arrives here as a number) gets no pending send: the next words are not
-     * obviously for anyone, so they are a command.
-     */
-    private suspend fun holdSendFor(call: ToolCall, dismissalsBefore: Int): Boolean {
-        val spoken = call.string("recipient") ?: return false
-        val number = withContext(Dispatchers.IO) { contacts.resolveNumber(spoken) } ?: return false
-        val send = PendingSend(number, call.string("display") ?: spoken, System.currentTimeMillis())
-        // Not if the owner dismissed the overlay since the command began.
-        return PendingSend.holdUnlessDismissed(send, dismissalsBefore)
-    }
-
-    /**
      * The two ways a command is answered with no model at all.
      *
      * The clock first: the phone knows the time exactly, and the small model asked for it
@@ -714,38 +618,8 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         return true
     }
 
-    /**
-     * The user picked one of several matching contacts. Carry the held command out to them,
-     * with the number to send to and the name to say back.
-     */
-    fun chooseContact(contact: Contact) {
-        val pending = pendingChoice ?: return
-        pendingChoice = null
-        val chosen = pending.call.copy(
-            arguments = pending.call.arguments + mapOf("recipient" to contact.number, "display" to contact.name),
-        )
-        processing = scope.launch {
-            carryOut(pending.transcript, chosen, pending.sttMillis, pending.llmMillis, pending.resolution)
-        }
-    }
-
-    /**
-     * The contacts to choose between, if a messaging or calling command's recipient matched
-     * several people — null for any other tool or an unambiguous name. Reads the contacts,
-     * SMS and call logs off the main thread, ordered so the person most recently texted or
-     * called is first (and so survives the cap).
-     */
-    private suspend fun contactChoices(call: ToolCall): List<Contact>? {
-        val messaging = call.tool == AssistantTools.SEND_MESSAGE || call.tool == AssistantTools.CALL_CONTACT
-        val recipient = call.arguments["recipient"]?.takeIf { it.isNotBlank() }
-        if (!messaging || recipient == null) return null
-        return withContext(Dispatchers.IO) {
-            (contacts.resolve(recipient) as? ContactResolution.Many)?.options?.let(recency::sortByRecency)
-        }
-    }
-
     /** Executes a resolved call, then records, remembers, shows and speaks the outcome. */
-    private suspend fun carryOut(
+    internal suspend fun carryOut(
         transcript: String,
         call: ToolCall,
         sttMillis: Long,
@@ -829,15 +703,6 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
         piper.speak(result.spoken)
 
         if (askedForWords || askedForTask) listenForAnswer()
-    }
-
-    /**
-     * Straight back to the microphone, so the owner can answer the question just asked without summoning
-     * again. start() is the ordinary summon, and a stop since this command began (the overlay dismissed,
-     * a switch to typing) means they did not want it.
-     */
-    private fun listenForAnswer() {
-        if (source == QuerySource.VOICE && stops == stopsAtStart) start()
     }
 
     /**
