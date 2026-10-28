@@ -51,6 +51,10 @@ Summarised from `git log --since=2026-09-03`.
   after a reboot, and a cold start no longer alerts twice. Ticked-off tasks no longer fill the
   answer model's context. A short word in a message body must have been said whole ("ok" is
   not in "okay"). Contact and app lookups and the voice's teardown are off the main thread.
+- **Audit cleanup (27 Oct).** A read-only over-engineering audit, each cut checked twice,
+  removed about 1,100 lines net: dead code, no-op UI left from the redesign, unused
+  dependencies, the experimental FunctionGemma path with its prompt-dialect layer, and Hilt
+  (nothing was injected). The routing prompt, grammar and stop marker are byte-for-byte unchanged.
 
 ## Phase status
 
