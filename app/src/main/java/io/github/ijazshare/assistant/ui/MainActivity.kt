@@ -41,7 +41,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
 import io.github.ijazshare.assistant.BuildConfig
 import io.github.ijazshare.assistant.R
 import io.github.ijazshare.assistant.context.AssistantFiles
@@ -62,7 +61,6 @@ import io.github.ijazshare.assistant.ui.theme.AssistantReadout
 import io.github.ijazshare.assistant.ui.theme.AssistantStatus
 import io.github.ijazshare.assistant.ui.theme.AssistantTheme
 
-@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()

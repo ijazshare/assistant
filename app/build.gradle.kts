@@ -7,13 +7,11 @@ import java.util.Properties
 plugins {
     // AGP 9 compiles Kotlin itself (android.builtInKotlin, on by default) and rejects
     // the standalone org.jetbrains.kotlin.android plugin. The Kotlin compiler version
-    // is raised above AGP's bundled default by the compose/KSP plugin markers below,
+    // is raised above AGP's bundled default by the compose and serialization plugin markers below,
     // which pull a newer kotlin-gradle-plugin onto the shared buildscript classpath.
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
 }
 
 // Release signing is driven entirely by environment variables in CI (see release.yml)
@@ -345,11 +343,6 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
     implementation(libs.kotlinx.coroutines.android)
-
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
-    implementation(libs.androidx.hilt.work)
-    ksp(libs.androidx.hilt.compiler)
 
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.datastore.preferences)

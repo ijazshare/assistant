@@ -8,7 +8,6 @@
 # ---- Build toolchain ----
 agp = "9.4.0"
 kotlin = "2.4.10"
-ksp = "2.3.11"
 
 # ---- Android platform ----
 # API 37 = Android 17. AGP 9.4.0 caps out at API 37, so this is the ceiling.
@@ -36,10 +35,6 @@ androidxActivity = "1.13.0"
 androidxLifecycle = "2.11.0"
 androidxDatastore = "1.2.1"
 androidxWork = "2.11.2"
-
-# ---- DI ----
-hilt = "2.60.1"
-androidxHilt = "1.4.0"
 
 # ---- Networking (model downloads only - see Privacy invariants in CLAUDE.md) ----
 okhttp = "5.5.0"
@@ -74,12 +69,6 @@ androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lif
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "androidxDatastore" }
 androidx-work-runtime = { group = "androidx.work", name = "work-runtime", version.ref = "androidxWork" }
 
-# ---- DI ----
-hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
-hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
-androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "androidxHilt" }
-androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "androidxHilt" }
-
 # ---- Networking ----
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
@@ -97,7 +86,5 @@ detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-form
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

@@ -11,11 +11,9 @@ package io.github.ijazshare.assistant.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import dagger.hilt.android.AndroidEntryPoint
 import io.github.ijazshare.assistant.ui.models.ModelManagerScreen
 
 /** Pick and download the speech, language and voice models. */
-@AndroidEntryPoint
 class ModelsActivity : ScreenActivity() {
     override val content: @Composable (Modifier) -> Unit = { ModelManagerScreen(it) }
 }

@@ -11,7 +11,6 @@ package io.github.ijazshare.assistant
 
 import android.app.Application
 import android.util.Log
-import dagger.hilt.android.HiltAndroidApp
 import io.github.ijazshare.assistant.diagnostics.CrashLog
 import io.github.ijazshare.assistant.tools.ReminderStore
 
@@ -23,7 +22,6 @@ import io.github.ijazshare.assistant.tools.ReminderStore
  * app's alarms exactly as a reboot does, and no receiver is told about it; the next
  * time the process comes up is the first chance to put them back.
  */
-@HiltAndroidApp
 class AssistantApplication : Application() {
 
     override fun onCreate() {

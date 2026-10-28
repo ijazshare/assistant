@@ -132,7 +132,7 @@ No Room database.
 ## Build, test, style
 
 - Commands: `./gradlew assembleDebug` · `testDebugUnitTest` · `spotlessCheck` / `spotlessApply` · `detekt` · `connectedDebugAndroidTest` (device only).
-- Gradle version catalog (`libs.versions.toml`); Hilt for DI; coroutines + Flow; DataStore (no SharedPreferences); conventional commits.
+- Gradle version catalog (`libs.versions.toml`); no DI framework (plain constructors); coroutines + Flow; DataStore (no SharedPreferences); conventional commits.
 - Unit-test hard requirements (all present in `app/src/test`): `TimeResolver` and `StatedTime`; the tool list and grammar (`AssistantToolsTest`, `ToolGrammarTest`); contact matching and message-body checks; the tasks.md reader/writer (`AssistantFilesTaskTest`); model storage state and SHA-256 verification (`ModelStorageTest`); the command cache. Not unit-tested: the downloader's HTTP Range resume, and the tool-call parser, which is covered on device (`ToolCallOnDeviceTest`). JNI layers and the routing and honesty benchmarks are instrumented tests (`app/src/androidTest`).
 - Every commit must build. Update the git submodule pins deliberately, never floating.
 - **Verify current versions via web search when wiring things up** (AGP/Kotlin/Compose BOM, sherpa-onnx AAR, whisper.cpp/llama.cpp tags) — training-data versions are stale.

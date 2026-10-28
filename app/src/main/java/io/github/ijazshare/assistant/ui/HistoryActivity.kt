@@ -11,11 +11,9 @@ package io.github.ijazshare.assistant.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import dagger.hilt.android.AndroidEntryPoint
 import io.github.ijazshare.assistant.ui.history.HistoryScreen
 
 /** What has been asked, what was done about it, and what has been learned. */
-@AndroidEntryPoint
 class HistoryActivity : ScreenActivity() {
     override val content: @Composable (Modifier) -> Unit = { HistoryScreen(it) }
 }

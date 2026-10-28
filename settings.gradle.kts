@@ -1,6 +1,6 @@
 pluginManagement {
     repositories {
-        // Google's maven hosts AGP, AndroidX and Hilt; filtering keeps every
+        // Google's maven hosts AGP and AndroidX; filtering keeps every
         // unrelated artifact lookup from paying a round trip to dl.google.com.
         google {
             content {

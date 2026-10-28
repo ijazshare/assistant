@@ -11,11 +11,9 @@ package io.github.ijazshare.assistant.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import dagger.hilt.android.AndroidEntryPoint
 import io.github.ijazshare.assistant.ui.context.ContextScreen
 
 /** Your name and the Markdown files the assistant reads before every command. */
-@AndroidEntryPoint
 class ContextActivity : ScreenActivity() {
     override val content: @Composable (Modifier) -> Unit = { ContextScreen(it) }
 }
