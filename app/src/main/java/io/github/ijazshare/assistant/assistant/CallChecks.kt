@@ -51,10 +51,10 @@ internal object CallChecks {
                 ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "For the screen, say \"read this\"."))
             }
 
-            // Dropped, so the executor asks who to text or what to tap.
-            unsaid != null -> {
-                Log.i(TAG, "dropping $unsaid \"${call.arguments[unsaid]}\", never said in [$transcript]")
-                call.copy(arguments = call.arguments - unsaid)
+            // Dropped, so the executor asks who to text, what to tap, where to go or how long for.
+            unsaid.isNotEmpty() -> {
+                Log.i(TAG, "dropping $unsaid, never said in [$transcript]")
+                call.copy(arguments = call.arguments - unsaid.toSet())
             }
 
             call.tool == AssistantTools.SEND_MESSAGE -> checkedMessage(transcript, call)
@@ -67,22 +67,46 @@ internal object CallChecks {
     }
 
     /**
-     * The argument holding a number to text or call, or words to tap, that the user never said.
-     * The model fills both whatever was said, and neither a text to a stranger nor a press on the
-     * wrong button can be taken back. A number the session chose itself (a contact picked from a
-     * list, a send held for its words) comes with the contact's name and is not checked.
+     * The arguments the user never said: a number to text or call, words to tap, where to go, or a
+     * timer's length. The model fills them whatever was said, and a text to a stranger, a press on
+     * the wrong button, a jump to the home screen or a timer nobody asked for cannot be taken back:
+     * "Navigate to work" pressed Home, and sums the calculator could not read set real timers. A
+     * number the session chose itself (a contact picked from a list, a send held for its words)
+     * comes with the contact's name and is not checked.
      */
-    private fun unsaid(transcript: String, call: ToolCall): String? {
+    private fun unsaid(transcript: String, call: ToolCall): List<String> {
+        val words = transcript.lowercase().split(NOT_LETTER).toSet()
         val dialled = call.tool == AssistantTools.SEND_MESSAGE || call.tool == AssistantTools.CALL_CONTACT
         val number = call.arguments["recipient"]
             ?.takeIf { dialled && "display" !in call.arguments && it.any(Char::isDigit) && it.none(Char::isLetter) }
         val label = call.arguments["label"]?.takeIf { call.tool == AssistantTools.TAP_TEXT }
+        val target = call.arguments["target"]?.takeIf { call.tool == AssistantTools.NAVIGATE }
         return when {
-            number != null && !ContactMatch.numberSaid(transcript, number) -> "recipient"
-            label != null && !ScreenQuestion.containsPhrase(transcript, label) -> "label"
-            else -> null
+            number != null && !ContactMatch.numberSaid(transcript, number) -> listOf("recipient")
+            label != null && !ScreenQuestion.containsPhrase(transcript, label) -> listOf("label")
+            target != null && words.none { it in NAVIGATE_WORDS[target].orEmpty() } -> listOf("target")
+            call.tool == AssistantTools.SET_TIMER && words.none { it in TIMER_WORDS } -> TIMER_LENGTH
+            else -> emptyList()
         }
     }
+
+    private val NOT_LETTER = Regex("[^a-z]+")
+
+    /** What has to be said for each place navigate can go: "quick" for quick settings, not "settings". */
+    private val NAVIGATE_WORDS = mapOf(
+        "back" to setOf("back"),
+        "home" to setOf("home"),
+        "recents" to setOf("recent", "recents"),
+        "notifications" to setOf("notification", "notifications"),
+        "quick_settings" to setOf("quick"),
+    )
+
+    /** A timer needs its unit, or the word itself, said: numbers alone are not a length. */
+    private val TIMER_WORDS = setOf(
+        "timer", "timers", "second", "seconds", "sec", "secs", "minute", "minutes", "min", "mins",
+        "hour", "hours", "hr", "hrs",
+    )
+    private val TIMER_LENGTH = listOf("hours", "minutes", "seconds")
 
     /**
      * A reminder with neither a task nor a time said is the model's invention twice over: "set

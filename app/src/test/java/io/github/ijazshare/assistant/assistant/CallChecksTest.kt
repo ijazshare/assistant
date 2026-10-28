@@ -84,4 +84,27 @@ class CallChecksTest {
         assertThat(checked.arguments).doesNotContainKey("body")
         assertThat(checked.arguments["recipient"]).isEqualTo("Sam")
     }
+
+    @Test
+    fun `a timer needs a length said, or the word timer`() {
+        // A sum the calculator could not read: the small model made a 20 minute 39 second timer of it.
+        val sum = ToolCall(AssistantTools.SET_TIMER, mapOf("minutes" to "20", "seconds" to "39"))
+        assertThat(CallChecks.reconciled("20 plus 390x", sum).arguments).isEmpty()
+        val asked = ToolCall(AssistantTools.SET_TIMER, mapOf("minutes" to "3"))
+        assertThat(CallChecks.reconciled("Set a timer for 3 minutes", asked)).isEqualTo(asked)
+        // Misheard, but the unit was said.
+        val misheard = ToolCall(AssistantTools.SET_TIMER, mapOf("minutes" to "10"))
+        assertThat(CallChecks.reconciled("I don't mind you for 10 minutes", misheard)).isEqualTo(misheard)
+    }
+
+    @Test
+    fun `navigate goes only where it was told to`() {
+        val home = ToolCall(AssistantTools.NAVIGATE, mapOf("target" to "home"))
+        assertThat(CallChecks.reconciled("Navigate to work", home).arguments).doesNotContainKey("target")
+        assertThat(CallChecks.reconciled("go home", home)).isEqualTo(home)
+        val quick = ToolCall(AssistantTools.NAVIGATE, mapOf("target" to "quick_settings"))
+        assertThat(CallChecks.reconciled("How far is New York from Chicago?", quick).arguments)
+            .doesNotContainKey("target")
+        assertThat(CallChecks.reconciled("open quick settings", quick)).isEqualTo(quick)
+    }
 }

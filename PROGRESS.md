@@ -54,7 +54,16 @@ Summarised from `git log --since=2026-09-03`.
 - **Only what was said (27 Oct).** A number to text or call is used only if its digits were
   said, and tap_text taps only words that were said, matched as whole words on screen ("tap OK"
   no longer presses "Book"); otherwise the assistant asks. A text is reported as "Sending", since
-  nothing confirms delivery.
+  nothing confirms delivery. Later the same rule for timers (a unit or "timer" must be said, so a
+  sum the calculator cannot read no longer becomes a timer) and for navigate (only a target that
+  was said: "Navigate to work" pressed Home, "How far is New York from Chicago?" opened Quick
+  Settings).
+- **Sums worked out in code (27 Oct).** A sentence that is nothing but a sum is answered by
+  `Arithmetic` before any model, exactly and in digits ("96,000 times 30,000 is
+  2,880,000,000"); the small model had turned sums into real timers, and the answer model got
+  large ones wrong and switched between words and digits.
+- **VoiceSession split (27 Oct).** 1,123 lines into its parts: VoiceSession (the conductor),
+  SpeechCapture, CallChecks (pure, now unit-tested) and FollowUps; a pure move, reviewed for drift.
 - **Next, planned: a message's words from the transcript, not the model.** Take send_message's
   body out of the 1B's grammar; the session takes the words after the recipient (or after
   "that", "saying", "say"), asks "What should I say to X?" when nothing follows, and keeps only

@@ -36,7 +36,7 @@ Assistant is a fully offline Android voice assistant that replaces Google Assist
 ### Package layout (`io.github.ijazshare.assistant`, under `app/src/main/java/`)
 
 ```
-assistant/    voice-interaction service and session, VoiceSession (the pipeline), overlay, CommandCache (learned phrases), PendingSend (the "what should I say" follow-up), local answers (clock, world time), mic foreground service
+assistant/    voice-interaction service and session: VoiceSession (the conductor), SpeechCapture (microphone, end of speech, Whisper), CallChecks (the model's call checked against the words), FollowUps (the questions asked back, PendingSend/PendingReminder, the contact chooser), overlay, CommandCache (learned phrases), answers without the model (LocalAnswers for clock and world time, Arithmetic for sums), mic foreground service
 audio/        AudioRecord capture (16 kHz mono), energy-based endpointing, high-pass and frame meter, optional Silero voice check, sound cues
 context/      AssistantFiles: profile.md, memories.md, tasks.md, notes.md under getExternalFilesDir(null)/context
 diagnostics/  CrashLog: uncaught-exception traces kept on the device (shown in History), never uploaded
@@ -79,7 +79,7 @@ The 1B's single grammar-constrained tool call is the routing decision. The tool 
 
 No Room database.
 
-- `set_alarm` → `AlarmClock.ACTION_SET_ALARM` with `EXTRA_HOUR/MINUTES/MESSAGE` and `EXTRA_SKIP_UI=true` (stay in overlay). `set_timer` → `ACTION_SET_TIMER` with `EXTRA_LENGTH`. `show_alarms` → `ACTION_SHOW_ALARMS`.
+- `set_alarm` → `AlarmClock.ACTION_SET_ALARM` with `EXTRA_HOUR/MINUTES/MESSAGE` and `EXTRA_SKIP_UI=true` (stay in overlay). `set_timer` → `ACTION_SET_TIMER` with `EXTRA_LENGTH`, only if a unit or "timer" was said (numbers alone are not a length). `show_alarms` → `ACTION_SHOW_ALARMS`. `navigate` acts only on a target that was said ("Navigate to work" must not press Home).
 - `create_reminder` → a line in `tasks.md` via `ReminderStore`; with a time, `AlarmManager.setExactAndAllowWhileIdle` (inexact fallback). `ReminderReceiver` posts the notification with Done and Snooze 10 min actions. `ReminderBootReceiver` re-arms every reminder on `BOOT_COMPLETED`, timezone change and time change, and after a reboot shows once more a reminder that fired but was never answered (Done, Snooze, swiped or opened): a fired reminder's line carries a `delivered` flag in place of its due time. Ticked-off tasks are left out of the answer model's context.
 - `send_message` → `SmsManager`, never without a body the user said; `call_contact` → `TelecomManager.placeCall` (falls back to the dialler). Contacts must match whole words of a display name, a number is used only if its digits were said, and a sent text is reported as "Sending" because nothing confirms delivery.
 - `open_app` → `AppLookup` and the app's launch intent; no accessibility needed. `tap_text` taps only words that were said, matched as whole words on screen. `tap_text`, `scroll`, `navigate`, `take_screenshot`, `read_screen` → the accessibility service (`read_screen` falls back to Tesseract OCR, if installed, when the tree has fewer than 3 lines or 40 characters of text). `read_notifications` → the notification listener.
