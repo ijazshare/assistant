@@ -41,6 +41,9 @@ object MessageBody {
         "an", "the", "my",
     )
 
+    /** Apps a message could be meant for other than SMS, which is all this can send. */
+    private val OTHER_APPS = setOf("signal", "whatsapp", "telegram", "email", "emails")
+
     /** The verbs that open a request to send: what is said after them is the request, not a message. */
     private val REQUEST_VERBS = setOf(
         "send", "text", "message", "sms", "email", "whatsapp", "signal", "telegram", "dm", "msg", "txt",
@@ -77,6 +80,18 @@ object MessageBody {
         // Only politeness may stand in front of the verb: "Now send ...", "Can you text ...".
         if (verb < 0 || words.take(verb).any { it !in REQUEST_WORDS }) return false
         return words.drop(verb + 1).all { it in REQUEST_WORDS }
+    }
+
+    /**
+     * True if the request names an app other than SMS: "Send a Signal message to Sam", "WhatsApp
+     * Yusuf", "message Sam on Telegram". Sent as a text, the words would go somewhere the user did
+     * not ask for. A word the user dictated ("the signal is bad here") is part of the message and
+     * does not count, unless the body is only the request echoed back.
+     */
+    fun namesAnotherApp(transcript: String, body: String, recipient: String = ""): Boolean {
+        val echoed = body.isBlank() || isRequest(body, recipient)
+        val dictated = if (echoed) emptySet() else body.lowercase().split(WORD).toSet()
+        return transcript.lowercase().split(WORD).any { it in OTHER_APPS && it !in dictated }
     }
 
     /**

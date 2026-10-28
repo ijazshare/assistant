@@ -68,6 +68,22 @@ class MessageBodyTest {
     }
 
     @Test
+    fun aMessageForAnotherAppIsNotAText() {
+        assertThat(
+            MessageBody.namesAnotherApp("Send a signal message to Sam", "Send a signal message to Sam", "Sam"),
+        ).isTrue()
+        assertThat(MessageBody.namesAnotherApp("WhatsApp Yusuf", "What's up?", "Yusuf")).isTrue()
+        assertThat(MessageBody.namesAnotherApp("message Sam on Telegram I'm late", "I'm late", "Sam")).isTrue()
+        assertThat(MessageBody.namesAnotherApp("email Margaret", "", "Margaret")).isTrue()
+        // Said inside the message itself, it is just a word.
+        assertThat(
+            MessageBody.namesAnotherApp("text Sam the signal is bad here", "The signal is bad here.", "Sam"),
+        ).isFalse()
+        assertThat(MessageBody.namesAnotherApp("text Sam I sent you an email", "I sent you an email", "Sam")).isFalse()
+        assertThat(MessageBody.namesAnotherApp("text Sam I'm late", "I'm late", "Sam")).isFalse()
+    }
+
+    @Test
     fun aShortWordIsNotFoundInsideALongerOne() {
         // "ok" is inside "okay", and "in" inside "running": neither was said.
         assertThat(MessageBody.isTraceable("okay text Dad please", "ok", "Dad")).isFalse()
