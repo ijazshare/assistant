@@ -28,10 +28,17 @@ airplane mode changes nothing.
   the screen and notifications, tapping and scrolling through the accessibility service.
 - **Contacts are matched, not guessed.** A spoken name must match whole words of a contact's
   display name; "me" goes only to the number you save on the Context screen (YOUR NUMBER),
-  never to whichever contact the provider fuzzily returned. Not found beats wrong person.
-- **Answers only what it can know.** General knowledge, definitions and arithmetic in one
-  sentence; live data (weather, prices, scores, counts) gets a plain "I can't know that
-  offline". An answer never claims to have sent, called or set anything.
+  never to whichever contact the provider fuzzily returned. Not found beats wrong person. When
+  no name matches, a contact whose notes have a line that is exactly the word said is used: tag
+  a contact "Assistant" and "text my assistant" reaches it.
+- **Only what you said.** A text's words are yours, taken from what you said after the name;
+  the model's version is thrown away, and when it cannot tell where your message starts it
+  asks. A number is texted or called only if its digits were said, it taps only words you said,
+  a timer needs its length said, and "navigate" goes only where it was told.
+- **Answers only what it can know.** General knowledge and definitions in one sentence; a
+  sentence that is nothing but a sum is worked out exactly in code, before any model; live data
+  (weather, prices, scores, counts) gets a plain "I can't know that offline". An answer never
+  claims to have sent, called or set anything.
 - **Everything is testable over adb without speaking.** Instrumented probes drive the real
   models and log to logcat: `RoutingBenchmarkTest` (tag `BENCH`, 57 typed commands),
   `AnswerHonestyTest` (`HONEST`), and `PipelineProbeTest` (`PIPE`) with `-e runcmd "<text>"`,
@@ -60,8 +67,9 @@ What it does today:
   the Context screen. A task with a due time fires an exact-alarm notification with *Done*
   and *Snooze 10 min* actions, and survives a reboot.
 - **Messages, calls and apps.** Text or call a contact, open an app. A name that matches
-  several contacts shows a selector. "Text Sam" with no message asks "What should I say to
-  Sam?" and your next dictation is the message.
+  several contacts shows a selector. "Text Sam I'm running late" sends "I'm running late";
+  "Text Sam" with no message asks "What should I say to Sam?" and your next dictation is the
+  message.
 - **Screen and notifications.** Read what is on screen (from the accessibility tree, or by
   OCR when it has little or no text), tap, scroll, go back, take a screenshot, and read your
   notifications.
@@ -72,7 +80,8 @@ What it does today:
 - **No telemetry.** No analytics, no crash reporting, no ad SDK, no account.
 
 Out of scope for now (and not accidentally, see `CLAUDE.md`): wake word, multi-turn chat,
-multilingual recognition, and user-defined automations.
+multilingual recognition, and user-defined automations. Next up: optional Home Assistant
+control (see [PROGRESS.md](PROGRESS.md)).
 
 ## Requirements
 

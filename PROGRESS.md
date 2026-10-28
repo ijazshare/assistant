@@ -3,7 +3,7 @@
 Running record of the build. Written so a future session can resume cold: what is done, what
 was decided and why, and which facts were verified against a live source rather than assumed.
 
-**Last updated:** 2026-10-27
+**Last updated:** 2026-10-28
 
 Everything below the "Since September" section is the log as written; numbers and decisions
 in it are dated and some have since been superseded (the tool count is 15, not 14; the router
@@ -76,11 +76,25 @@ Summarised from `git log --since=2026-09-03`.
   request on ("Text Sam back", "Text Sam on WhatsApp ...", which is declined). That removed the
   invented-body and echo checks (`isTraceable`, `isEchoed`) rather than adding to them. The body
   stays in the model's grammar and example: taken out, the 1B put the date in as the recipient of
-  "Text me, I'm testing" on the phone, so the prompt is unchanged and routing with it.
+  "Text me, I'm testing" on the phone, so the prompt is unchanged and routing with it (53/57 on
+  the phone, the same as before). "Let me know when you're free" is a message; "tell him ..."
+  is the request going on, and asks.
 - **Audit cleanup (27 Oct).** A read-only over-engineering audit, each cut checked twice,
   removed about 1,100 lines net: dead code, no-op UI left from the redesign, unused
   dependencies, the experimental FunctionGemma path with its prompt-dialect layer, and Hilt
   (nothing was injected). The routing prompt, grammar and stop marker are byte-for-byte unchanged.
+
+## Next
+
+- **Home Assistant is the next integration (owner's choice, 28 Oct).** Not started. The owner's
+  terms: it lives in this app on the phone, not as an add-on on the Home Assistant server, and
+  it has to be airtight. Proposed, not yet agreed: opt-in and off by default; the exact words go
+  to Home Assistant's Assist, through the Home Assistant app on the phone if it accepts them
+  from other apps (to be checked), otherwise the Home Assistant API directly; only devices the
+  owner exposed to Assist, and a spoken confirmation for locks, the garage door and the alarm.
+  The words would leave the phone for the owner's own server, so the privacy invariants in
+  CLAUDE.md change with it, and only on the owner's say-so.
+- Later, also the owner's: "navigate to X" handed to Maps.
 
 ## Phase status
 
