@@ -7,7 +7,7 @@
 [versions]
 # ---- Build toolchain ----
 agp = "9.4.0"
-kotlin = "2.4.10"
+kotlin = "2.4.21"
 
 # ---- Android platform ----
 # API 37 = Android 17. AGP 9.4.0 caps out at API 37, so this is the ceiling.
@@ -26,7 +26,7 @@ cmake = "3.31.6"
 
 # ---- Kotlin ecosystem ----
 coroutines = "1.11.0"
-serializationJson = "1.11.0"
+serializationJson = "1.12.0"
 
 # ---- AndroidX / Jetpack ----
 composeBom = "2026.08.00"
