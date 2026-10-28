@@ -54,10 +54,11 @@ internal object TimeExpressions {
             Expression(Kind.LENGTH, minutes.roundToInt()) to next
         }
 
-        // "For 2 hours" is how long, not when, except straight after "reminder" or "alarm":
-        // "a reminder for 5 minutes" is five minutes from now.
+        // "For 2 hours" is how long, not when, except in the request itself: after "remind",
+        // "reminder" or "alarm" and before any "to" that starts the task, "a reminder for 5
+        // minutes" is five minutes from now, and "remind me to study for 2 hours" is not.
         words[at] == "for" && durationAt(words, at + 1) != null ->
-            durationAt(words, at + 1)?.takeIf { words.getOrNull(at - 1) in TIMED }
+            durationAt(words, at + 1)?.takeIf { words.take(at).let { it.any(TIMED::contains) && "to" !in it } }
                 ?.let { (minutes, next) -> Expression(Kind.LENGTH, minutes.roundToInt()) to next }
 
         // A clock time, after an at or for or bare: "3 pm", "7 o'clock".
@@ -199,7 +200,7 @@ internal object TimeExpressions {
 
     private val DECIMAL_BREAK = Regex("""[^a-z0-9.]+""")
     val MERIDIEMS = setOf("am", "pm")
-    private val TIMED = setOf("reminder", "alarm")
+    private val TIMED = setOf("remind", "reminder", "reminders", "alarm", "alarms")
     private val NOONS = setOf("noon", "midday")
     private val TWELVES = setOf("twelve", "12")
     private val OHS = setOf("oh", "o")

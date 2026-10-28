@@ -75,7 +75,22 @@ class MessageBodyTest {
         assertThat(MessageBody.namesAnotherApp("WhatsApp Yusuf", "What's up?", "Yusuf")).isTrue()
         assertThat(MessageBody.namesAnotherApp("message Sam on Telegram I'm late", "I'm late", "Sam")).isTrue()
         assertThat(MessageBody.namesAnotherApp("email Margaret", "", "Margaret")).isTrue()
+        // As Whisper spells them, echoed back as the body, or named twice.
+        assertThat(
+            MessageBody.namesAnotherApp("Send a what's app message to Sam", "Send a what's app message to Sam", "Sam"),
+        ).isTrue()
+        assertThat(MessageBody.namesAnotherApp("e-mail Margaret", "", "Margaret")).isTrue()
+        assertThat(MessageBody.namesAnotherApp("message Sam on Telegram", "message Sam on Telegram", "Sam")).isTrue()
+        assertThat(MessageBody.namesAnotherApp("message Sam on messenger", "message Sam on messenger", "Sam")).isTrue()
+        assertThat(
+            MessageBody.namesAnotherApp(
+                "WhatsApp Yusuf the whatsapp group is dead",
+                "the whatsapp group is dead",
+                "Yusuf",
+            ),
+        ).isTrue()
         // Said inside the message itself, it is just a word.
+        assertThat(MessageBody.namesAnotherApp("text Sam check your email", "check your email", "Sam")).isFalse()
         assertThat(
             MessageBody.namesAnotherApp("text Sam the signal is bad here", "The signal is bad here.", "Sam"),
         ).isFalse()

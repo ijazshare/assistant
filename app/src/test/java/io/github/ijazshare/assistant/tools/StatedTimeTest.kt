@@ -273,8 +273,11 @@ class StatedTimeTest {
         assertThat(spoken("reminder for five minutes", hour = 21, minute = 0)).isEqualTo(StatedTime.At(9, 9, false))
         assertThat(spoken("Set a reminder for 5 minutes", hour = 21, minute = 0)).isEqualTo(StatedTime.At(9, 9, false))
         assertThat(spoken("set an alarm for 10 minutes")).isEqualTo(StatedTime.At(9, 14, false))
+        assertThat(spoken("set a reminder for me for 5 minutes")).isEqualTo(StatedTime.At(9, 9, false))
+        assertThat(TimeExpressions.of("remind me for 5 minutes")).hasSize(1)
         // After a task it is still how long: "to study for 2 hours" has no time of its own.
         assertThat(TimeExpressions.of("remind me to study for 2 hours")).isEmpty()
+        assertThat(TimeExpressions.of("remind me to turn off the alarm for 10 minutes")).isEmpty()
     }
 
     @Test
@@ -282,6 +285,10 @@ class StatedTimeTest {
         assertThat(StatedTime.isUntitled("five minutes")).isTrue()
         assertThat(StatedTime.isUntitled("set a reminder")).isTrue()
         assertThat(StatedTime.isUntitled("Set a reminder for 5 minutes")).isTrue()
+        assertThat(StatedTime.isUntitled("set a reminder half past three")).isTrue()
+        assertThat(StatedTime.isUntitled("a reminder at midnight")).isTrue()
+        assertThat(StatedTime.isUntitled("tomorrow morning")).isTrue()
+        assertThat(StatedTime.isUntitled("set the timer")).isFalse()
         assertThat(StatedTime.isUntitled("take a nap")).isFalse()
         assertThat(StatedTime.isUntitled("call Mom at 5")).isFalse()
     }

@@ -42,11 +42,18 @@ object MessageBody {
     )
 
     /** Apps a message could be meant for other than SMS, which is all this can send. */
-    private val OTHER_APPS = setOf("signal", "whatsapp", "telegram", "email", "emails")
+    private val OTHER_APPS = setOf(
+        "signal", "whatsapp", "telegram", "email", "emails", "mail", "gmail", "messenger", "facebook",
+        "instagram", "discord", "slack", "viber",
+    )
+
+    // Whisper writes the app as two words ("what's app"), and "e-mail" splits in two.
+    private val WHATS_APP = Regex("""\bwhat['’]?s ?app\b""")
+    private val E_MAIL = Regex("""\be[- ]mail""")
 
     /** The verbs that open a request to send: what is said after them is the request, not a message. */
     private val REQUEST_VERBS = setOf(
-        "send", "text", "message", "sms", "email", "whatsapp", "signal", "telegram", "dm", "msg", "txt",
+        "send", "text", "message", "sms", "email", "mail", "whatsapp", "signal", "telegram", "dm", "msg", "txt",
         "ping", "tell", "write", "reply",
     )
 
@@ -59,7 +66,8 @@ object MessageBody {
         "now", "please", "ok", "okay", "then", "and", "can", "could", "you", "just", "go", "ahead",
         "it", "that", "this", "a", "an", "the", "to", "him", "her", "them", "over", "off", "again",
         "message", "messages", "text", "texts", "sms", "email", "whatsapp", "signal", "telegram", "dm",
-        "msg", "txt", "quick", "quickly", "real", "right", "hey", "for", "up",
+        "msg", "txt", "quick", "quickly", "real", "right", "hey", "for", "up", "on", "via", "using", "through",
+        "mail", "gmail", "messenger", "facebook", "instagram", "discord", "slack", "viber",
     )
 
     /**
@@ -89,10 +97,17 @@ object MessageBody {
      * does not count, unless the body is only the request echoed back.
      */
     fun namesAnotherApp(transcript: String, body: String, recipient: String = ""): Boolean {
-        val echoed = body.isBlank() || isRequest(body, recipient)
-        val dictated = if (echoed) emptySet() else body.lowercase().split(WORD).toSet()
-        return transcript.lowercase().split(WORD).any { it in OTHER_APPS && it !in dictated }
+        val echoed = body.isBlank() || isRequest(spelledOut(body), recipient)
+        val dictated = if (echoed) emptyList() else appsIn(body)
+        // Counted, not looked up: "WhatsApp Yusuf the whatsapp group is dead" names it twice, once as the app.
+        return appsIn(transcript).groupingBy {
+            it
+        }.eachCount().any { (app, said) -> said > dictated.count { it == app } }
     }
+
+    private fun spelledOut(text: String) = text.lowercase().replace(WHATS_APP, "whatsapp").replace(E_MAIL, "email")
+
+    private fun appsIn(text: String) = spelledOut(text).split(WORD).filter { it in OTHER_APPS }
 
     /**
      * True if [body] looks like something the user actually said in [transcript] when

@@ -52,6 +52,7 @@ import io.github.ijazshare.assistant.tools.ContactResolution
 import io.github.ijazshare.assistant.tools.MessageBody
 import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.StatedTime
+import io.github.ijazshare.assistant.tools.TimeExpressions
 import io.github.ijazshare.assistant.tools.TimeResolver
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
@@ -623,9 +624,20 @@ class VoiceSession(private val context: Context, private val scope: CoroutineSco
 
         if (call.tool == AssistantTools.SEND_MESSAGE) return checkedMessage(transcript, call)
         if (call.tool == AssistantTools.SET_ALARM || call.tool == AssistantTools.CREATE_REMINDER) {
-            return withSpokenTime(transcript, call)
+            return withSpokenTime(transcript, withoutInventedTime(transcript, call))
         }
         return call
+    }
+
+    /**
+     * A reminder with neither a task nor a time said is the model's invention twice over: "set
+     * a reminder" came back as one for 9 PM tomorrow. Its time goes, so the executor asks what
+     * the reminder is for.
+     */
+    private fun withoutInventedTime(transcript: String, call: ToolCall): ToolCall {
+        val invented = call.tool == AssistantTools.CREATE_REMINDER &&
+            TimeExpressions.of(transcript).isEmpty() && StatedTime.isUntitled(call.arguments["task"].orEmpty())
+        return if (invented) call.copy(arguments = call.arguments - "hour" - "minute") else call
     }
 
     /**

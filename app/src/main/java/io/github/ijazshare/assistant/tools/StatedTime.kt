@@ -57,6 +57,9 @@ object StatedTime {
         "set", "add", "make", "create", "new", "a", "an", "the", "reminder", "remind", "me", "for", "in", "at",
         "to", "please", "can", "could", "you", "and", "half", "quarter", "minute", "minutes", "min", "mins",
         "hour", "hours", "hr", "hrs", "from", "now", "today", "tonight", "tomorrow", "am", "pm", "o", "clock",
+        "oh", "past", "after", "till", "til", "until", "by", "morning", "afternoon", "evening", "night", "noon",
+        "midday", "midnight", "next", "this", "later", "second", "seconds", "sec", "secs", "sixty", "seventy",
+        "eighty", "ninety", "hundred",
     )
     private const val HALF_MINUTE_SECONDS = 30L
     private const val MAX_RELATIVE_MINUTES = 24 * 60
