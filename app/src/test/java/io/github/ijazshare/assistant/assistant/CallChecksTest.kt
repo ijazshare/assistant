@@ -65,6 +65,17 @@ class CallChecksTest {
     }
 
     @Test
+    fun `an app named after the contact is still declined`() {
+        listOf("Send Sam a message on WhatsApp saying hi", "Text Sam on what's app that I'm late").forEach {
+            val call = ToolCall(AssistantTools.SEND_MESSAGE, mapOf("recipient" to "Sam"))
+
+            val checked = CallChecks.reconciled(it, CallChecks.withMessageFromWords(it, call))
+
+            assertThat(checked.tool).isEqualTo(AssistantTools.UNSUPPORTED)
+        }
+    }
+
+    @Test
     fun `a message body is set from the words said, not the model's`() {
         val transcript = "Text Sam I'm running late"
         val call = ToolCall(AssistantTools.SEND_MESSAGE, mapOf("recipient" to "Sam", "body" to "hello how are you"))

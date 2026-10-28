@@ -162,8 +162,8 @@ class ToolExecutor(
         // Contacts queries are off the main thread, where they stalled the overlay.
         val number = withContext(Dispatchers.IO) { contacts.resolveNumber(recipient) }
             ?: return ToolResult.failed("I could not find $label.")
-        // A blank body reaches here when the session dropped an invented one: ask for the
-        // words rather than send something the user never said.
+        // A blank body reaches here when no message could be told apart from the request ("Text
+        // Sam", "Text Sam back"): ask for the words rather than guess them.
         val body = call.string("body")?.takeIf { it.isNotBlank() }
             ?: return ToolResult.failed("What should I say to $label?")
 

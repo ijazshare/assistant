@@ -133,6 +133,49 @@ class MessageBodyTest {
     }
 
     @Test
+    fun `the ways of saying a text that says`() {
+        listOf(
+            "Send Sam a text that says I'm running late",
+            "Send a text to Sam that says I'm running late",
+            "Send Sam a text message saying I'm running late",
+            "Send a message to Sam saying that I'm running late",
+            "Text Sam to say I'm running late",
+            "Text Sam - I'm running late",
+        ).forEach { assertThat(MessageBody.fromWords(it, "Sam")).isEqualTo("I'm running late") }
+        // "On my way" is a message, "on WhatsApp" the request; a pause before a capital is not a surname.
+        assertThat(MessageBody.fromWords("Text Sam on my way", "Sam")).isEqualTo("On my way")
+        assertThat(MessageBody.fromWords("Text Sam. Happy birthday!", "Sam")).isEqualTo("Happy birthday!")
+    }
+
+    @Test
+    fun `the request going on past the name gives null`() {
+        listOf(
+            // An app after the name, which the other-app check would take as dictated.
+            "Send Sam a message on WhatsApp saying hi",
+            "Send Sam a WhatsApp saying hi",
+            "Text Sam on Signal that I'm late",
+            "Text Sam on what's app that I'm late",
+            "Send Sam an email saying hi",
+            "Text Sam via WhatsApp hi",
+            // Words that are the request, not a message.
+            "Text Sam back",
+            "Text Sam back please",
+            "Text Sam again",
+            "Text Sam as well",
+            "Text Sam something",
+            "Text Sam and tell him I'm running late",
+            "Text Sam and Ali I'm late",
+            "Text Sam asking if he wants pizza",
+            "Text Sam about dinner tonight",
+            "Text Sam real quick that I'm late",
+            "Send Sam a text that says that I'm late",
+            // A name the model cut short: "Lee" would be sent.
+            "Text Sam Lee I'm running late",
+        ).forEach { assertThat(MessageBody.fromWords(it, "Sam")).isNull() }
+        assertThat(MessageBody.fromWords("Text my sister Sara I'm late", "my sister")).isNull()
+    }
+
+    @Test
     fun `anything but the plain shape gives null`() {
         assertThat(MessageBody.fromWords("Let Sam know I'm late", "Sam")).isNull()
         assertThat(MessageBody.fromWords("Sam I'm late", "Sam")).isNull()

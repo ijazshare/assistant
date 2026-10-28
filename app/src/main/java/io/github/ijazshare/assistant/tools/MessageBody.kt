@@ -30,8 +30,8 @@ object MessageBody {
     )
 
     // Whisper writes the app as two words ("what's app"), and "e-mail" splits in two.
-    private val WHATS_APP = Regex("""\bwhat['’]?s ?app\b""")
-    private val E_MAIL = Regex("""\be[- ]mail""")
+    private val WHATS_APP = Regex("""\bwhat['’]?s ?app\b""", RegexOption.IGNORE_CASE)
+    private val E_MAIL = Regex("""\be[- ]mail""", RegexOption.IGNORE_CASE)
 
     /** The verbs that open a request to send: what is said after them is the request, not a message. */
     private val REQUEST_VERBS = setOf(
@@ -97,12 +97,39 @@ object MessageBody {
         "for", "me",
     )
 
-    /** What may come between the recipient and the words: "a text", "a quick message". */
+    /** What may come between the recipient and the words: "a text", "a quick message", "a text message". */
     private val MESSAGE_NOUNS = setOf("text", "message", "sms", "msg", "note")
     private val ARTICLES = setOf("a", "an")
 
-    /** The one word that may introduce the words themselves: "text Sam that ...", "tell Sam to ...". */
-    private val JOINERS = setOf("that", "saying", "say", "to")
+    /** What may introduce the words themselves, longest first: "a text that says ...", "tell Sam to ...". */
+    private val JOINERS = listOf(
+        "to say that",
+        "saying that",
+        "that says",
+        "which says",
+        "to say",
+        "that",
+        "saying",
+        "to",
+    )
+        .map { it.split(" ") }
+
+    /**
+     * Words that carry the request on past the name, so what follows is not yet the message: "back",
+     * "again", "and tell him", "about dinner", "asking if", "a WhatsApp", "that says that". A message
+     * that opens with one ("Let me know") is asked for, never guessed at.
+     */
+    private val CARRIES_ON = setOf(
+        "a", "an", "and", "or", "then", "also", "too", "as", "back", "again", "about", "asking", "telling",
+        "something", "if", "whether", "that", "to", "say", "says", "said", "saying", "ask", "let", "for",
+        "later", "tomorrow", "tonight", "real", "quick", "quickly",
+    ) + REQUEST_VERBS + MESSAGE_NOUNS + OTHER_APPS
+
+    /** Words that put an app next, "on WhatsApp", "via his Signal": the request, not the message. */
+    private val BY_WAY_OF = setOf("on", "over", "in", "with", "via", "using", "through", "by")
+
+    /** "I", "I'm", "I'll": the capital letters that do not carry a name on. */
+    private val I_FORM = Regex("i(['’]\\p{L}+)?")
 
     /** What may stand before the recipient: the request, and "my" as in "text my wife". */
     private val BEFORE_RECIPIENT = REQUEST_WORDS + REQUEST_VERBS + "my"
@@ -114,23 +141,32 @@ object MessageBody {
      * asks what to say.
      *
      * Safe by construction: it acts only on the plain shape, a request, the recipient, an
-     * optional "a text" and one of "that", "saying", "say", "to", then the words. "Text Sam I'm
-     * late", "Send a message to Sam saying hi" and "Tell Sam to call me" give the words after the
-     * name; "Let Sam know I'm late" and "Sam I'm late" are not that shape and give null, as does a
-     * request with nothing after the name or only politeness ("Text Sam please").
+     * optional "a text", an optional "that", "saying", "to say" or "that says", then the words.
+     * "Text Sam I'm late", "Send Sam a text that says hi" and "Tell Sam to call me" give the words
+     * after the name. Anything else gives null: "Let Sam know I'm late" and "Sam I'm late" are not
+     * that shape, "Text Sam back", "Text Sam on WhatsApp ..." and "Text Sam and tell him ..." carry
+     * the request on past the name, "Text Sam Lee ..." carries on a name the model cut short, and
+     * "Text Sam please" has nothing after the name but politeness.
      */
     fun fromWords(transcript: String, recipient: String): String? {
-        val tokens = transcript.trim().split(SPACES).filter { it.isNotEmpty() }
+        // One spelling of each app, and no lone punctuation ("-"), which would hide the first word from the checks.
+        val tokens = transcript.replace(WHATS_APP, "WhatsApp").replace(E_MAIL, "email").trim().split(SPACES)
+            .filter { token -> token.any(Char::isLetterOrDigit) }
         val said = tokens.map(::bare)
         val run = recipientRun(said, recipient) ?: return null
         // Before the recipient only the request may stand, and it needs a verb: "Can you text my ...".
         val before = said.subList(0, run.first)
-        if (before.none { it in REQUEST_VERBS } || before.any { it !in BEFORE_RECIPIENT }) return null
-        val noun = afterMessageNoun(said, run.last + 1)
-        // Past one optional "that", "saying", "say" or "to".
-        val from = if (said.getOrNull(noun) in JOINERS) noun + 1 else noun
-        val rest = said.drop(from).filter { it.isNotEmpty() }
-        if (rest.isEmpty() || rest.all { it in POLITENESS }) return null
+        val asked = before.any { it in REQUEST_VERBS } && before.all { it in BEFORE_RECIPIENT }
+        // A capital straight after the name carries the name on, unless it is "I" or a pause came
+        // between ("Sam. Running late").
+        val next = tokens.getOrNull(run.last + 1)
+        val nameGoesOn = next != null && tokens[run.last].last().isLetterOrDigit() &&
+            next.first(Char::isLetterOrDigit).isUpperCase() && !I_FORM.matches(bare(next))
+        if (!asked || nameGoesOn) return null
+        val from = messageStart(said, run.last + 1)
+        val opening = said.drop(from)
+        val byApp = opening.firstOrNull() in BY_WAY_OF && opening.drop(1).take(2).any { it in OTHER_APPS }
+        if (opening.firstOrNull() in CARRIES_ON || byApp || opening.all { it in POLITENESS }) return null
         return tokens.drop(from).joinToString(" ").replaceFirstChar { it.uppercaseChar() }
     }
 
@@ -172,10 +208,15 @@ object MessageBody {
         return null
     }
 
-    /** Past an optional "a text", "an sms", "a quick message". */
-    private fun afterMessageNoun(said: List<String>, from: Int): Int {
-        if (said.getOrNull(from) !in ARTICLES) return from
-        val noun = if (said.getOrNull(from + 1) == "quick") from + 2 else from + 1
-        return if (said.getOrNull(noun) in MESSAGE_NOUNS) noun + 1 else from
+    /** Where the words start: past an optional "a text", "a quick message" or "a text message", then a joiner. */
+    private fun messageStart(said: List<String>, from: Int): Int {
+        var at = from
+        if (said.getOrNull(at) in ARTICLES) {
+            val noun = if (said.getOrNull(at + 1) == "quick") at + 2 else at + 1
+            val nouns = said.drop(noun).takeWhile { it in MESSAGE_NOUNS }.size
+            if (nouns > 0) at = noun + nouns
+        }
+        val joiner = JOINERS.firstOrNull { said.drop(at).take(it.size) == it }
+        return at + (joiner?.size ?: 0)
     }
 }

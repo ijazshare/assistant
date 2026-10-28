@@ -88,9 +88,10 @@ object PromptBuilder {
         // send_message rather than a second set_alarm example. set_alarm is the tool the
         // model over-predicts when the prompt tips — it needs the least help — and the
         // prompt has no room to grow without every reply collapsing to the first example.
-        // So this buys the messaging shape (verb "text", recipient then body) at no extra
-        // length. "text Hassan saying hello" had gone to answer, "text mum I will be late"
-        // to set_alarm. A distinct name and body, so the shape transfers, not the words.
+        // So this buys the messaging shape (verb "text", then the recipient; the message is taken
+        // from the words, never written by the model) at no extra length. "text Hassan saying hello"
+        // had gone to answer, "text mum I will be late" to set_alarm. A distinct name and message,
+        // so the shape transfers, not the words.
         appendLine(
             """text Sara I'll be late -> """ +
                 """{"tool":"send_message","arguments":{"recipient":"Sara"}}""",
