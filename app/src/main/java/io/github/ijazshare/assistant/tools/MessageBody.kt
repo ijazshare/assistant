@@ -117,13 +117,18 @@ object MessageBody {
     /**
      * Words that carry the request on past the name, so what follows is not yet the message: "back",
      * "again", "and tell him", "about dinner", "asking if", "a WhatsApp", "that says that". A message
-     * that opens with one ("Let me know") is asked for, never guessed at.
+     * that opens with one ("Back home now") is asked for, never guessed at.
      */
     private val CARRIES_ON = setOf(
         "a", "an", "and", "or", "then", "also", "too", "as", "back", "again", "about", "asking", "telling",
-        "something", "if", "whether", "that", "to", "say", "says", "said", "saying", "ask", "let", "for",
+        "something", "if", "whether", "that", "to", "say", "says", "said", "saying", "for",
         "later", "tomorrow", "tonight", "real", "quick", "quickly",
-    ) + REQUEST_VERBS + MESSAGE_NOUNS + OTHER_APPS
+    ) + (REQUEST_VERBS - "tell") + MESSAGE_NOUNS + OTHER_APPS
+
+    /** The request again, about the one being texted; "Let me know ..." and "Tell Ali ..." are messages. */
+    private val TELLING_THEM = setOf(
+        "tell him", "tell her", "tell them", "let him", "let her", "let them", "ask him", "ask her", "ask them",
+    )
 
     /** Words that put an app next, "on WhatsApp", "via his Signal": the request, not the message. */
     private val BY_WAY_OF = setOf("on", "over", "in", "with", "via", "using", "through", "by")
@@ -165,8 +170,9 @@ object MessageBody {
         if (!asked || nameGoesOn) return null
         val from = messageStart(said, run.last + 1)
         val opening = said.drop(from)
-        val byApp = opening.firstOrNull() in BY_WAY_OF && opening.drop(1).take(2).any { it in OTHER_APPS }
-        if (opening.firstOrNull() in CARRIES_ON || byApp || opening.all { it in POLITENESS }) return null
+        val carriesOn = opening.firstOrNull() in CARRIES_ON || opening.take(2).joinToString(" ") in TELLING_THEM ||
+            (opening.firstOrNull() in BY_WAY_OF && opening.drop(1).take(2).any { it in OTHER_APPS })
+        if (carriesOn || opening.all { it in POLITENESS }) return null
         return tokens.drop(from).joinToString(" ").replaceFirstChar { it.uppercaseChar() }
     }
 

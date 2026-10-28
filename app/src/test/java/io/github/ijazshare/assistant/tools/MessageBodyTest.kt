@@ -145,6 +145,10 @@ class MessageBodyTest {
         // "On my way" is a message, "on WhatsApp" the request; a pause before a capital is not a surname.
         assertThat(MessageBody.fromWords("Text Sam on my way", "Sam")).isEqualTo("On my way")
         assertThat(MessageBody.fromWords("Text Sam. Happy birthday!", "Sam")).isEqualTo("Happy birthday!")
+        // As tested on the phone; a request word with someone else after it is the message.
+        assertThat(MessageBody.fromWords("Text me, let me know when you're free", "me"))
+            .isEqualTo("Let me know when you're free")
+        assertThat(MessageBody.fromWords("Text Sam tell Ali I said hi", "Sam")).isEqualTo("Tell Ali I said hi")
     }
 
     @Test
@@ -164,6 +168,8 @@ class MessageBodyTest {
             "Text Sam as well",
             "Text Sam something",
             "Text Sam and tell him I'm running late",
+            "Text Sam tell him I'm on my way",
+            "Text Sam to let him know I'm late",
             "Text Sam and Ali I'm late",
             "Text Sam asking if he wants pizza",
             "Text Sam about dinner tonight",
