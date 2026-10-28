@@ -11,6 +11,7 @@ package io.github.ijazshare.assistant.tools
 
 import com.google.common.truth.Truth.assertThat
 import io.github.ijazshare.assistant.tools.HomeCommand.Ask
+import io.github.ijazshare.assistant.tools.HomeCommand.Run
 import io.github.ijazshare.assistant.tools.HomeCommand.Switch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -46,20 +47,31 @@ class HomeCommandTest {
     }
 
     @Test
+    fun anyOtherWordsNameAScript() {
+        assertThat(parse("Homie, pink fan medium")).isEqualTo(Run("pink fan medium"))
+        assertThat(parse("Homie, set fan medium please.")).isEqualTo(Run("set fan medium"))
+        assertThat(parse("Homie, the usual")).isEqualTo(Run("usual"))
+        assertThat(parse("Homie, lights off")).isEqualTo(Run("lights off"))
+        // Only a name: Home Assistant runs it only if the owner labelled a script called exactly that.
+        assertThat(parse("Homie, unlock the front door")).isEqualTo(Run("unlock the front door"))
+        // Never shortened to what was asked about, which could be a script's name.
+        assertThat(parse("Homie, status of the garage door")).isEqualTo(Run("status of the garage door"))
+    }
+
+    @Test
     fun anythingElseIsNotGuessedAt() {
-        assertThat(parse("Homie, lights off")).isNull()
         assertThat(parse("Homie, turn on")).isNull()
         assertThat(parse("Homie, turn on the")).isNull()
         assertThat(parse("Homie, turn the light")).isNull()
-        assertThat(parse("Homie, dim the kitchen light")).isNull()
-        assertThat(parse("Homie, unlock the front door")).isNull()
-        assertThat(parse("Homie, open the garage door")).isNull()
+        assertThat(parse("Homie, switch to the kitchen")).isNull()
         // Both ends name a state, so which one was meant is a guess.
         assertThat(parse("Homie, turn on the light off")).isNull()
         assertThat(parse("Homie, is the garage door")).isNull()
         assertThat(parse("Homie, is open")).isNull()
         assertThat(parse("Homie, what is")).isNull()
         assertThat(parse("Homie")).isNull()
+        assertThat(parse("Homie, the")).isNull()
+        assertThat(parse("Homie, please")).isNull()
     }
 
     @Test
@@ -87,6 +99,10 @@ class HomeCommandTest {
         val asked = Json.parseToJsonElement(Ask("garage door", "open").json("1")).jsonObject
         assertThat(asked.getValue("do").jsonPrimitive.content).isEqualTo("state")
         assertThat(asked.keys).containsExactly("do", "name", "id")
+        assertThat(
+            Json.parseToJsonElement(Run("pink fan medium").json("2")).jsonObject.getValue("do").jsonPrimitive.content,
+        )
+            .isEqualTo("run")
     }
 
     @Test
@@ -96,6 +112,7 @@ class HomeCommandTest {
             Switch("fan", on = false),
             Ask("garage door", "open"),
             Ask("thermostat"),
+            Run("pink fan medium"),
         )
             .forEach { assertThat(HomeCommand.of(it.toCall())).isEqualTo(it) }
         assertThat(HomeCommand.of(ToolCall(AssistantTools.HOME, emptyMap()))).isNull()
@@ -114,6 +131,11 @@ class HomeCommandTest {
         assertThat(on.said(null).spoken).contains("do not know if that worked")
         // Anything but the agreed words is not a yes.
         assertThat(on.said(mapOf("status" to "")).success).isFalse()
+        val medium = Run("pink fan medium")
+        assertThat(medium.said(mapOf("status" to "done"))).isEqualTo(ToolResult.ok("Started pink fan medium."))
+        assertThat(medium.said(mapOf("status" to "refused")).spoken).contains("no script called pink fan medium")
+        assertThat(medium.said(mapOf("status" to "ambiguous")).spoken).contains("more than one pink fan medium")
+        assertThat(medium.said(null).spoken).contains("do not know if that worked")
     }
 
     @Test

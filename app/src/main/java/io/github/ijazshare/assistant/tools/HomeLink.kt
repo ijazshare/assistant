@@ -25,7 +25,7 @@ import java.security.SecureRandom
  *
  * Assistant itself never goes online for this. The HA app's share screen fires a `mobile_app.share`
  * event on the owner's server over the connection that app already keeps, at home or away. The owner's
- * automation there checks the key, acts on or reads the one labelled device the name matches, and
+ * automation there checks the key, acts on, reads or runs the one labelled thing the name matches, and
  * answers with the HA app's `command_broadcast_intent`, which arrives here as [ACTION_REPLY].
  */
 class HomeLink(private val context: Context) {
@@ -38,7 +38,7 @@ class HomeLink(private val context: Context) {
         if (command == null || key == null) {
             val trigger = settings.homeTriggerNow()
             return ToolResult.failed(
-                "I can switch things on or off, or tell you how they are. " +
+                "I can switch things on or off, tell you how they are, or run a script you named. " +
                     "Say: $trigger, turn off the kitchen light. Or: $trigger, is the garage door open?",
             )
         }

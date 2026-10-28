@@ -77,9 +77,10 @@ What it does today:
   notifications.
 - **Questions.** The small model decides a request is a question; a larger on-device model
   (or a remote one you configure) answers in a sentence.
-- **Home Assistant (optional, off by default).** "Homie, turn off the kitchen light" and
-  "Homie, is the garage door open?" go through the Home Assistant app on your phone to your own
-  Home Assistant, which acts only on the devices you labelled. See
+- **Home Assistant (optional, off by default).** "Homie, turn off the kitchen light",
+  "Homie, is the garage door open?" and your own phrases ("Homie, pink fan medium" runs the
+  script you named that) go through the Home Assistant app on your phone to your own Home
+  Assistant, which acts only on the devices and scripts you labelled. See
   [Home Assistant](#home-assistant).
 - **Learned phrases.** A phrase whose meaning is fixed is learned on first success and runs
   without the model afterwards.
@@ -133,7 +134,7 @@ These are enforced, not just promised:
 - When a command needs another app on the phone (the clock, calls and texts, or the Home
   Assistant link if you turn it on), Assistant hands it only what that command needs, never
   audio. What that app does next is covered by its own privacy policy. The Home Assistant link
-  hands the Home Assistant app a short command (on, off or "state", and the device's name) with
+  hands the Home Assistant app a short command (on, off, "state" or "run", and the name) with
   your key; Assistant opens no connection for it.
 - Audio is never transmitted, with or without the remote model. Release builds process it
   in memory only. Debug builds, for now, also keep the last 500 recordings on the device
@@ -159,10 +160,17 @@ accident):
   fans labelled `assistant` only, on or off only.
 - "Homie, is the garage door open?", "Homie, is the front door locked?", "Homie, what's the
   thermostat set to?". Anything labelled `assistant` or `assistant_read`.
+- Your own phrases: any other words run the script labelled `assistant` with exactly that
+  name. Name a script "Pink fan medium" and "Homie, pink fan medium" runs it; want a second
+  way to say it, make a second script that runs the first. A script can do anything and
+  nobody asks "are you sure?", so never label one that unlocks or opens something.
 
-The name must be the device's name in Home Assistant, said exactly (case and punctuation
-don't matter). Nothing is guessed: no match, or two devices with the same name, and nothing
-happens. Assistant says "done" only when Home Assistant saw the new state.
+The name must be the device's or script's name in Home Assistant, said exactly (case,
+punctuation and a leading "the" don't matter). Nothing is guessed: no match, or two with the
+same name, and nothing happens. Home Assistant's own aliases aren't used, since an automation
+can't read them; rename the entity instead (its entity id, and your automations, stay as they
+are). Assistant says a device is on or off only when Home Assistant saw the new state, and
+that a script started, since Home Assistant runs it on its own.
 
 Setup:
 
@@ -187,7 +195,8 @@ alias: Assistant commands
 description: >-
   Commands from Assistant on the phone, through the Home Assistant app. Runs only for
   Assistant's key and this phone's user. Switches only lights, switches and fans labelled
-  "assistant"; tells the state of anything labelled "assistant" or "assistant_read".
+  "assistant", and runs scripts labelled "assistant" by their name; tells the state of anything
+  labelled "assistant" or "assistant_read".
 mode: queued
 triggers:
   - trigger: event
@@ -209,6 +218,15 @@ variables:
     {%- set ns = namespace(ids=[]) -%}
     {%- for e in label_entities('assistant')
         if e.split('.')[0] in ['light', 'switch', 'fan']
+        and (state_attr(e, 'friendly_name') or '') | lower | regex_replace('[^a-z0-9]+', ' ') | trim
+            | regex_replace('^(the|my) ', '') == wanted | string -%}
+      {%- set ns.ids = ns.ids + [e] -%}
+    {%- endfor -%}
+    {{ ns.ids }}
+  runnable: >-
+    {%- set ns = namespace(ids=[]) -%}
+    {%- for e in label_entities('assistant')
+        if e.split('.')[0] == 'script'
         and (state_attr(e, 'friendly_name') or '') | lower | regex_replace('[^a-z0-9]+', ' ') | trim
             | regex_replace('^(the|my) ', '') == wanted | string -%}
       {%- set ns.ids = ns.ids + [e] -%}
@@ -274,10 +292,27 @@ actions:
                 intent_extras: "id:{{ reply_id }}:String.urlencoded,status:{{ 'done' if wait.completed else 'unsure' }}:String"
                 ttl: 10000
                 priority: high
+      - alias: Run it
+        conditions: "{{ ok and want == 'run' and runnable | count == 1 }}"
+        sequence:
+          # Starts the script and goes on, so a long one never holds up the next command.
+          - action: script.turn_on
+            target:
+              entity_id: "{{ runnable[0] }}"
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "id:{{ reply_id }}:String.urlencoded,status:done:String"
+                ttl: 10000
+                priority: high
       - alias: More than one has that name
         conditions: >-
           {{ ok and ((want == 'state' and readable | count > 1)
-                     or (want in ['turn_on', 'turn_off'] and switchable | count > 1)) }}
+                     or (want in ['turn_on', 'turn_off'] and switchable | count > 1)
+                     or (want == 'run' and runnable | count > 1)) }}
         sequence:
           - action: "{{ phone }}"
             data:
