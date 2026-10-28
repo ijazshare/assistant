@@ -63,7 +63,11 @@ object ContactMatch {
         return tag.isNotEmpty() && note.lines().any { it.trim().lowercase() == tag }
     }
 
-    /** Names for the user themselves, which must resolve to their own number, not a contact. */
+    /**
+     * Names for the user themselves, which must resolve to their own number, not a contact. Read
+     * as words, so the model's "Me." is still the owner and never a contact with "me" in its name.
+     */
     fun isSelf(spoken: String): Boolean =
-        spoken.lowercase().trim() in setOf("me", "myself", "my number", "my phone", "my cell")
+        spoken.lowercase().split(SEP).filter { it.isNotEmpty() }.joinToString(" ") in
+            setOf("me", "myself", "my number", "my phone", "my cell")
 }

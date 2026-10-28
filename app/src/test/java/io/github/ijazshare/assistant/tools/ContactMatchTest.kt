@@ -57,7 +57,10 @@ class ContactMatchTest {
     fun treatsMeAsSelf() {
         assertThat(ContactMatch.isSelf("me")).isTrue()
         assertThat(ContactMatch.isSelf("Myself")).isTrue()
+        assertThat(ContactMatch.isSelf("Me.")).isTrue()
+        assertThat(ContactMatch.isSelf("my  phone")).isTrue()
         assertThat(ContactMatch.isSelf("mum")).isFalse()
+        assertThat(ContactMatch.isSelf("Meera")).isFalse()
     }
 
     @Test

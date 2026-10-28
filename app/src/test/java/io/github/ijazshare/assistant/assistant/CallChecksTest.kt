@@ -158,7 +158,12 @@ class CallChecksTest {
     @Test
     fun `the owner's own number is never called`() {
         // The first rang the owner's own phone on 28 Oct.
-        listOf("Tell me to call me back" to "me", "Call me back." to "me", "Ring my phone" to "my phone").forEach {
+        listOf(
+            "Tell me to call me back" to "me",
+            "Call me back." to "me",
+            "Call me." to "Me.",
+            "Ring my phone" to "my phone",
+        ).forEach {
             val call = ToolCall(AssistantTools.CALL_CONTACT, mapOf("recipient" to it.second))
 
             val checked = CallChecks.reconciled(it.first, call)

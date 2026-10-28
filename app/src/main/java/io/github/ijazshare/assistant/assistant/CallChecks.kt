@@ -99,7 +99,7 @@ internal object CallChecks {
      * A call rings at once and cannot be taken back, and the model calls whoever is named near a
      * "call": "Tell me to call me back" rang the owner's own phone, and "Text Sam to call me"
      * came back as a call to Sam. So a call is placed only when the whole sentence is a request
-     * for one ([CALL_ASKED]), and never to the owner's own number; anything else is declined,
+     * for one ([CALL_ASKED]), and never to "me", the owner's own number; anything else is declined,
      * never made a text. A contact the session chose from a list comes with its name, and its
      * command was checked before the list was shown.
      */

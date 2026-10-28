@@ -33,10 +33,10 @@ airplane mode changes nothing.
   a contact "Assistant" and "text my assistant" reaches it.
 - **Only what you said.** A text's words are yours, taken from what you said after the name;
   the model's version is thrown away, and when it cannot tell where your message starts it
-  asks. A call is placed only when you ask for one ("call Sam", "give Mum a ring"), and never
-  to your own number: "Remind me to call Sam" never rings Sam. A number is texted or called
-  only if its digits were said, it taps only words you said, a timer needs its length said, and
-  "navigate" goes only where it was told.
+  asks. A call is placed only when you ask for one ("call Sam", "give Mum a ring"): "Remind me
+  to call Sam" never rings Sam, and "call me" never rings your own phone. A number is texted or
+  called only if its digits were said, it taps only words you said, a timer needs its length
+  said, and "navigate" goes only where it was told.
 - **Answers only what it can know.** General knowledge and definitions in one sentence; a
   sentence that is nothing but a sum is worked out exactly in code, before any model; live data
   (weather, prices, scores, counts) gets a plain "I can't know that offline". An answer never
