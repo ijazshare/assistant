@@ -44,6 +44,20 @@ object StatedTime {
 
     /** Words before an hour that say it is not on the hour: "seven oh five pm", "half 7 pm", "quarter 8 pm". */
     private val NOT_OCLOCK = setOf("oh", "o", "half", "quarter")
+
+    /**
+     * True if a reminder's task is nothing but the asking and the time, "set a reminder" or "five
+     * minutes": the model fills an empty task with the request, and that is no title.
+     */
+    fun isUntitled(task: String): Boolean = TimeExpressions.words(task).all {
+        it in ASKING || it[0].isDigit() || TimeResolver.clockHour(it) != null || TimeResolver.isMinutes(it)
+    }
+
+    private val ASKING = setOf(
+        "set", "add", "make", "create", "new", "a", "an", "the", "reminder", "remind", "me", "for", "in", "at",
+        "to", "please", "can", "could", "you", "and", "half", "quarter", "minute", "minutes", "min", "mins",
+        "hour", "hours", "hr", "hrs", "from", "now", "today", "tonight", "tomorrow", "am", "pm", "o", "clock",
+    )
     private const val HALF_MINUTE_SECONDS = 30L
     private const val MAX_RELATIVE_MINUTES = 24 * 60
 

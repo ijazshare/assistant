@@ -268,6 +268,25 @@ class StatedTimeTest {
     }
 
     @Test
+    fun `a reminder or an alarm for a length is that long from now`() {
+        // The model's 21:00, said at 21:07, became a reminder for tomorrow at 9 PM.
+        assertThat(spoken("reminder for five minutes", hour = 21, minute = 0)).isEqualTo(StatedTime.At(9, 9, false))
+        assertThat(spoken("Set a reminder for 5 minutes", hour = 21, minute = 0)).isEqualTo(StatedTime.At(9, 9, false))
+        assertThat(spoken("set an alarm for 10 minutes")).isEqualTo(StatedTime.At(9, 14, false))
+        // After a task it is still how long: "to study for 2 hours" has no time of its own.
+        assertThat(TimeExpressions.of("remind me to study for 2 hours")).isEmpty()
+    }
+
+    @Test
+    fun `a task of nothing but the asking and the time is untitled`() {
+        assertThat(StatedTime.isUntitled("five minutes")).isTrue()
+        assertThat(StatedTime.isUntitled("set a reminder")).isTrue()
+        assertThat(StatedTime.isUntitled("Set a reminder for 5 minutes")).isTrue()
+        assertThat(StatedTime.isUntitled("take a nap")).isFalse()
+        assertThat(StatedTime.isUntitled("call Mom at 5")).isFalse()
+    }
+
+    @Test
     fun `one time with extra words is still one time`() {
         assertThat(
             spoken("remind me at 10 pm to lock up", hour = 22, minute = 0),

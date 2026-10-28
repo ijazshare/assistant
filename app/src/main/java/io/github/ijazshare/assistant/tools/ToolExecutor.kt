@@ -143,7 +143,11 @@ class ToolExecutor(
         // A time that is exactly now is the model echoing the clock, not a time the user
         // gave. Drop it: keep the task, but as a plain note rather than one that fires now.
         val dueHour = if (TimeResolver.echoesNow(hour, minute)) null else hour
-        return reminders.create(task, dueHour, minute, call.bool("tomorrow"))
+        // "Set a reminder for 5 minutes" names no task, and the model fills the slot with the request.
+        // With a time it is still a reminder; with none there is nothing to keep.
+        val untitled = StatedTime.isUntitled(task)
+        if (untitled && dueHour == null) return ToolResult.failed("What should I remind you about?")
+        return reminders.create(task.takeUnless { untitled }, dueHour, minute, call.bool("tomorrow"))
     }
 
     // ---- Messaging ---------------------------------------------------------------

@@ -32,7 +32,8 @@ internal object TimeExpressions {
     data class Expression(val kind: Kind, val minutes: Int = 0, val hour: Int? = null)
 
     /**
-     * The time expressions in [transcript], in order: a length ("in 30 minutes"), a clock time ("at 9:35",
+     * The time expressions in [transcript], in order: a length ("in 30 minutes", "a reminder for 30
+     * minutes"), a clock time ("at 9:35",
      * "9 35 am", "3 pm", "at 6", "for 6", "7 o'clock", "seven ten pm", "half past three") and noon or
      * midnight ("twelve noon" is one). A bare "9" or "12.50" is none: it needs an at, a for or an am/pm.
      */
@@ -53,8 +54,11 @@ internal object TimeExpressions {
             Expression(Kind.LENGTH, minutes.roundToInt()) to next
         }
 
-        // "For 2 hours" is how long, not when.
-        words[at] == "for" && durationAt(words, at + 1) != null -> null
+        // "For 2 hours" is how long, not when, except straight after "reminder" or "alarm":
+        // "a reminder for 5 minutes" is five minutes from now.
+        words[at] == "for" && durationAt(words, at + 1) != null ->
+            durationAt(words, at + 1)?.takeIf { words.getOrNull(at - 1) in TIMED }
+                ?.let { (minutes, next) -> Expression(Kind.LENGTH, minutes.roundToInt()) to next }
 
         // A clock time, after an at or for or bare: "3 pm", "7 o'clock".
         else -> {
@@ -195,6 +199,7 @@ internal object TimeExpressions {
 
     private val DECIMAL_BREAK = Regex("""[^a-z0-9.]+""")
     val MERIDIEMS = setOf("am", "pm")
+    private val TIMED = setOf("reminder", "alarm")
     private val NOONS = setOf("noon", "midday")
     private val TWELVES = setOf("twelve", "12")
     private val OHS = setOf("oh", "o")

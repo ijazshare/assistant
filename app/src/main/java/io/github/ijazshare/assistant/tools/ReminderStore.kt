@@ -43,47 +43,50 @@ class ReminderStore(private val context: Context) {
     enum class Exactness { EXACT, INEXACT }
 
     /**
-     * Records a task, and schedules an alarm if a time was given.
+     * Records a task, and schedules an alarm if a time was given. A null [task] is a reminder
+     * with nothing said but its time, shown as "Reminder".
      *
      * A time in the past rolls forward rather than firing immediately: someone saying
      * "remind me at 7" at 9pm means tomorrow morning, and an alarm that goes off the
      * instant they finish speaking is the least useful possible reading.
      */
     suspend fun create(
-        task: String,
+        task: String?,
         hour: Int?,
         minute: Int,
         tomorrow: Boolean,
     ): ToolResult = withContext(Dispatchers.IO) {
+        val title = task ?: UNTITLED
         if (hour == null) {
-            files.appendTask(task, due = null)
-            return@withContext ToolResult.ok("I will remember: $task.")
+            files.appendTask(title, due = null)
+            return@withContext ToolResult.ok("I will remember: $title.")
         }
 
         val now = LocalDateTime.now()
         var due = now.withHour(hour).withMinute(minute).withSecond(0).withNano(0)
         if (tomorrow || due.isBefore(now)) due = due.plusDays(1)
 
-        val id = files.appendTask(task, due)
-        val exactness = schedule(id, task, due)
+        val id = files.appendTask(title, due)
+        val exactness = schedule(id, title, due)
             ?: return@withContext ToolResult.failed("I have written that down, but I cannot reach the alarm service.")
 
         val spokenTime = due.format(SPOKEN_TIME)
         // Said whenever it is not today, so a reminder for tomorrow never sounds like one for today.
         val day = if (due.toLocalDate() == now.toLocalDate()) "" else " tomorrow"
+        val what = task?.let { " to $it" } ?: ""
         when {
             // Promising a reminder that can never be shown would be a lie; say so now.
             !notificationsWillShow() -> ToolResult.ok(
-                "I will remind you to $task$day at $spokenTime, but notifications are off.",
+                "I will remind you$what$day at $spokenTime, but notifications are off.",
                 "Allow Notifications under System access, or the reminder will be silent.",
             )
 
             exactness == Exactness.INEXACT -> ToolResult.ok(
-                "I will remind you to $task$day at about $spokenTime.",
+                "I will remind you$what$day at about $spokenTime.",
                 "Grant Exact alarms under System access for it to be on time.",
             )
 
-            else -> ToolResult.ok("I will remind you to $task$day at $spokenTime.")
+            else -> ToolResult.ok("I will remind you$what$day at $spokenTime.")
         }
     }
 
@@ -194,6 +197,7 @@ class ReminderStore(private val context: Context) {
     private companion object {
         const val TAG = "Assistant"
         const val SNOOZE_MINUTES = 10L
+        const val UNTITLED = "Reminder"
         const val LATE_GRACE_SECONDS = 5L
         val SPOKEN_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
     }
