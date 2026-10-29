@@ -104,7 +104,7 @@ fun ContextScreen(modifier: Modifier = Modifier) {
     val loaded = remember { mutableStateMapOf<String, String>() }
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            AssistantFiles.ALL.forEach {
+            EDITED.forEach {
                 val text = files.read(it)
                 loaded[it.id] = text
                 drafts[it.id] = text
@@ -231,7 +231,7 @@ fun ContextScreen(modifier: Modifier = Modifier) {
             },
         )
 
-        for (spec in AssistantFiles.ALL) {
+        for (spec in EDITED) {
             FileEditor(
                 spec = spec,
                 value = drafts[spec.id].orEmpty(),
@@ -272,6 +272,9 @@ fun ContextScreen(modifier: Modifier = Modifier) {
         }
     }
 }
+
+// The files the model reads, and the home list, which only home commands read.
+private val EDITED = AssistantFiles.ALL + AssistantFiles.HOME
 
 /** What a setting field holds, which decides its keyboard, masking and blank-state hint. */
 private enum class FieldKind { NAME, NUMBER, TEXT, SECRET }

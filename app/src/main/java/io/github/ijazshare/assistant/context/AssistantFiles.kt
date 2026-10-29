@@ -307,6 +307,23 @@ class AssistantFiles(private val root: File) {
         )
 
         val ALL = listOf(PROFILE, MEMORIES, TASKS, NOTES)
+
+        /** The owner's Home Assistant list. Read only for home commands, so it is not in [ALL]. */
+        val HOME = AssistantFile(
+            id = "home",
+            fileName = "home.md",
+            title = "Home Assistant devices",
+            purpose = "What \"homie\" commands may name. Only read for those, never given to the model.",
+            template = """
+                # Home Assistant devices
+
+                > In Home Assistant, open Developer tools → Template, paste the template from
+                > Assistant's README, and paste what it prints below. Do it again after you
+                > rename, move or relabel something. It looks like this:
+                > ## Pink Bedroom
+                > - Pink Bedroom Light (light.pink_bedroom_light)
+            """.trimIndent(),
+        )
     }
 }
 

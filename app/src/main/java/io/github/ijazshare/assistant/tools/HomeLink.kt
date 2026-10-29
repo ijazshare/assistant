@@ -25,23 +25,31 @@ import java.security.SecureRandom
  *
  * Assistant itself never goes online for this. The HA app's share screen fires a `mobile_app.share`
  * event on the owner's server over the connection that app already keeps, at home or away. The owner's
- * automation there checks the key, acts on, reads or runs the one labelled thing the name matches, and
- * answers with the HA app's `command_broadcast_intent`, which arrives here as [ACTION_REPLY].
+ * automation there checks the key, and the labels and allowed actions of the entities named, acts or
+ * reads, and answers with the HA app's `command_broadcast_intent`, which arrives here as [ACTION_REPLY].
  */
 class HomeLink(private val context: Context) {
 
     private val settings = AssistantSettings(context)
 
     suspend fun run(call: ToolCall): ToolResult {
-        val command = HomeCommand.of(call)
         val key = settings.homeKeyNow()
-        if (command == null || key == null) {
-            val trigger = settings.homeTriggerNow()
-            return ToolResult.failed(
-                "I can switch things on or off, tell you how they are, or run a script you named. " +
-                    "Say: $trigger, turn off the kitchen light. Or: $trigger, is the garage door open?",
-            )
+        return when (val command = HomeCommand.of(call)) {
+            is HomeCommand.Decline -> ToolResult.failed(command.reason)
+            is HomeCommand.Act -> if (key == null) help() else send(command, key)
+            null -> help()
         }
+    }
+
+    private suspend fun help(): ToolResult {
+        val trigger = settings.homeTriggerNow()
+        return ToolResult.failed(
+            "I can switch things, set the thermostat, lock, close, or tell you how things are. " +
+                "Say: $trigger, turn off the kitchen light. Or: $trigger, is the garage door open?",
+        )
+    }
+
+    private suspend fun send(command: HomeCommand.Act, key: String): ToolResult {
         // Never all digits or a number with an exponent: Home Assistant would read it back as a number.
         val id = "i" + randomHex(ID_BYTES)
         val reply = CompletableDeferred<Map<String, String>>()
@@ -102,7 +110,7 @@ class HomeLink(private val context: Context) {
         private fun randomHex(bytes: Int) =
             ByteArray(bytes).also(SecureRandom()::nextBytes).joinToString("") { "%02x".format(it) }
 
-        private val REPLY_EXTRAS = listOf("status", "state", "unit", "temperature", "target")
+        private val REPLY_EXTRAS = listOf("status", "state", "unit", "temperature", "target", "assumed", "low", "high")
 
         // The Play build, then the F-Droid one; both keep the share screen under the same class name.
         private val HA_PACKAGES =

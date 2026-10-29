@@ -153,39 +153,69 @@ itself: it hands a short command to the Home Assistant app on the same phone, wh
 to your server over the connection it already has, at home or away. An automation on your
 server checks the command and answers.
 
+Labels decide what Assistant may touch. Put them on the entities themselves, not their devices:
+
+- `assistant`: may be asked about and controlled.
+- `assistant_read`: may only be asked about.
+- No label: Assistant can't see it at all.
+
 What you can say, starting with the trigger word (default "homie", a word you never say by
 accident):
 
-- "Homie, turn on the porch light", "Homie, switch the desk fan off". Lights, switches and
-  fans labelled `assistant` only, on or off only.
-- "Homie, is the garage door open?", "Homie, is the front door locked?", "Homie, what's the
-  thermostat set to?". Anything labelled `assistant` or `assistant_read`.
-- Your own phrases: any other words run the script labelled `assistant` with exactly that
-  name. Name a script "Pink fan medium" and "Homie, pink fan medium" runs it; want a second
-  way to say it, make a second script that runs the first. A script can do anything and
-  nobody asks "are you sure?", so never label one that unlocks or opens something.
+- Lights, switches and fans: "Homie, turn off the pink bedroom light", "Homie, pink bedroom
+  lights off" (every light in that room).
+- The thermostat: "Homie, cool to 72", "Homie, set the thermostat to heat", "Homie, make it
+  warmer" (2 degrees), "Homie, turn off the thermostat". Only within the limits in the
+  automation.
+- Locks and covers: "Homie, lock the front door", "Homie, close the garage door". Nothing is
+  ever unlocked or opened by voice, by Assistant or by the automation.
+- Questions: "Homie, is the garage door open?", "Homie, what's the thermostat set to?",
+  "Homie, what's the temperature in the kitchen?"
+- Your own phrases: a script labelled `assistant` runs when you say its whole name. Name a
+  script "Pink fan medium" and "Homie, pink fan medium" runs it. A script can do anything and
+  nobody asks "are you sure?", so never give `assistant` to a script, or a switch, that unlocks
+  or opens something (a gate relay, a door strike).
 
-The name must be the device's or script's name in Home Assistant, said exactly (case,
-punctuation and a leading "the" don't matter). Nothing is guessed: no match, or two with the
-same name, and nothing happens. Home Assistant's own aliases aren't used, since an automation
-can't read them; rename the entity instead (its entity id, and your automations, stay as they
-are). Assistant says a device is on or off only when Home Assistant saw the new state, and
-that a script started, since Home Assistant runs it on its own.
+A device is its name in Home Assistant, or its name and its room in either order: "pink
+bedroom light", "ceiling light in the den". Case, punctuation and "the" don't matter. Part of
+a name never counts: "bedroom light" doesn't find "Pink Bedroom Light", since it could be the
+wrong bedroom's. When two things answer to what you said, Assistant asks which, and every
+word must be accounted for, so "turn on the light in ten minutes" is declined, not done now.
+Home Assistant's own aliases aren't used; rename the entity instead (its entity id, and your
+automations, stay as they are).
+
+Assistant says a device is on, locked or closing only when Home Assistant saw it happen. For
+a device Home Assistant can't see (one-way RF, such as Bond), it says it sent the command,
+and answers a question with what Home Assistant last set.
 
 Setup:
 
 1. In Assistant's Context screen, under HOME ASSISTANT · KEY, tap **Make a key and copy it**.
-2. In Home Assistant, create the labels `assistant` (may be switched) and `assistant_read`
-   (may only be asked about), and put them on the entities themselves, not on their devices.
-   Never give `assistant` to a lock, a garage door, a gate, or a switch that drives one; use
-   `assistant_read` for those.
+2. In Home Assistant, create the labels `assistant` and `assistant_read` and put them on
+   entities. Give every labelled device a room (area), and no two in one room the same name.
 3. Find your phone's user id: Developer tools → Events, listen to `mobile_app.share`, then
    share any text to the Home Assistant app; it is `context.user_id`.
 4. Create an automation, switch it to YAML, and paste the one below. Replace the key, the user
-   id and `notify.mobile_app_YOUR_PHONE`. A debug build of Assistant is
-   `io.github.ijazshare.assistant.debug`.
-5. In the Home Assistant app, set Persistent connection to "Always" (or "On home network
+   id and `notify.mobile_app_YOUR_PHONE`, and set `lowest` and `highest` to the thermostat
+   limits you want. A debug build of Assistant is `io.github.ijazshare.assistant.debug`.
+5. Tell Assistant your devices: in Developer tools → Template, paste the template below and
+   paste what it prints into the Context screen's "Home Assistant devices". Do it again after
+   you rename, move or relabel something.
+6. In the Home Assistant app, set Persistent connection to "Always" (or "On home network
    only") so replies don't go through Google's push service.
+
+```jinja
+{%- set ns = namespace(rows=[]) -%}
+{%- for e in (label_entities('assistant') + label_entities('assistant_read')) | unique | sort -%}
+  {%- set ns.rows = ns.rows + [{'area': area_name(e) or 'No area', 'name': state_attr(e, 'friendly_name') or e, 'id': e, 'read': e not in label_entities('assistant')}] -%}
+{%- endfor -%}
+{%- for area in ns.rows | groupby('area') %}
+## {{ area.grouper }}
+{%- for r in area.list %}
+- {{ r.name }} ({{ r.id }}){{ ' read only' if r.read else '' }}
+{%- endfor %}
+{%- endfor %}
+```
 
 It needs Home Assistant 2025.7 or newer. Optional: leave `mobile_app.share` out of the
 recorder (`recorder: exclude: event_types:`), so the key isn't stored with every command.
@@ -194,9 +224,13 @@ recorder (`recorder: exclude: event_types:`), so the key isn't stored with every
 alias: Assistant commands
 description: >-
   Commands from Assistant on the phone, through the Home Assistant app. Runs only for
-  Assistant's key and this phone's user. Switches only lights, switches and fans labelled
-  "assistant", and runs scripts labelled "assistant" by their name; tells the state of anything
-  labelled "assistant" or "assistant_read".
+  Assistant's key and this phone's user. Assistant sends entity ids and this automation only
+  checks them against the labels; it never matches names. It acts only on entities labelled
+  "assistant": it switches lights, switches and fans on or off, runs scripts, locks locks,
+  closes covers, and sets a thermostat's mode (heat, cool or off) and target temperature
+  within the limits in the variables below. It tells the state of anything labelled
+  "assistant" or "assistant_read". Nothing is ever unlocked or opened: there is no command for
+  either. Anything else is refused.
 mode: queued
 triggers:
   - trigger: event
@@ -207,47 +241,43 @@ triggers:
       user_id: YOUR_PHONE_USER_ID
 variables:
   phone: notify.mobile_app_YOUR_PHONE
+  # The owner's limits for a set-temperature command, in Home Assistant's own unit
+  # (for Celsius use about 16 and 29). The thermostat's own min_temp and max_temp apply too.
+  lowest: 60
+  highest: 85
   cmd: "{{ trigger.event.data.text | default('') | string | from_json(default={}) }}"
-  want: "{{ cmd.do if cmd is mapping and cmd.do is string else '' }}"
-  wanted: >-
-    {{ (cmd.name if cmd is mapping and cmd.name is string else '')
-       | lower | regex_replace('[^a-z0-9]+', ' ') | trim }}
+  # Home Assistant strips the spaces off a rendered result, so a padded "do" (" lock") must be
+  # turned away here, or it would come out as "lock".
+  want: "{{ cmd.do if cmd is mapping and cmd.do is string and cmd.do == cmd.do | trim else '' }}"
+  # The entity ids: a list of 1 to 20 well-formed ids, otherwise an empty list.
+  ids: >-
+    {{ cmd.entity
+       if cmd is mapping and cmd.entity is list and 1 <= cmd.entity | count <= 20
+          and cmd.entity | select('string') | select('match', '^[a-z_]+[.][a-z0-9_]+$') | list | count
+              == cmd.entity | count
+       else [] }}
   reply_id: "{{ (cmd.id if cmd is mapping and cmd.id is string else '') | urlencode }}"
-  ok: "{{ reply_id | regex_match('^i[0-9a-f]{16}$') and wanted | string != '' }}"
-  switchable: >-
-    {%- set ns = namespace(ids=[]) -%}
-    {%- for e in label_entities('assistant')
-        if e.split('.')[0] in ['light', 'switch', 'fan']
-        and (state_attr(e, 'friendly_name') or '') | lower | regex_replace('[^a-z0-9]+', ' ') | trim
-            | regex_replace('^(the|my) ', '') == wanted | string -%}
-      {%- set ns.ids = ns.ids + [e] -%}
-    {%- endfor -%}
-    {{ ns.ids }}
-  runnable: >-
-    {%- set ns = namespace(ids=[]) -%}
-    {%- for e in label_entities('assistant')
-        if e.split('.')[0] == 'script'
-        and (state_attr(e, 'friendly_name') or '') | lower | regex_replace('[^a-z0-9]+', ' ') | trim
-            | regex_replace('^(the|my) ', '') == wanted | string -%}
-      {%- set ns.ids = ns.ids + [e] -%}
-    {%- endfor -%}
-    {{ ns.ids }}
+  ok: "{{ reply_id | regex_match('^i[0-9a-f]{16}$') and ids | count > 0 }}"
+  # Every id carries "assistant", so all of them may be controlled.
+  allowed: "{{ ok and ids | reject('in', label_entities('assistant')) | list | count == 0 }}"
+  # The one id carries "assistant" or "assistant_read", so it may be read.
   readable: >-
-    {%- set ns = namespace(ids=[]) -%}
-    {%- for e in (label_entities('assistant') + label_entities('assistant_read')) | unique
-        if (state_attr(e, 'friendly_name') or '') | lower | regex_replace('[^a-z0-9]+', ' ') | trim
-            | regex_replace('^(the|my) ', '') == wanted | string -%}
-      {%- set ns.ids = ns.ids + [e] -%}
-    {%- endfor -%}
-    {{ ns.ids }}
+    {{ ok and ids | count == 1
+       and ids[0] in (label_entities('assistant') + label_entities('assistant_read')) }}
+  # The domain of the one id, when there is exactly one and it may be controlled.
+  kind: "{{ ids[0].split('.')[0] if allowed and ids | count == 1 else '' }}"
+  # Every id is a light, switch or fan, and may be controlled.
+  switchable: >-
+    {{ allowed and ids | map('regex_replace', '[.].*$', '')
+       | reject('in', ['light', 'switch', 'fan']) | list | count == 0 }}
 actions:
   - choose:
       - alias: Tell the state
-        conditions: "{{ ok and want == 'state' and readable | count == 1 }}"
+        conditions: "{{ want == 'state' and readable }}"
         sequence:
           - variables:
               extras: >-
-                {%- set e = readable[0] -%}
+                {%- set e = ids[0] -%}
                 {%- set ex = ['id:' ~ reply_id ~ ':String.urlencoded', 'status:done:String',
                     'state:' ~ (state_translated(e) | string | urlencode) ~ ':String.urlencoded'] -%}
                 {%- set u = state_attr(e, 'unit_of_measurement') -%}
@@ -256,6 +286,7 @@ actions:
                 {%- if u is not none -%}{%- set ex = ex + ['unit:' ~ (u | string | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
                 {%- if t is not none -%}{%- set ex = ex + ['temperature:' ~ (t | string | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
                 {%- if g is not none -%}{%- set ex = ex + ['target:' ~ (g | string | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
+                {%- if state_attr(e, 'assumed_state') == true -%}{%- set ex = ex + ['assumed:true:String'] -%}{%- endif -%}
                 {{ ex | join(',') }}
           - action: "{{ phone }}"
             data:
@@ -266,21 +297,114 @@ actions:
                 intent_extras: "{{ extras }}"
                 ttl: 10000
                 priority: high
-      - alias: Switch it
-        conditions: "{{ ok and want in ['turn_on', 'turn_off'] and switchable | count == 1 }}"
+      - alias: Switch them
+        conditions: "{{ want in ['turn_on', 'turn_off'] and switchable }}"
         sequence:
           - if: "{{ want == 'turn_on' }}"
             then:
               - action: homeassistant.turn_on
                 continue_on_error: true
                 target:
-                  entity_id: "{{ switchable[0] }}"
+                  entity_id: "{{ ids }}"
             else:
               - action: homeassistant.turn_off
                 continue_on_error: true
                 target:
-                  entity_id: "{{ switchable[0] }}"
-          - wait_template: "{{ is_state(switchable[0], 'on' if want == 'turn_on' else 'off') }}"
+                  entity_id: "{{ ids }}"
+          - wait_template: >-
+              {{ ids | select('is_state', 'on' if want == 'turn_on' else 'off') | list | count
+                 == ids | count }}
+            timeout: 5
+            continue_on_timeout: true
+          - variables:
+              extras: >-
+                {%- set ex = ['id:' ~ reply_id ~ ':String.urlencoded',
+                    'status:' ~ ('done' if wait.completed else 'unsure') ~ ':String'] -%}
+                {%- if ids | select('is_state_attr', 'assumed_state', true) | list | count > 0 -%}
+                  {%- set ex = ex + ['assumed:true:String'] -%}
+                {%- endif -%}
+                {{ ex | join(',') }}
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "{{ extras }}"
+                ttl: 10000
+                priority: high
+      - alias: Run it
+        conditions: "{{ want == 'run' and kind == 'script' }}"
+        sequence:
+          # Starts the script and goes on, so a long one never holds up the next command.
+          - action: script.turn_on
+            target:
+              entity_id: "{{ ids[0] }}"
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "id:{{ reply_id }}:String.urlencoded,status:done:String"
+                ttl: 10000
+                priority: high
+      - alias: Lock it
+        conditions: "{{ want == 'lock' and kind == 'lock' }}"
+        sequence:
+          - action: lock.lock
+            continue_on_error: true
+            target:
+              entity_id: "{{ ids[0] }}"
+          - wait_template: "{{ is_state(ids[0], 'locked') }}"
+            timeout: 10
+            continue_on_timeout: true
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "id:{{ reply_id }}:String.urlencoded,status:{{ 'done' if wait.completed else 'unsure' }}:String"
+                ttl: 10000
+                priority: high
+      - alias: Close it
+        conditions: "{{ want == 'close' and kind == 'cover' }}"
+        sequence:
+          - action: cover.close_cover
+            continue_on_error: true
+            target:
+              entity_id: "{{ ids[0] }}"
+          - wait_template: "{{ states(ids[0]) in ['closing', 'closed'] }}"
+            timeout: 5
+            continue_on_timeout: true
+          - variables:
+              extras: >-
+                {{ ['id:' ~ reply_id ~ ':String.urlencoded',
+                    'status:' ~ ('done' if wait.completed else 'unsure') ~ ':String',
+                    'state:' ~ (state_translated(ids[0]) | string | urlencode) ~ ':String.urlencoded'] | join(',') }}
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "{{ extras }}"
+                ttl: 10000
+                priority: high
+      - alias: Set the mode
+        conditions: >-
+          {{ want == 'hvac' and kind == 'climate'
+             and cmd.value is string and cmd.value in ['heat', 'cool', 'off']
+             and cmd.value in (state_attr(ids[0], 'hvac_modes') or []) }}
+        sequence:
+          - action: climate.set_hvac_mode
+            continue_on_error: true
+            target:
+              entity_id: "{{ ids[0] }}"
+            data:
+              hvac_mode: "{{ cmd.value }}"
+          - wait_template: "{{ is_state(ids[0], cmd.value) }}"
             timeout: 5
             continue_on_timeout: true
           - action: "{{ phone }}"
@@ -292,37 +416,91 @@ actions:
                 intent_extras: "id:{{ reply_id }}:String.urlencoded,status:{{ 'done' if wait.completed else 'unsure' }}:String"
                 ttl: 10000
                 priority: high
-      - alias: Run it
-        conditions: "{{ ok and want == 'run' and runnable | count == 1 }}"
-        sequence:
-          # Starts the script and goes on, so a long one never holds up the next command.
-          - action: script.turn_on
-            target:
-              entity_id: "{{ runnable[0] }}"
-          - action: "{{ phone }}"
-            data:
-              message: command_broadcast_intent
-              data:
-                intent_package_name: io.github.ijazshare.assistant
-                intent_action: io.github.ijazshare.assistant.HA_REPLY
-                intent_extras: "id:{{ reply_id }}:String.urlencoded,status:done:String"
-                ttl: 10000
-                priority: high
-      - alias: More than one has that name
+      - alias: Set the temperature
         conditions: >-
-          {{ ok and ((want == 'state' and readable | count > 1)
-                     or (want in ['turn_on', 'turn_off'] and switchable | count > 1)
-                     or (want == 'run' and runnable | count > 1)) }}
+          {{ want == 'temperature' and kind == 'climate'
+             and cmd.value is string and cmd.value == cmd.value | trim
+             and cmd.value | regex_match('^[+-]?[0-9]{1,3}([.][0-9])?$')
+             and ('mode' not in cmd
+                  or (cmd.mode is string and cmd.mode in ['heat', 'cool']
+                      and cmd.mode in (state_attr(ids[0], 'hvac_modes') or []))) }}
         sequence:
-          - action: "{{ phone }}"
-            data:
-              message: command_broadcast_intent
-              data:
-                intent_package_name: io.github.ijazshare.assistant
-                intent_action: io.github.ijazshare.assistant.HA_REPLY
-                intent_extras: "id:{{ reply_id }}:String.urlencoded,status:ambiguous:String"
-                ttl: 10000
-                priority: high
+          # A signed value ("+2", "-2") moves the current target; a plain one ("72") is the target.
+          # The value is always read from cmd, never from a variable: a variable holding "+2"
+          # would be turned into the number 2 and the sign would be lost.
+          - variables:
+              thermostat: "{{ ids[0] }}"
+              set_mode: "{{ cmd.mode if 'mode' in cmd else '' }}"
+              eff_mode: "{{ set_mode if set_mode != '' else states(thermostat) }}"
+              relative: "{{ cmd.value[0] in ['+', '-'] }}"
+              current: "{{ state_attr(thermostat, 'temperature') | float(none) }}"
+              target: >-
+                {{ none if relative and current is none
+                   else ((current + cmd.value | float) if relative else cmd.value | float) | round(1) }}
+              low: >-
+                {%- set m = state_attr(thermostat, 'min_temp') | float(none) -%}
+                {{ [lowest, m] | max if m is not none else lowest }}
+              high: >-
+                {%- set m = state_attr(thermostat, 'max_temp') | float(none) -%}
+                {{ [highest, m] | min if m is not none else highest }}
+          - choose:
+              - alias: Not heating or cooling, or no current target to move
+                conditions: "{{ eff_mode not in ['heat', 'cool'] or target is none }}"
+                sequence:
+                  - action: "{{ phone }}"
+                    data:
+                      message: command_broadcast_intent
+                      data:
+                        intent_package_name: io.github.ijazshare.assistant
+                        intent_action: io.github.ijazshare.assistant.HA_REPLY
+                        intent_extras: "id:{{ reply_id }}:String.urlencoded,status:mode:String"
+                        ttl: 10000
+                        priority: high
+              - alias: Outside the limits
+                conditions: "{{ target < low or target > high }}"
+                sequence:
+                  - variables:
+                      extras: >-
+                        {%- set lo = low | int if low == low | int else low -%}
+                        {%- set hi = high | int if high == high | int else high -%}
+                        {{ ['id:' ~ reply_id ~ ':String.urlencoded', 'status:range:String',
+                            'low:' ~ lo ~ ':String.urlencoded', 'high:' ~ hi ~ ':String.urlencoded'] | join(',') }}
+                  - action: "{{ phone }}"
+                    data:
+                      message: command_broadcast_intent
+                      data:
+                        intent_package_name: io.github.ijazshare.assistant
+                        intent_action: io.github.ijazshare.assistant.HA_REPLY
+                        intent_extras: "{{ extras }}"
+                        ttl: 10000
+                        priority: high
+            default:
+              - action: climate.set_temperature
+                continue_on_error: true
+                target:
+                  entity_id: "{{ thermostat }}"
+                data: "{{ {'temperature': target, 'hvac_mode': set_mode} if set_mode != '' else {'temperature': target} }}"
+              - wait_template: >-
+                  {{ state_attr(thermostat, 'temperature') | float(none) == target
+                     and (set_mode == '' or is_state(thermostat, set_mode)) }}
+                timeout: 5
+                continue_on_timeout: true
+              - variables:
+                  extras: >-
+                    {%- set tt = target | int if target == target | int else target -%}
+                    {{ ['id:' ~ reply_id ~ ':String.urlencoded',
+                        'status:' ~ ('done' if wait.completed else 'unsure') ~ ':String',
+                        'target:' ~ tt ~ ':String.urlencoded',
+                        'state:' ~ (eff_mode | urlencode) ~ ':String.urlencoded'] | join(',') }}
+              - action: "{{ phone }}"
+                data:
+                  message: command_broadcast_intent
+                  data:
+                    intent_package_name: io.github.ijazshare.assistant
+                    intent_action: io.github.ijazshare.assistant.HA_REPLY
+                    intent_extras: "{{ extras }}"
+                    ttl: 10000
+                    priority: high
     default:
       - action: "{{ phone }}"
         data:

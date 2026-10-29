@@ -41,7 +41,8 @@ import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.Contact
 import io.github.ijazshare.assistant.tools.ContactLookup
 import io.github.ijazshare.assistant.tools.ContactRecency
-import io.github.ijazshare.assistant.tools.HomeCommand
+import io.github.ijazshare.assistant.tools.HomeDevices
+import io.github.ijazshare.assistant.tools.HomeGrammar
 import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
@@ -515,8 +516,9 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
 
     /**
      * With the Home Assistant link on, a sentence that starts with the trigger word is for the home:
-     * read by code ([HomeCommand]), never by the model, never learned, and declined with a hint when
-     * the words are not a command. Without the link, the trigger word is just a word.
+     * read by code ([HomeGrammar], against the owner's pasted device list), never by the model, never
+     * learned, and declined with the reason when the words are not one command for one thing on that
+     * list. Without the link, the trigger word is just a word.
      *
      * Ahead of the follow-ups, and it ends them: the trigger word is never dictation, and "Homie, turn
      * off the light" said while a text waited for its words was otherwise sent to the contact.
@@ -524,10 +526,11 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     private suspend fun answeredHome(transcript: String, sttMillis: Long): Boolean {
         if (settings.homeKeyNow() == null) return false
         val trigger = settings.homeTriggerNow()
-        if (!HomeCommand.addressed(transcript, trigger)) return false
+        if (!HomeGrammar.addressed(transcript, trigger)) return false
         PendingSend.dismiss()
         PendingReminder.dismiss()
-        val call = HomeCommand.parse(transcript, trigger)?.toCall() ?: ToolCall(AssistantTools.HOME, emptyMap())
+        val home = withContext(Dispatchers.IO) { HomeDevices.parse(files.read(AssistantFiles.HOME)) }
+        val call = HomeGrammar.read(transcript, trigger, home).toCall()
         carryOut(transcript, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
         return true
     }
