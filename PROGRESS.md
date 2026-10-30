@@ -96,11 +96,16 @@ Summarised from `git log --since=2026-09-03`.
 
 ## Next
 
-- **Home Assistant link (28 Oct, in testing on the owner's phone).** Built to the owner's design: a
-  sentence that starts with "homie" is read by a fixed grammar (switch on/off, or ask a state), handed
+- **Home Assistant link (28 Oct, built; waiting on the owner's labels and phone test).** Built to the
+  owner's design: a sentence that starts with "homie" is read by a fixed grammar against the owner's
+  device list (printed by a template in Home Assistant and pasted into Context), handed as entity ids
   with a key to the Home Assistant app's share screen, and answered by an automation on the owner's
-  server (README, "Home Assistant"). Switching: lights, switches and fans labelled `assistant`, on or
-  off only. Questions: anything labelled `assistant` or `assistant_read`. Assistant opens no connection;
+  server (README, "Home Assistant"). A device is its whole name, or its name and room; anything else is
+  declined with the reason, never guessed. `assistant` lets Assistant ask about and control a device,
+  `assistant_read` only ask. Control: on and off (lights, switches, fans, a room's lights), the owner's
+  scripts by name, the thermostat (heat, cool, off, a temperature within the owner's limits, warmer or
+  cooler), lock and close. Never unlock or open; a confirm step for those (a PIN on screen) is the
+  owner's call, as is how wall tablets would reach Home Assistant. Assistant opens no connection;
   locked decision 9 now covers Assistant's own data, and hand-offs to other apps carry only what the
   command needs, never audio.
 - Later, also the owner's: "navigate to X" handed to Maps.
