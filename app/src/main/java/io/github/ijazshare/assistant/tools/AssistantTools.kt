@@ -94,8 +94,10 @@ object AssistantTools {
         ),
         Tool(
             name = TASKS,
-            description = "Tasks, to-do lists and reminders: remind me, add to or read my list, what is due or " +
-                "overdue, mark done, move, snooze, delete, brain dump. Not alarms or timers.",
+            // The old reminder tool's wording, kept on purpose: the longer list of Tasks verbs read well but, on
+            // the 1B, moved "text me ..." and notification questions into wrong sends (379-case bench, 2026-11-02:
+            // 21 wrong-send criticals against 17 with this wording, 13 on main). The verbs are the pre-route's job.
+            description = "Remember a task, optionally at a time.",
             // No parameters, so the router has nothing to invent: the words go to the Tasks app as they were said.
         ),
         Tool(
