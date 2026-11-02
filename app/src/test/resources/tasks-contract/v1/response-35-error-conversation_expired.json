@@ -1,0 +1,16 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000040",
+    "status": "error",
+    "speech": "I lost track of that. Please say it again.",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": null,
+    "undo": null,
+    "open_uri": null,
+    "error": {
+        "code": "conversation_expired",
+        "detail": "fixture"
+    }
+}

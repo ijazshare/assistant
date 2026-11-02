@@ -1,0 +1,13 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000029",
+    "status": "declined",
+    "speech": "That can't be undone any more. You can change it in Tasks.",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": null,
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

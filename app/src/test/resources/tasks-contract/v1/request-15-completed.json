@@ -1,0 +1,20 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000020",
+    "type": "utterance",
+    "utterance": "mark call Amira as done",
+    "context": {
+        "now_epoch_ms": 1793109780000,
+        "speech_end_epoch_ms": 1793109779400,
+        "zone": "Europe/London",
+        "locale": "en-GB",
+        "hour_cycle": "h12",
+        "source": "voice",
+        "round": 0,
+        "routed_by": "keyword"
+    },
+    "client": {
+        "package": "io.github.ijazshare.assistant",
+        "version": "0.1.0"
+    }
+}

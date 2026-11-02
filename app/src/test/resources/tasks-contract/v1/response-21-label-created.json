@@ -1,0 +1,22 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000026",
+    "status": "done",
+    "speech": "Okay. I made an Errands label.",
+    "display": null,
+    "effects": [
+        {
+            "op": "label_created",
+            "id": "errands",
+            "name": "errands"
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": {
+        "token": "u_41fe",
+        "expires_epoch_ms": 1793110380000
+    },
+    "open_uri": null,
+    "error": null
+}

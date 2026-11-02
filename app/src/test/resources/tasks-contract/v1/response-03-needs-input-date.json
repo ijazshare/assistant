@@ -1,0 +1,28 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000003",
+    "status": "needs_input",
+    "speech": "This Friday the 30th, or Friday 6 November?",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": {
+        "id": "c_1",
+        "expects": "date",
+        "expires_epoch_ms": 1793109870000,
+        "rounds_left": 1,
+        "options": [
+            {
+                "id": "o1",
+                "label": "Friday 30 October"
+            },
+            {
+                "id": "o2",
+                "label": "Friday 6 November"
+            }
+        ]
+    },
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

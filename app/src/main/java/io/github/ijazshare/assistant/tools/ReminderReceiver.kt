@@ -22,7 +22,11 @@ import androidx.core.content.getSystemService
 import androidx.core.net.toUri
 import io.github.ijazshare.assistant.R
 import io.github.ijazshare.assistant.context.AssistantFiles
+import io.github.ijazshare.assistant.settings.AssistantSettings
+import io.github.ijazshare.assistant.tasks.TaskAppClient
+import io.github.ijazshare.assistant.tasks.TaskRequest
 import io.github.ijazshare.assistant.ui.MainActivity
+import kotlinx.coroutines.runBlocking
 import java.io.IOException
 
 /**
@@ -38,6 +42,14 @@ class ReminderReceiver : BroadcastReceiver() {
             ACTION_DONE -> offMainThread {
                 ReminderStore(context).complete(id)
                 NotificationManagerCompat.from(context).cancel(id.hashCode())
+                // A reminder that moved to Tasks: its task is ticked there (spec 4.13 step 5).
+                runBlocking {
+                    if (AssistantSettings(context).tasksMigratedNow()) {
+                        val tasks = TaskAppClient.of(context)
+                        tasks.send(TaskRequest("complete_by_legacy_id", legacyId = id))
+                        tasks.sessionEnded()
+                    }
+                }
             }
 
             ACTION_SNOOZE -> offMainThread {

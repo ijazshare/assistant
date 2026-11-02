@@ -1,0 +1,28 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000013",
+    "status": "needs_input",
+    "speech": "Which one: call Amira, or call Amira's dentist?",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": {
+        "id": "c_1",
+        "expects": "task",
+        "expires_epoch_ms": 1793109870000,
+        "rounds_left": 1,
+        "options": [
+            {
+                "id": "o1",
+                "label": "Call Amira"
+            },
+            {
+                "id": "o2",
+                "label": "Call Amira's dentist"
+            }
+        ]
+    },
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

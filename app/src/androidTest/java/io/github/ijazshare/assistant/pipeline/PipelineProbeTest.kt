@@ -27,7 +27,6 @@ import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.ContactLookup
 import io.github.ijazshare.assistant.tools.ContactRecency
 import io.github.ijazshare.assistant.tools.ContactResolution
-import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
 import io.github.ijazshare.assistant.tools.ToolGrammar
@@ -83,7 +82,7 @@ class PipelineProbeTest {
             Log.i(PIPE, "DRY RUN — pass -e live true to execute")
             return
         }
-        val executor = ToolExecutor(context, ReminderStore(context), ContactLookup(context))
+        val executor = ToolExecutor(context, ContactLookup(context))
         val result = runBlocking { executor.execute(call) }
         Log.i(PIPE, "EXECUTED success=${result.success} spoken=[${result.spoken}] detail=[${result.detail}]")
     }

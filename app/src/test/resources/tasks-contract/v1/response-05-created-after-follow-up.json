@@ -1,0 +1,35 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000008",
+    "status": "done",
+    "speech": "Okay. I'll remind you to renew the parking permit on Friday 6 November at 9 am.",
+    "display": {
+        "title": "Renew the parking permit",
+        "lines": [
+            "Friday 6 November 9 am · Inbox · reminder on"
+        ]
+    },
+    "effects": [
+        {
+            "op": "created",
+            "task_id": "new4",
+            "title": "Renew the parking permit",
+            "project": "Inbox",
+            "due": {
+                "date": "2026-11-06",
+                "time": "09:00",
+                "zone": null
+            },
+            "recurrence": null,
+            "reminder_at_epoch_ms": 1793955600000
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": {
+        "token": "u_41fe",
+        "expires_epoch_ms": 1793110380000
+    },
+    "open_uri": "tasks://task/new4",
+    "error": null
+}

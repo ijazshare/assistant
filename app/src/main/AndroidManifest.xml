@@ -118,6 +118,17 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
+    <!-- ──── Tasks link: whichever app installs first defines the permission (declared identically in both) ──── -->
+    <permission
+        android:name="io.github.ijazshare.permission.TASK_COMMAND"
+        android:label="Send task commands"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="io.github.ijazshare.permission.TASK_COMMAND" />
+    <queries>
+        <package android:name="io.github.ijazshare.tasks" />
+        <package android:name="io.github.ijazshare.tasks.debug" />
+    </queries>
+
     <application
         android:name=".AssistantApplication"
         android:allowBackup="true"

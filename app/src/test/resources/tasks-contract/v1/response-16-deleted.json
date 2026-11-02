@@ -1,0 +1,30 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000021",
+    "status": "done",
+    "speech": "Deleted 'Gym at 6'. Say undo to bring it back.",
+    "display": null,
+    "effects": [
+        {
+            "op": "deleted",
+            "task_id": "t_Gym0000001",
+            "title": "Gym at 6",
+            "project": "Home",
+            "due": {
+                "date": "2026-10-27",
+                "time": "18:00",
+                "zone": null
+            },
+            "recurrence": null,
+            "reminder_at_epoch_ms": null
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": {
+        "token": "u_41fe",
+        "expires_epoch_ms": 1793110380000
+    },
+    "open_uri": null,
+    "error": null
+}

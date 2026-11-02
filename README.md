@@ -65,9 +65,13 @@ What it does today:
   assistant, so the existing assistant gesture wakes it. You can also type a command.
 - **Alarms and timers** are delegated to your phone's own Clock app via standard `AlarmClock`
   intents — no second alarm engine to fight with, and no alarms trapped inside this app.
-- **Tasks and reminders** live in `tasks.md`, a Markdown checklist you can open and edit on
-  the Context screen. A task with a due time fires an exact-alarm notification with *Done*
-  and *Snooze 10 min* actions, and survives a reboot.
+- **Tasks and reminders** live in the separate Tasks app, which this one drives over a bound
+  service that only apps signed with your key can reach: "remind me to call Sam at 5", "what's
+  on my list today", "mark that as done", "undo". Tasks parses the words, keeps the list and
+  fires the alarms; this app only passes on what you said and speaks the answer. Install Tasks
+  first or the command says so. Your old `tasks.md` is moved into Tasks the first time they meet
+  (Context screen, *Tasks app*, *Run migration*), the old alarms are cancelled, and the file is
+  kept as `tasks.migrated-<date>.md`.
 - **Messages, calls and apps.** Text or call a contact, open an app. A name that matches
   several contacts shows a selector. "Text Sam I'm running late" sends "I'm running late";
   "Text Sam" with no message asks "What should I say to Sam?" and your next dictation is the

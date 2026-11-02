@@ -1,0 +1,19 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000009",
+    "status": "needs_input",
+    "speech": "When should I remind you?",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": {
+        "id": "c_1",
+        "expects": "date_time",
+        "expires_epoch_ms": 1793109870000,
+        "rounds_left": 1,
+        "options": []
+    },
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

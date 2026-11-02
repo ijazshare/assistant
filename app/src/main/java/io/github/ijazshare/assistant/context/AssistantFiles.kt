@@ -193,8 +193,9 @@ class AssistantFiles(private val root: File) {
     }
 
     /** Everything the model should be told, concatenated in a stable order. */
-    fun contextForPrompt(): String = ALL
+    fun contextForPrompt(includeTasks: Boolean = true): String = ALL
         .filter { isCustomised(it) || it.id == TASKS.id }
+        .filter { includeTasks || it.id != TASKS.id }
         .joinToString("\n\n") { spec ->
             "## ${spec.title}\n" + read(spec).lineSequence()
                 // Strip the guidance comments; they are for the user, not the model.

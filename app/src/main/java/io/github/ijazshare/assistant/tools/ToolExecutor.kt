@@ -31,11 +31,7 @@ import kotlinx.coroutines.withContext
  * now, and what should be said aloud. A tool that quietly fails is worse than one that
  * refuses, because the user walks away believing the alarm is set.
  */
-class ToolExecutor(
-    private val context: Context,
-    private val reminders: ReminderStore,
-    private val contacts: ContactLookup,
-) {
+class ToolExecutor(private val context: Context, private val contacts: ContactLookup) {
 
     /**
      * Every tool the model can name, mapped to the code that carries it out.
@@ -60,7 +56,6 @@ class ToolExecutor(
         AssistantTools.SET_ALARM to { call -> setAlarm(call) },
         AssistantTools.SET_TIMER to { call -> setTimer(call) },
         AssistantTools.SHOW_ALARMS to { _ -> showAlarms() },
-        AssistantTools.CREATE_REMINDER to { call -> createReminder(call) },
         AssistantTools.SEND_MESSAGE to { call -> sendMessage(call) },
         AssistantTools.CALL_CONTACT to { call -> callContact(call) },
         AssistantTools.OPEN_APP to { call -> openApp(call) },
@@ -131,27 +126,6 @@ class ToolExecutor(
 
     private fun showAlarms(): ToolResult =
         launch(Intent(AlarmClock.ACTION_SHOW_ALARMS), "Here are your alarms.", "No clock app to open.")
-
-    // ---- Reminders ---------------------------------------------------------------
-
-    private suspend fun createReminder(call: ToolCall): ToolResult {
-        val task = call.string("task")?.takeIf { it.isNotBlank() }
-            ?: return ToolResult.failed(ASK_TASK)
-        // The model sometimes copies a tool-name token into the task ("set_reminder").
-        // Speech never contains underscores, so one marks a hallucinated task, not a real
-        // thing to be reminded of. Refuse — which also stops the bad parse being learned.
-        if ('_' in task) return ToolResult.failed(ASK_TASK)
-        val hour = TimeResolver.hourOf(call.int("hour"))
-        val minute = TimeResolver.minuteOf(call.int("minute")) ?: 0
-        // A time that is exactly now is the model echoing the clock, not a time the user
-        // gave. Drop it: keep the task, but as a plain note rather than one that fires now.
-        val dueHour = if (TimeResolver.echoesNow(hour, minute)) null else hour
-        // "Set a reminder for 5 minutes" names no task, and the model fills the slot with the request.
-        // With a time it is still a reminder; with none there is nothing to keep.
-        val untitled = StatedTime.isUntitled(task)
-        if (untitled && dueHour == null) return ToolResult.failed(ASK_TASK)
-        return reminders.create(task.takeUnless { untitled }, dueHour, minute, call.bool("tomorrow"))
-    }
 
     // ---- Messaging ---------------------------------------------------------------
 

@@ -1,0 +1,27 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000031",
+    "type": "migrate",
+    "lines": [
+        "- [ ] Pay rent — due Tue 3 Nov, 9:00 AM  <!-- id:ab12cd34 due:2026-11-03T09:00 added 2026-10-27 09:04 -->"
+    ],
+    "chunk": {
+        "index": 0,
+        "count": 1,
+        "file_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "context": {
+        "now_epoch_ms": 1793109780000,
+        "speech_end_epoch_ms": 1793109779400,
+        "zone": "Europe/London",
+        "locale": "en-GB",
+        "hour_cycle": "h12",
+        "source": "voice",
+        "round": 0,
+        "routed_by": "keyword"
+    },
+    "client": {
+        "package": "io.github.ijazshare.assistant",
+        "version": "0.1.0"
+    }
+}

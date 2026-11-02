@@ -1,0 +1,31 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000020",
+    "status": "done",
+    "speech": "Okay. Marked 'Call Amira' as done.",
+    "display": {
+        "title": "Call Amira",
+        "lines": [
+            "Inbox"
+        ]
+    },
+    "effects": [
+        {
+            "op": "completed",
+            "task_id": "t_Amira00001",
+            "title": "Call Amira",
+            "project": "Inbox",
+            "due": null,
+            "recurrence": null,
+            "reminder_at_epoch_ms": null
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": {
+        "token": "u_41fe",
+        "expires_epoch_ms": 1793110380000
+    },
+    "open_uri": "tasks://task/t_Amira00001",
+    "error": null
+}

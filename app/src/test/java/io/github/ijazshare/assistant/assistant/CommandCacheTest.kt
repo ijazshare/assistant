@@ -134,44 +134,9 @@ class CommandCacheTest {
     }
 
     @Test
-    fun `a task rewritten through the user's notes is not cached`() {
-        val cache = cache()
-        // "my brother" became "Osman" via memories.md; that depends on the notes, not the words.
-        assertThat(
-            cache.learn(
-                "remind me to call my brother",
-                ToolCall(AssistantTools.CREATE_REMINDER, mapOf("task" to "call Osman")),
-            ),
-        ).isFalse()
-        assertThat(
-            cache.learn(
-                "remind me to buy milk",
-                ToolCall(AssistantTools.CREATE_REMINDER, mapOf("task" to "buy milk")),
-            ),
-        ).isTrue()
-    }
-
-    @Test
-    fun `the tomorrow flag must match the word`() {
-        val cache = cache()
-        assertThat(
-            cache.learn(
-                "remind me tomorrow at 7 to call Ali",
-                ToolCall(
-                    AssistantTools.CREATE_REMINDER,
-                    mapOf("task" to "call Ali", "hour" to "7", "tomorrow" to "true"),
-                ),
-            ),
-        ).isTrue()
-        assertThat(
-            cache.learn(
-                "remind me at 7 to call Ali",
-                ToolCall(
-                    AssistantTools.CREATE_REMINDER,
-                    mapOf("task" to "call Ali", "hour" to "7", "tomorrow" to "true"),
-                ),
-            ),
-        ).isFalse()
+    fun `a call to Tasks is never cached`() {
+        // Tasks decides each time (and may answer "not mine"), so a remembered phrase must not skip it.
+        assertThat(cache().learn("remind me to buy milk", ToolCall(AssistantTools.TASKS, emptyMap()))).isFalse()
     }
 
     @Test

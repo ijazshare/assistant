@@ -25,7 +25,11 @@ object AssistantTools {
     const val SET_ALARM = "set_alarm"
     const val SET_TIMER = "set_timer"
     const val SHOW_ALARMS = "show_alarms"
+
+    /** The old reminder tool, no longer offered: Tasks keeps reminders now. Kept for the code that still names it. */
     const val CREATE_REMINDER = "create_reminder"
+
+    const val TASKS = "tasks"
     const val SEND_MESSAGE = "send_message"
     const val CALL_CONTACT = "call_contact"
     const val OPEN_APP = "open_app"
@@ -89,24 +93,10 @@ object AssistantTools {
             description = "List alarms already set.",
         ),
         Tool(
-            name = CREATE_REMINDER,
-            description = "Remember a task, optionally at a time.",
-            params = listOf(
-                ToolParam("task", ParamType.STRING, "What to be reminded of.", required = true),
-                ToolParam(
-                    "hour",
-                    ParamType.INTEGER,
-                    "Hour in 24-hour time, if a time was given. Six in the evening is 18.",
-                    range = 0..23,
-                ),
-                ToolParam(
-                    "minute",
-                    ParamType.INTEGER,
-                    "Minutes past the hour, if a time was given.",
-                    range = 0..59,
-                ),
-                ToolParam("tomorrow", ParamType.BOOLEAN, "True if it is for tomorrow rather than today."),
-            ),
+            name = TASKS,
+            description = "Tasks, to-do lists and reminders: remind me, add to or read my list, what is due or " +
+                "overdue, mark done, move, snooze, delete, brain dump. Not alarms or timers.",
+            // No parameters, so the router has nothing to invent: the words go to the Tasks app as they were said.
         ),
         Tool(
             name = SEND_MESSAGE,

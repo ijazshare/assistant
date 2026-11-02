@@ -1,0 +1,23 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000032",
+    "status": "done",
+    "speech": "",
+    "display": null,
+    "effects": [
+        {
+            "op": "completed",
+            "task_id": "t_8Q2c",
+            "title": "Pay rent",
+            "project": "Inbox",
+            "due": null,
+            "recurrence": null,
+            "reminder_at_epoch_ms": null
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

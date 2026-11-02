@@ -1,0 +1,21 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000028",
+    "status": "done",
+    "speech": "Undone. I've removed 'Call Amira'.",
+    "display": null,
+    "effects": [
+        {
+            "op": "undone",
+            "undone_op": "created",
+            "task_ids": [
+                "t_8Q2c"
+            ]
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

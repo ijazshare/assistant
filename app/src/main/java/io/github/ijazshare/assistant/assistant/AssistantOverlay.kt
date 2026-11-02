@@ -58,6 +58,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.ijazshare.assistant.tasks.TaskOption
 import io.github.ijazshare.assistant.tools.Contact
 import io.github.ijazshare.assistant.ui.assistant.IndeterminateCells
 import io.github.ijazshare.assistant.ui.assistant.LevelMeter
@@ -197,7 +198,12 @@ fun AssistantOverlay(showCount: Int, hideCount: Int, onDismiss: () -> Unit) {
                         },
                     )
                 }
-                SessionBody(state, onChoose = { session.chooseContact(it) })
+                SessionBody(
+                    state,
+                    onChoose = { session.chooseContact(it) },
+                    onOption = { session.chooseOption(it) },
+                    onUndo = { session.undoLast() },
+                )
             }
         }
     }
@@ -248,7 +254,12 @@ private fun CommandField(value: String, onValueChange: (String) -> Unit, onSend:
 }
 
 @Composable
-private fun SessionBody(state: SessionState, onChoose: (Contact) -> Unit) {
+private fun SessionBody(
+    state: SessionState,
+    onChoose: (Contact) -> Unit,
+    onOption: (TaskOption) -> Unit,
+    onUndo: () -> Unit,
+) {
     when (state) {
         SessionState.Idle, SessionState.Preparing -> {
             Working("Getting ready")
@@ -293,6 +304,12 @@ private fun SessionBody(state: SessionState, onChoose: (Contact) -> Unit) {
                 style = FootStyle,
                 color = Faint,
             )
+            if (state.canUndo) Chip("Undo", onUndo)
+        }
+
+        is SessionState.FollowUp -> {
+            Text(state.question, style = ResultStyle, color = OnCard)
+            state.options.forEach { Chip(it.label) { onOption(it) } }
         }
 
         is SessionState.Problem -> {
@@ -328,6 +345,19 @@ private fun SessionBody(state: SessionState, onChoose: (Contact) -> Unit) {
 
 /** Enough of a number to tell two people with the same name apart. */
 private const val NUMBER_HINT_DIGITS = 4
+
+@Composable
+private fun Chip(label: String, onClick: () -> Unit) {
+    Text(
+        text = label,
+        style = LabelStyle,
+        color = Accent,
+        modifier = Modifier
+            .border(1.dp, Accent, CardShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    )
+}
 
 /** A calm status line plus a quiet activity bar, for any state that is still working. */
 @Composable

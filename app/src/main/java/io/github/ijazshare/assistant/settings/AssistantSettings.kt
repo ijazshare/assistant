@@ -11,6 +11,7 @@ package io.github.ijazshare.assistant.settings
 
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -97,6 +98,13 @@ class AssistantSettings(private val context: Context) {
     suspend fun setHomeKey(value: String) = setOrClear(HOME_KEY, value)
     suspend fun setHomeTrigger(value: String) = setOrClear(HOME_TRIGGER, value)
 
+    /** Set once tasks.md has moved into Tasks (the migration, spec 4.13). */
+    suspend fun tasksMigratedNow(): Boolean = context.dataStore.data.first()[TASKS_MIGRATED] == true
+
+    suspend fun setTasksMigrated() {
+        context.dataStore.edit { it[TASKS_MIGRATED] = true }
+    }
+
     private suspend fun setOrClear(key: Preferences.Key<String>, value: String) {
         context.dataStore.edit { prefs ->
             val trimmed = value.trim()
@@ -120,6 +128,7 @@ class AssistantSettings(private val context: Context) {
         private val ADMIN_NAME = stringPreferencesKey("admin_name")
         private val HOME_KEY = stringPreferencesKey("home_key")
         private val HOME_TRIGGER = stringPreferencesKey("home_trigger")
+        private val TASKS_MIGRATED = booleanPreferencesKey("tasks_migrated")
         private val OWN_NUMBER = stringPreferencesKey("own_number")
         private val REMOTE_LLM_URL = stringPreferencesKey("remote_llm_url")
         private val REMOTE_LLM_KEY = stringPreferencesKey("remote_llm_key")

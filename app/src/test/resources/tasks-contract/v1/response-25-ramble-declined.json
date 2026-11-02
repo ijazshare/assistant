@@ -1,0 +1,13 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000030",
+    "status": "declined",
+    "speech": "Brain dumps aren't ready in the task app yet.",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": null,
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

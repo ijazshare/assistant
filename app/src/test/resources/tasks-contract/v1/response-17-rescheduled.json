@@ -1,0 +1,40 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000022",
+    "status": "done",
+    "speech": "Okay. Moved 'Gym at 6' to Thursday at 6 pm.",
+    "display": {
+        "title": "Gym at 6",
+        "lines": [
+            "Thursday 6 pm · Home · reminder on"
+        ]
+    },
+    "effects": [
+        {
+            "op": "rescheduled",
+            "task_id": "t_Gym0000001",
+            "title": "Gym at 6",
+            "project": "Home",
+            "due": {
+                "date": "2026-10-29",
+                "time": "18:00",
+                "zone": null
+            },
+            "recurrence": null,
+            "reminder_at_epoch_ms": 1793296800000,
+            "previous_due": {
+                "date": "2026-10-27",
+                "time": "18:00",
+                "zone": null
+            }
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": {
+        "token": "u_41fe",
+        "expires_epoch_ms": 1793110380000
+    },
+    "open_uri": "tasks://task/t_Gym0000001",
+    "error": null
+}

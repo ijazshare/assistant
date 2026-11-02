@@ -101,7 +101,7 @@ object PromptBuilder {
         // model duly filed "at 6pm" as hour 6 — a notification twelve hours early.
         appendLine(
             """remind me to take the bins out at 8pm -> """ +
-                """{"tool":"create_reminder","arguments":{"task":"take the bins out","hour":20}}""",
+                """{"tool":"tasks"}""",
         )
         appendLine("""open Spotify -> {"tool":"open_app","arguments":{"app":"Spotify"}}""")
         // The arguments object is not optional once a tool declares a parameter: the

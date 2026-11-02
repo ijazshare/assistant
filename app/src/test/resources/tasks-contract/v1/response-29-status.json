@@ -1,0 +1,29 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000034",
+    "status": "done",
+    "speech": "",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": null,
+    "undo": null,
+    "open_uri": null,
+    "error": null,
+    "health": {
+        "contract_version": 1,
+        "counts": {
+            "open": 4,
+            "overdue": 0,
+            "due_today": 1
+        },
+        "permissions": {
+            "notifications": true,
+            "exact_alarm": true,
+            "battery_unrestricted": false
+        },
+        "migrated": [
+            "assistant_md"
+        ]
+    }
+}

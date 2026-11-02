@@ -51,9 +51,9 @@ class RoutingBenchmarkTest {
         Case("show my alarms", AssistantTools.SHOW_ALARMS),
         Case("what alarms are set", AssistantTools.SHOW_ALARMS),
         // ---- reminders ----
-        Case("remind me to buy milk", AssistantTools.CREATE_REMINDER),
-        Case("remind me to call Osman at 6pm", AssistantTools.CREATE_REMINDER),
-        Case("remind me to take the bins out tonight", AssistantTools.CREATE_REMINDER),
+        Case("remind me to buy milk", AssistantTools.TASKS),
+        Case("remind me to call Osman at 6pm", AssistantTools.TASKS),
+        Case("remind me to take the bins out tonight", AssistantTools.TASKS),
         // ---- messaging / calls ----
         Case("text Osman I'm running late", AssistantTools.SEND_MESSAGE),
         Case("message mum that I will be home soon", AssistantTools.SEND_MESSAGE),
@@ -108,7 +108,7 @@ class RoutingBenchmarkTest {
             "book me a flight to Cairo",
             AssistantTools.UNSUPPORTED,
             AssistantTools.ANSWER,
-            AssistantTools.CREATE_REMINDER,
+            AssistantTools.TASKS,
         ),
     )
 

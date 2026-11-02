@@ -1,0 +1,28 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000011",
+    "status": "needs_input",
+    "speech": "I don't have a Garden list. Create it, or put this in Inbox?",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": {
+        "id": "c_1",
+        "expects": "choice",
+        "expires_epoch_ms": 1793109870000,
+        "rounds_left": 1,
+        "options": [
+            {
+                "id": "o1",
+                "label": "Create it"
+            },
+            {
+                "id": "o2",
+                "label": "Inbox"
+            }
+        ]
+    },
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

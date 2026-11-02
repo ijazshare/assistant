@@ -1,0 +1,35 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000001",
+    "status": "done",
+    "speech": "Okay. I'll remind you to call Amira today at 5 pm.",
+    "display": {
+        "title": "Call Amira",
+        "lines": [
+            "Today 5 pm · Inbox · reminder on"
+        ]
+    },
+    "effects": [
+        {
+            "op": "created",
+            "task_id": "new4",
+            "title": "Call Amira",
+            "project": "Inbox",
+            "due": {
+                "date": "2026-10-27",
+                "time": "17:00",
+                "zone": null
+            },
+            "recurrence": null,
+            "reminder_at_epoch_ms": 1793120400000
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": {
+        "token": "u_41fe",
+        "expires_epoch_ms": 1793110380000
+    },
+    "open_uri": "tasks://task/new4",
+    "error": null
+}

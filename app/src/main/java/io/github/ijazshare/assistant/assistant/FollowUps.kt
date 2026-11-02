@@ -9,15 +9,24 @@
  */
 package io.github.ijazshare.assistant.assistant
 
+import android.util.Log
 import io.github.ijazshare.assistant.history.QuerySource
 import io.github.ijazshare.assistant.history.Resolution
+import io.github.ijazshare.assistant.settings.AssistantSettings
+import io.github.ijazshare.assistant.tasks.TaskMigration
+import io.github.ijazshare.assistant.tasks.TaskOption
+import io.github.ijazshare.assistant.tasks.TaskRequest
+import io.github.ijazshare.assistant.tasks.TaskResponse
+import io.github.ijazshare.assistant.tasks.TaskRouting
 import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.Contact
 import io.github.ijazshare.assistant.tools.ContactResolution
 import io.github.ijazshare.assistant.tools.ToolCall
+import io.github.ijazshare.assistant.tools.ToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * If a send is waiting for its words, this transcript is them, or a change of mind. If one is
@@ -143,4 +152,149 @@ internal suspend fun VoiceSession.contactChoices(call: ToolCall): List<Contact>?
  */
 internal fun VoiceSession.listenForAnswer() {
     if (source == QuerySource.VOICE && stops == stopsAtStart) start()
+}
+
+// ---- Tasks (spec 4.7, 4.8, 4.12 step 5) -----------------------------------------------------------------
+
+/** The conversation Tasks is waiting on: its id, the question number (1 or 2) and when it expires. */
+internal data class TaskPending(val conversationId: String, val round: Int, val expiresAtMillis: Long)
+
+private const val NOT_MINE = "I cannot do that yet."
+private const val MAX_TASK_ROUNDS = 2
+private val migrating = AtomicBoolean(false)
+
+/**
+ * The answer to Tasks' open question, then an undo, then words that are plainly for Tasks (all before the model).
+ * [viaTasks] is false when Tasks has just said the words are not its own, so they are not offered a second time.
+ */
+internal suspend fun VoiceSession.answeredByTasks(transcript: String, sttMillis: Long, viaTasks: Boolean): Boolean {
+    val waiting = taskPending
+    taskPending = null
+    if (waiting != null && waiting.expiresAtMillis > System.currentTimeMillis()) {
+        return followUp(transcript, null, waiting, sttMillis)
+    }
+    if (!viaTasks) return false
+    if (TaskRouting.isUndo(transcript) && taskClient.canUndo()) return undo(transcript, sttMillis)
+    return TaskRouting.claims(transcript) && sendToTasks(transcript, "keyword", sttMillis, 0, Resolution.CACHE)
+}
+
+/** Sends the words to Tasks and shows what it says. False only for a keyword or follow-up that Tasks did not claim. */
+@Suppress("LongParameterList") // the command's timing and how it was resolved travel together
+internal suspend fun VoiceSession.sendToTasks(
+    transcript: String,
+    routedBy: String,
+    sttMillis: Long,
+    llmMillis: Long,
+    resolution: Resolution,
+    waiting: TaskPending? = null,
+    optionId: String? = null,
+): Boolean {
+    val request = TaskRequest(
+        type = if (waiting == null) "utterance" else "follow_up",
+        utterance = transcript.takeIf { optionId == null },
+        conversationId = waiting?.conversationId,
+        optionId = optionId,
+        source = if (source == QuerySource.TYPED) "typed" else "voice",
+        routedBy = routedBy,
+        round = waiting?.round ?: 0,
+        speechEndMillis = speechEnd,
+    )
+    val answer = taskClient.send(request)
+    if (answer.status == "not_mine") {
+        if (routedBy != "model") return false
+        showTasks(transcript, ToolResult.failed(NOT_MINE), answer, sttMillis, llmMillis, resolution, waiting)
+        return true
+    }
+    showTasks(transcript, answer.asResult(), answer, sttMillis, llmMillis, resolution, waiting)
+    return true
+}
+
+private fun TaskResponse.asResult() = ToolResult(
+    spoken = speech.ifBlank { if (status == "done") "Done." else "Something went wrong in the task app." },
+    success = status == "done",
+    detail = display?.lines?.joinToString("\n")?.ifBlank { null },
+)
+
+@Suppress("LongParameterList") // the command's timing and how it was resolved travel together
+private suspend fun VoiceSession.showTasks(
+    transcript: String,
+    result: ToolResult,
+    answer: TaskResponse,
+    sttMillis: Long,
+    llmMillis: Long,
+    resolution: Resolution,
+    waiting: TaskPending?,
+) {
+    val round = (waiting?.round ?: 0) + 1
+    // A question Tasks asked a third time is its mistake, not ours to follow: it ends the conversation.
+    val asking = answer.conversation?.takeIf { answer.status == "needs_input" && round <= MAX_TASK_ROUNDS }
+    asking?.let { taskPending = TaskPending(it.id, round, it.expiresEpochMs) }
+    present(
+        transcript,
+        ToolCall(AssistantTools.TASKS, emptyMap()),
+        result,
+        sttMillis,
+        llmMillis,
+        resolution,
+        listenAfter = asking != null,
+        question = asking?.let { SessionState.FollowUp(result.spoken, it.options) },
+        canUndo = taskClient.canUndo(),
+    )
+}
+
+private suspend fun VoiceSession.followUp(
+    transcript: String,
+    optionId: String?,
+    waiting: TaskPending,
+    sttMillis: Long,
+): Boolean {
+    // A "not mine" answer to a follow-up is a fresh command for the normal path (4.7).
+    if (sendToTasks(transcript, "follow_up", sttMillis, 0, Resolution.CACHE, waiting, optionId)) return true
+    act(transcript, sttMillis, viaTasks = false)
+    return true
+}
+
+/** The Undo chip, or the words "undo" with a token held. */
+internal suspend fun VoiceSession.undo(transcript: String, sttMillis: Long): Boolean {
+    val token = taskClient.lastUndo?.token ?: return false
+    val answer = taskClient.send(TaskRequest("undo", undoToken = token, source = "voice", routedBy = "keyword"))
+    showTasks(transcript, answer.asResult(), answer, sttMillis, 0, Resolution.CACHE, null)
+    return true
+}
+
+/** A tapped option chip answers Tasks' question without speech. */
+fun VoiceSession.chooseOption(option: TaskOption) {
+    val waiting = taskPending ?: return
+    taskPending = null
+    stopListening()
+    requestAudioFocus()
+    beginCommand()
+    processing = scope.launch { followUp(option.label, option.id, waiting, sttMillis = 0) }
+}
+
+/** The Undo chip. */
+fun VoiceSession.undoLast() {
+    stopListening()
+    requestAudioFocus()
+    beginCommand()
+    processing = scope.launch { undo("undo", sttMillis = 0) }
+}
+
+/** Nothing was said, or the overlay closed: tell Tasks to drop its open question (4.7). Nothing is spoken. */
+internal fun VoiceSession.cancelTaskQuestion() {
+    val waiting = taskPending ?: return
+    taskPending = null
+    scope.launch { taskClient.send(TaskRequest("cancel", conversationId = waiting.conversationId)) }
+}
+
+/** Moves tasks.md into Tasks once, in the background, at the first session after Tasks answers (4.13). */
+internal fun VoiceSession.migrateOnce() {
+    if (!migrating.compareAndSet(false, true)) return
+    scope.launch(Dispatchers.IO) {
+        try {
+            if (!AssistantSettings(context).tasksMigratedNow()) Log.i("Assistant", TaskMigration(context).run())
+        } finally {
+            migrating.set(false)
+        }
+    }
 }

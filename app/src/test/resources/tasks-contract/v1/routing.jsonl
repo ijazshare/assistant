@@ -1,0 +1,37 @@
+{"utterance":"remind me to call Amira at 5","claim":true,"intent":"create"}
+{"utterance":"okay remind me to stretch at 4pm","claim":true,"intent":"create"}
+{"utterance":"so, remind me tomorrow at 9 to send the report","claim":true,"intent":"create"}
+{"utterance":"add oat milk and eggs to my shopping list","claim":true,"intent":"create"}
+{"utterance":"put water the plants on my to-do list","claim":true,"intent":"create"}
+{"utterance":"add a task to call the garage","claim":true,"intent":"create"}
+{"utterance":"create a task renew the passport on Friday","claim":true,"intent":"create"}
+{"utterance":"mark call Amira as done","claim":true,"intent":"complete"}
+{"utterance":"tick off the gas bill","claim":true,"intent":"complete"}
+{"utterance":"I've paid the gas bill","claim":true,"intent":"complete"}
+{"utterance":"I have finished the report","claim":true,"intent":"complete"}
+{"utterance":"what's on my list today","claim":true,"intent":"query"}
+{"utterance":"what do I have tomorrow","claim":true,"intent":"query"}
+{"utterance":"anything overdue","claim":true,"intent":"query"}
+{"utterance":"anything on my list today","claim":true,"intent":"query"}
+{"utterance":"read my tasks","claim":true,"intent":"query"}
+{"utterance":"show my list","claim":true,"intent":"query"}
+{"utterance":"move the gym task to Thursday","claim":true,"intent":"reschedule"}
+{"utterance":"push that to tomorrow","claim":true,"intent":"reschedule"}
+{"utterance":"snooze that for an hour","claim":true,"intent":"reschedule"}
+{"utterance":"delete the gym task","claim":true,"intent":"delete"}
+{"utterance":"remove the gym reminder","claim":true,"intent":"delete"}
+{"utterance":"priority one call the insurer tomorrow morning","claim":true,"intent":"create"}
+{"utterance":"make the gas bill task priority one","claim":true,"intent":"change"}
+{"utterance":"create a list called Garden","claim":true,"intent":"create_project"}
+{"utterance":"create a label called errands","claim":true,"intent":"create_label"}
+{"utterance":"start a brain dump","claim":true,"intent":"ramble"}
+{"utterance":"brain dump call the garage about the MOT","claim":true,"intent":"ramble"}
+{"utterance":"set a timer for 10 minutes","claim":false,"intent":"not_mine"}
+{"utterance":"wake me at 7","claim":false,"intent":"not_mine"}
+{"utterance":"set an alarm for 6 am","claim":false,"intent":"not_mine"}
+{"utterance":"what's the weather","claim":false,"intent":"not_mine"}
+{"utterance":"text Sam I'm running late","claim":false,"intent":"not_mine"}
+{"utterance":"call Amira","claim":false,"intent":"not_mine"}
+{"utterance":"open the camera","claim":false,"intent":"not_mine"}
+{"utterance":"Thank you.","claim":false,"intent":"not_mine"}
+{"utterance":"what time is it","claim":false,"intent":"not_mine"}

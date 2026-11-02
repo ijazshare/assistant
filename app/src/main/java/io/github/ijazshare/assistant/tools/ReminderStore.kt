@@ -132,6 +132,11 @@ class ReminderStore(private val context: Context) {
         context.getSystemService<AlarmManager>()?.cancel(pendingIntentFor(id, task = ""))
     }
 
+    /** Disarms one alarm without touching the file (the migration to Tasks moves the reminder). */
+    fun cancelAlarm(id: String) {
+        context.getSystemService<AlarmManager>()?.cancel(pendingIntentFor(id, task = ""))
+    }
+
     /**
      * Re-arms every open, dated task from the file. Returns how many.
      *

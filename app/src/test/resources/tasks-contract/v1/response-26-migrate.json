@@ -1,0 +1,23 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000031",
+    "status": "done",
+    "speech": "Imported 1 task from your old list.",
+    "display": null,
+    "effects": [
+        {
+            "op": "migrated",
+            "chunk_index": 0,
+            "imported": 1,
+            "already_imported": 0,
+            "needs_review": 0,
+            "non_task_lines": 0,
+            "done_all": true
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

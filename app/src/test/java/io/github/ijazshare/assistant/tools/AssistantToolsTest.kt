@@ -34,12 +34,17 @@ class AssistantToolsTest {
     }
 
     @Test
+    fun `tasks takes no arguments and the old reminder tool is no longer offered`() {
+        assertThat(AssistantTools.all.first { it.name == AssistantTools.TASKS }.params).isEmpty()
+        assertThat(AssistantTools.all.map { it.name }).doesNotContain(AssistantTools.CREATE_REMINDER)
+    }
+
+    @Test
     fun `every declared tool has a required argument it can be identified by`() {
         // A tool whose arguments are all optional can be emitted as an empty object,
         // which is fine, but one that needs a subject must say so or the executor will
         // have nothing to act on.
         val needsSubject = listOf(
-            AssistantTools.CREATE_REMINDER,
             AssistantTools.SEND_MESSAGE,
             AssistantTools.CALL_CONTACT,
             AssistantTools.OPEN_APP,

@@ -331,7 +331,6 @@ class CommandCache internal constructor(private val file: File) {
         val TIME_BEARING: Set<String> = setOf(
             AssistantTools.SET_ALARM,
             AssistantTools.SET_TIMER,
-            AssistantTools.CREATE_REMINDER,
         )
 
         /**
@@ -348,7 +347,6 @@ class CommandCache internal constructor(private val file: File) {
             AssistantTools.SET_ALARM,
             AssistantTools.SET_TIMER,
             AssistantTools.SHOW_ALARMS,
-            AssistantTools.CREATE_REMINDER,
             AssistantTools.OPEN_APP,
             AssistantTools.READ_SCREEN,
             AssistantTools.TAKE_SCREENSHOT,

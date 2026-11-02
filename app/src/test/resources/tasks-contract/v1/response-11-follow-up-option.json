@@ -1,0 +1,28 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000015",
+    "status": "needs_input",
+    "speech": "What time on Friday the 30th?",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": {
+        "id": "c_2",
+        "expects": "time",
+        "expires_epoch_ms": 1793109870000,
+        "rounds_left": 0,
+        "options": [
+            {
+                "id": "o1",
+                "label": "9 am"
+            },
+            {
+                "id": "o2",
+                "label": "No alert"
+            }
+        ]
+    },
+    "undo": null,
+    "open_uri": null,
+    "error": null
+}

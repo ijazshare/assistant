@@ -150,12 +150,12 @@ class SpokenPipelineTest {
     }
 
     @Test
-    fun aSpokenReminderKeepsItsTask() {
+    fun aSpokenReminderGoesToTasks() {
         assumeTrue(ready)
         val heard = transcribe("reminder.wav")
         val (tool, args) = toolFor(heard)
-        assertThat(tool).isEqualTo(AssistantTools.CREATE_REMINDER)
-        assertThat(args["task"]).ignoringCase().contains("call")
+        assertThat(tool).isEqualTo(AssistantTools.TASKS)
+        assertThat(args).isEmpty()
     }
 
     /**

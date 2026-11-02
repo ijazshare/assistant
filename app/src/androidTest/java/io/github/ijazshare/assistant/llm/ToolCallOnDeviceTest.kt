@@ -162,10 +162,10 @@ class ToolCallOnDeviceTest {
     }
 
     @Test
-    fun createsAReminderWithItsTask() {
+    fun sendsAReminderToTasks() {
         val (tool, args) = parse("remind me to buy milk")
-        assertThat(tool).isEqualTo(AssistantTools.CREATE_REMINDER)
-        assertThat(args["task"]).ignoringCase().contains("milk")
+        assertThat(tool).isEqualTo(AssistantTools.TASKS)
+        assertThat(args).isEmpty()
     }
 
     @Test
@@ -188,16 +188,15 @@ class ToolCallOnDeviceTest {
         // letting the user believe a flight was arranged is not, and that is what this
         // is guarding against.
         //
-        // create_reminder is accepted deliberately. A 1B model files an errand it cannot
-        // run as an errand to remember, and the confirmation it produces says exactly
-        // that — "I will remind you to book flight to Cairo at 23:00" — so nothing is
-        // claimed that did not happen. Demanding a refusal here would be insisting on a
-        // less useful answer for the sake of a tidier rule.
+        // tasks is accepted deliberately. A 1B model files an errand it cannot run as an
+        // errand to remember, and Tasks says exactly what it saved, so nothing is claimed
+        // that did not happen. Demanding a refusal here would be insisting on a less
+        // useful answer for the sake of a tidier rule.
         val (tool, _) = parse("book me a flight to Cairo next Tuesday")
         assertThat(tool).isAnyOf(
             AssistantTools.UNSUPPORTED,
             AssistantTools.ANSWER,
-            AssistantTools.CREATE_REMINDER,
+            AssistantTools.TASKS,
         )
     }
 }

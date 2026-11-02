@@ -1,0 +1,16 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000041",
+    "status": "error",
+    "speech": "Something went wrong in the task app.",
+    "display": null,
+    "effects": [],
+    "warnings": [],
+    "conversation": null,
+    "undo": null,
+    "open_uri": null,
+    "error": {
+        "code": "internal",
+        "detail": "fixture"
+    }
+}

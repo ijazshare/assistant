@@ -52,6 +52,7 @@ import androidx.core.content.getSystemService
 import io.github.ijazshare.assistant.context.AssistantFile
 import io.github.ijazshare.assistant.context.AssistantFiles
 import io.github.ijazshare.assistant.settings.AssistantSettings
+import io.github.ijazshare.assistant.tasks.TaskMigration
 import io.github.ijazshare.assistant.tools.HomeLink
 import io.github.ijazshare.assistant.ui.assistant.AssistantRule
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
@@ -229,6 +230,24 @@ fun ContextScreen(modifier: Modifier = Modifier) {
                 homeTrigger = trigger
                 scope.launch { settings.setHomeTrigger(trigger) }
             },
+        )
+
+        var tasksStatus by remember { mutableStateOf("Checking the task app") }
+        LaunchedEffect(Unit) { tasksStatus = TaskMigration(context).status() }
+        Text("TASKS APP", style = AssistantLabel, color = AssistantColors.Admin)
+        Text(tasksStatus, style = AssistantReadout, color = AssistantColors.Ghost)
+        Text(
+            text = "RUN MIGRATION",
+            style = AssistantLabel,
+            color = AssistantColors.Admin,
+            modifier = Modifier
+                .clickable {
+                    scope.launch {
+                        tasksStatus = "Moving the old list"
+                        tasksStatus = withContext(Dispatchers.IO) { TaskMigration(context).run() }
+                    }
+                }
+                .padding(vertical = 4.dp),
         )
 
         for (spec in EDITED) {

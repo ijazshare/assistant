@@ -94,8 +94,7 @@ class GrammarBisectTest {
                 """{"tool":"set_alarm","arguments":{"hour":7,"minute":0}}""",
             AssistantTools.SET_TIMER to """{"tool":"set_timer","arguments":{"minutes":10}}""",
             AssistantTools.SHOW_ALARMS to """{"tool":"show_alarms"}""",
-            AssistantTools.CREATE_REMINDER to
-                """{"tool":"create_reminder","arguments":{"task":"buy milk"}}""",
+            AssistantTools.TASKS to """{"tool":"tasks"}""",
             AssistantTools.OPEN_APP to """{"tool":"open_app","arguments":{"app":"Spotify"}}""",
             // Once a tool declares any parameter the grammar always emits ,"arguments":,
             // so the bare form is deliberately no longer legal for read_screen.

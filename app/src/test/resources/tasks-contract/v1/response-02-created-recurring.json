@@ -1,0 +1,39 @@
+{
+    "v": 1,
+    "request_id": "00000000-0000-4000-8000-000000000002",
+    "status": "done",
+    "speech": "Okay. I'll remind you to take my vitamins every day at 9 am, starting tomorrow.",
+    "display": {
+        "title": "Take my vitamins",
+        "lines": [
+            "Tomorrow 9 am · Inbox · reminder on"
+        ]
+    },
+    "effects": [
+        {
+            "op": "created",
+            "task_id": "new4",
+            "title": "Take my vitamins",
+            "project": "Inbox",
+            "due": {
+                "date": "2026-10-28",
+                "time": "09:00",
+                "zone": null
+            },
+            "recurrence": {
+                "rrule": "FREQ=DAILY",
+                "anchor": "schedule",
+                "text": "every day"
+            },
+            "reminder_at_epoch_ms": 1793178000000
+        }
+    ],
+    "warnings": [],
+    "conversation": null,
+    "undo": {
+        "token": "u_41fe",
+        "expires_epoch_ms": 1793110380000
+    },
+    "open_uri": "tasks://task/new4",
+    "error": null
+}

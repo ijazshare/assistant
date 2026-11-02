@@ -37,13 +37,14 @@ import io.github.ijazshare.assistant.settings.AssistantSettings
 import io.github.ijazshare.assistant.stt.ContactNames
 import io.github.ijazshare.assistant.stt.JunkTranscript
 import io.github.ijazshare.assistant.stt.WhisperEngine
+import io.github.ijazshare.assistant.tasks.TaskAppClient
+import io.github.ijazshare.assistant.tasks.TaskOption
 import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.Contact
 import io.github.ijazshare.assistant.tools.ContactLookup
 import io.github.ijazshare.assistant.tools.ContactRecency
 import io.github.ijazshare.assistant.tools.HomeDevices
 import io.github.ijazshare.assistant.tools.HomeGrammar
-import io.github.ijazshare.assistant.tools.ReminderStore
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
 import io.github.ijazshare.assistant.tools.ToolGrammar
@@ -83,7 +84,12 @@ sealed interface SessionState {
         val timing: Timing,
         /** True if the command ran from the learned-phrase cache, with no model involved. */
         val fromCache: Boolean = false,
+        /** True when Tasks gave an undo token that has not expired: the overlay offers an Undo chip. */
+        val canUndo: Boolean = false,
     ) : SessionState
+
+    /** Tasks asked a question (spec 4.7): its words are spoken, its options are chips, the answer goes back. */
+    data class FollowUp(val question: String, val options: List<TaskOption>) : SessionState
 
     data class Problem(val message: String, val actionable: String? = null) : SessionState
 
@@ -138,7 +144,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     private var ownNumber: String? = null
     internal val contacts = ContactLookup(context) { ownNumber }
     internal val recency = ContactRecency(context)
-    private val executor = ToolExecutor(context, ReminderStore(context), contacts)
+    private val executor = ToolExecutor(context, contacts)
 
     init {
         scope.launch { settings.ownNumber.collect { ownNumber = it } }
@@ -219,6 +225,12 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     /** A messaging/calling command held while the user chooses among several contacts. */
     internal var pendingChoice: PendingChoice? = null
 
+    internal val taskClient = TaskAppClient.of(context)
+
+    /** The question Tasks is waiting on, and when the speech that began this command ended (for "in 20 minutes"). */
+    internal var taskPending: TaskPending? = null
+    internal var speechEnd = System.currentTimeMillis()
+
     @Suppress("VariableNaming", "ktlint:standard:backing-property-naming")
     internal val _state = MutableStateFlow<SessionState>(SessionState.Idle)
     val state: StateFlow<SessionState> = _state.asStateFlow()
@@ -229,6 +241,9 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
      */
     fun start() {
         source = QuerySource.VOICE
+        // The Tasks process starts while the user is still speaking; the first session also moves tasks.md over.
+        taskClient.prewarm()
+        migrateOnce()
         // Pause other apps' media the moment we are summoned: it would otherwise bleed into
         // the microphone and, later, play over the spoken reply.
         requestAudioFocus()
@@ -329,6 +344,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     fun dismissed() {
         PendingSend.dismiss()
         PendingReminder.dismiss()
+        cancelTaskQuestion()
         stopListening()
         // The command in flight is abandoned too. stopListening only ends the capture, so a "Text Sam"
         // dismissed while Thinking went on to ask for the words, hold the send and reopen the microphone.
@@ -337,7 +353,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     }
 
     /** Notes the stops and dismissals so far: what a command that began now must not have outlived. */
-    private fun beginCommand() {
+    internal fun beginCommand() {
         stopsAtStart = stops
         dismissalsAtStart = PendingSend.dismissals()
     }
@@ -353,6 +369,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
         val typed = text.trim()
         if (typed.isEmpty()) return
         source = QuerySource.TYPED
+        speechEnd = System.currentTimeMillis()
         stopListening()
         // stopListening gave media back; a typed command still speaks, so take focus again.
         requestAudioFocus()
@@ -371,6 +388,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     internal suspend fun handle(event: CaptureEvent.Finished) {
         AssistantSounds.capturing = false
         beginCommand()
+        speechEnd = System.currentTimeMillis()
         if (event.samples.isEmpty()) {
             fail("I did not hear anything.")
             return
@@ -409,7 +427,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
      * mean no grammar was applied, which is a programming error rather than a runtime
      * condition.
      */
-    internal suspend fun act(transcript: String, sttMillis: Long) {
+    internal suspend fun act(transcript: String, sttMillis: Long, viaTasks: Boolean = true) {
         // Left to right, and only until one answers: a home command first, then a follow-up's answer.
         if (answeredHome(transcript, sttMillis) ||
             answeredPendingSend(transcript, sttMillis) ||
@@ -417,7 +435,8 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
         ) {
             return
         }
-        if (answeredWithoutTheModel(transcript, sttMillis)) return
+        // Then Tasks (the answer to its open question, an undo, or words that are plainly its own), then the rest.
+        if (answeredByTasks(transcript, sttMillis, viaTasks) || answeredWithoutTheModel(transcript, sttMillis)) return
 
         if (!ensureLanguageModel()) {
             failCommand(
@@ -453,7 +472,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
             val answer = router.answer(
                 transcript,
                 settings.adminNameNow(),
-                files.contextForPrompt(),
+                files.contextForPrompt(includeTasks = !settings.tasksMigratedNow()),
                 remote = settings.remoteLlmNow(),
             )
             call = if (answer != null) {
@@ -530,6 +549,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
         if (!HomeGrammar.addressed(transcript, trigger)) return false
         PendingSend.dismiss()
         PendingReminder.dismiss()
+        cancelTaskQuestion()
         val home = withContext(Dispatchers.IO) { HomeDevices.parse(files.read(AssistantFiles.HOME)) }
         val call = HomeGrammar.read(transcript, trigger, home).toCall()
         carryOut(transcript, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
@@ -555,6 +575,12 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
             return
         }
 
+        // The model chose Tasks: the words as they were said, never an argument it wrote (spec 4.12 step 5c).
+        if (ready.tool == AssistantTools.TASKS) {
+            sendToTasks(transcript, "model", sttMillis, llmMillis, resolution)
+            return
+        }
+
         var result = executor.execute(ready)
         // The executor asked for the words; remember who they are for.
         val askedForWords = ready.tool == AssistantTools.SEND_MESSAGE && !result.success &&
@@ -564,7 +590,22 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
             PendingReminder.holdUnlessDismissed(transcript, dismissalsAtStart)
 
         result = summarisedScreen(transcript, call, result)
+        present(transcript, call, result, sttMillis, llmMillis, resolution, listenAfter = askedForWords || askedForTask)
+    }
 
+    /** Records, remembers, shows and speaks the outcome of a command; the end of [carryOut] and of a Tasks answer. */
+    @Suppress("LongParameterList") // the command's timing and how it was resolved travel together
+    internal suspend fun present(
+        transcript: String,
+        call: ToolCall,
+        result: ToolResult,
+        sttMillis: Long,
+        llmMillis: Long,
+        resolution: Resolution,
+        listenAfter: Boolean = false,
+        question: SessionState.FollowUp? = null,
+        canUndo: Boolean = false,
+    ) {
         // Learning and recording both touch the disk, and neither is worth a frame of
         // the reply. Only a call the model produced and that then succeeded is learned:
         // a failure might be a misread, and a cache hit is already known.
@@ -594,12 +635,13 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
             if (result.success) AssistantSounds.Cue.CONFIRM else AssistantSounds.Cue.REJECT,
             volume = 0.45f,
         )
-        _state.value = SessionState.Done(
+        _state.value = question ?: SessionState.Done(
             transcript = transcript,
             tool = call.tool,
             result = result,
             timing = Timing(sttMillis, llmMillis),
             fromCache = resolution == Resolution.CACHE,
+            canUndo = canUndo,
         )
 
         // Started while the user is listening to the answer, and on the scope that
@@ -620,7 +662,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
         // spoken rather than after.
         piper.speak(result.spoken)
 
-        if (askedForWords || askedForTask) listenForAnswer()
+        if (listenAfter) listenForAnswer()
     }
 
     /**
@@ -664,6 +706,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     internal fun fail(message: String, actionable: String? = null, transcript: String = "") {
         // An answer that never came: the next command must not be taken for what the reminder is about.
         PendingReminder.dismiss()
+        cancelTaskQuestion()
         // Recorded, not just spoken. The history held eleven entries and zero failures
         // over a period with more than a hundred failed summons, so the one log the user
         // can actually see was the one place the trouble never showed up.
@@ -703,6 +746,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     fun release() {
         // Media the assistant paused resumes when the session ends, not just on a dismiss.
         abandonAudioFocus()
+        taskClient.sessionEnded()
         // The microphone is done the moment the overlay closes; drop the foreground state
         // with it rather than leave a "listening" notification up after the session is gone.
         MicForegroundService.stop(context)
