@@ -212,4 +212,22 @@ class CallChecksTest {
             .doesNotContainKey("target")
         assertThat(CallChecks.reconciled("open quick settings", quick)).isEqualTo(quick)
     }
+
+    @Test
+    fun `an alarm nobody asked for is declined`() {
+        val call = ToolCall(AssistantTools.SET_ALARM, mapOf("hour" to "15", "minute" to "0"))
+
+        for (said in listOf("No, push it tomorrow", "Actually mark that as done", "market done")) {
+            assertThat(CallChecks.reconciled(said, call).tool).isEqualTo(AssistantTools.UNSUPPORTED)
+        }
+    }
+
+    @Test
+    fun `an alarm asked for keeps its time, and one with no time said loses the model's`() {
+        val call = ToolCall(AssistantTools.SET_ALARM, mapOf("hour" to "7", "minute" to "0"))
+
+        assertThat(CallChecks.reconciled("set an alarm for 7 am", call).arguments).containsEntry("hour", "7")
+        assertThat(CallChecks.reconciled("wake me up at 7", call).tool).isEqualTo(AssistantTools.SET_ALARM)
+        assertThat(CallChecks.reconciled("set an alarm", call).arguments).doesNotContainKey("hour")
+    }
 }

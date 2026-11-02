@@ -193,7 +193,9 @@ internal suspend fun VoiceSession.sendToTasks(
 ): Boolean {
     val request = TaskRequest(
         type = if (waiting == null) "utterance" else "follow_up",
-        utterance = transcript.takeIf { optionId == null },
+        // A new command goes without its leading "actually", "no," or "okay": Tasks read
+        // "Actually mark that as done" as not its own. An answer to its question goes as said.
+        utterance = (if (waiting == null) TaskRouting.stripped(transcript) else transcript).takeIf { optionId == null },
         conversationId = waiting?.conversationId,
         optionId = optionId,
         source = if (source == QuerySource.TYPED) "typed" else "voice",

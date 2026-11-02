@@ -62,6 +62,17 @@ internal object CallChecks {
 
             call.tool == AssistantTools.SEND_MESSAGE -> checkedMessage(transcript, call)
 
+            // The model sets an alarm for words that never asked for one: "No, push it tomorrow"
+            // set a real one for 3 PM. So "alarm" or "wake" has to be said, and with no time said
+            // the executor asks for one.
+            call.tool == AssistantTools.SET_ALARM && !alarmAsked(transcript) -> {
+                Log.i(TAG, "declining set_alarm, no alarm asked for in [$transcript]")
+                ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "To set an alarm, say \"alarm\" and the time."))
+            }
+
+            call.tool == AssistantTools.SET_ALARM && TimeExpressions.of(transcript).isEmpty() ->
+                call.copy(arguments = call.arguments - "hour" - "minute")
+
             call.tool == AssistantTools.SET_ALARM || call.tool == AssistantTools.CREATE_REMINDER ->
                 withSpokenTime(transcript, withoutInventedTime(transcript, call))
 
@@ -94,6 +105,11 @@ internal object CallChecks {
     }
 
     private val NOT_LETTER = Regex("[^a-z]+")
+
+    private val ALARM_WORDS = setOf("alarm", "alarms", "wake", "waking")
+
+    internal fun alarmAsked(transcript: String): Boolean =
+        transcript.lowercase().split(NOT_LETTER).any { it in ALARM_WORDS }
 
     /**
      * A call rings at once and cannot be taken back, and the model calls whoever is named near a
