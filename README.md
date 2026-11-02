@@ -78,7 +78,7 @@ What it does today:
 - **Questions.** The small model decides a request is a question; a larger on-device model
   (or a remote one you configure) answers in a sentence.
 - **Home Assistant (optional, off by default).** "Homie, turn off the kitchen light",
-  "Homie, is the garage door open?" and your own phrases ("Homie, pink fan medium" runs the
+  "Homie, is the garage door open?", fan speeds ("Homie, pink bedroom fan high") and your own phrases ("Homie, pink fan medium" runs the
   script you named that) go through the Home Assistant app on your phone to your own Home
   Assistant, which acts only on the devices and scripts you labelled. See
   [Home Assistant](#home-assistant).
@@ -227,7 +227,7 @@ description: >-
   Assistant's key and this phone's user. Assistant sends entity ids and this automation only
   checks them against the labels; it never matches names. It acts only on entities labelled
   "assistant": it switches lights, switches and fans on or off, runs scripts, locks locks,
-  closes covers, and sets a thermostat's mode (heat, cool or off) and target temperature
+  closes covers, sets fan speeds, and sets a thermostat's mode (heat, cool or off) and target temperature
   within the limits in the variables below. It tells the state of anything labelled
   "assistant" or "assistant_read". Nothing is ever unlocked or opened: there is no command for
   either. Anything else is refused.
@@ -345,6 +345,32 @@ actions:
               message: command_broadcast_intent
               data:
                 intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "id:{{ reply_id }}:String.urlencoded,status:done:String"
+                ttl: 10000
+                priority: high
+      - alias: Set the fan speed
+        conditions: "{{ want == 'speed' and kind == 'fan' and cmd.value in ['low', 'medium', 'high'] }}"
+        sequence:
+          # low is the first step, high is 100, medium the middle step (66 on a 3-speed fan).
+          - variables:
+              step: "{{ state_attr(ids[0], 'percentage_step') | float(33.34) }}"
+              steps: "{{ (100 / step) | round(0) | int }}"
+              percent: >-
+                {{ 100 if cmd.value == 'high'
+                   else (step | int) if cmd.value == 'low'
+                   else (((steps + 1) // 2) * step) | int }}
+          - action: fan.set_percentage
+            continue_on_error: true
+            target:
+              entity_id: "{{ ids[0] }}"
+            data:
+              percentage: "{{ percent }}"
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant.debug
                 intent_action: io.github.ijazshare.assistant.HA_REPLY
                 intent_extras: "id:{{ reply_id }}:String.urlencoded,status:done:String"
                 ttl: 10000

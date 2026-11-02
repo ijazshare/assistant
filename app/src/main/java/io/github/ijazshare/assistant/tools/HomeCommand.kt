@@ -20,7 +20,8 @@ sealed interface HomeCommand {
 
     /**
      * An [action] on [entities] (one, or every light in a room), said as [name]. [value] is a
-     * temperature ("72", "+2") or a mode; [mode] goes with a temperature; [asked] is the state a
+     * temperature ("72", "+2"), a mode
+     * or a fan speed (low, medium, high); [mode] goes with a temperature; [asked] is the state a
      * question asked about, which stays on the phone.
      */
     data class Act(
@@ -67,6 +68,7 @@ sealed interface HomeCommand {
         const val CLOSE = "close"
         const val HVAC = "hvac"
         const val TEMPERATURE = "temperature"
+        const val SPEED = "speed"
 
         /** The command a [toCall] call carries, or null for a call the words did not make. */
         fun of(call: ToolCall): HomeCommand? {
@@ -81,7 +83,7 @@ sealed interface HomeCommand {
             }
         }
 
-        private val ACTIONS = setOf(STATE, TURN_ON, TURN_OFF, RUN, LOCK, CLOSE, HVAC, TEMPERATURE)
+        private val ACTIONS = setOf(STATE, TURN_ON, TURN_OFF, RUN, LOCK, CLOSE, HVAC, TEMPERATURE, SPEED)
         private const val DO = "do"
         private const val ENTITY = "entity"
         private const val NAME = "name"

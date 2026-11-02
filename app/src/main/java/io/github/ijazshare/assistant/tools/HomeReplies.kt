@@ -14,6 +14,7 @@ import io.github.ijazshare.assistant.tools.HomeCommand.Companion.CLOSE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.HVAC
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.LOCK
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.RUN
+import io.github.ijazshare.assistant.tools.HomeCommand.Companion.SPEED
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.STATE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TEMPERATURE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_OFF
@@ -72,6 +73,9 @@ private fun Act.done(reply: Map<String, String>): String {
 
         RUN -> "Started $name."
 
+        // ponytail: Home Assistant only knows the command went out for a one-way fan, so no read-back.
+        SPEED -> "Set $name to $value."
+
         LOCK -> "$name is locked."
 
         CLOSE -> "$name is ${reply["state"].orEmpty().lowercase().ifEmpty { "closing" }}."
@@ -92,6 +96,7 @@ private fun Act.expected(): String = when (action) {
     LOCK -> "$name is locked"
     CLOSE -> "$name is closing"
     HVAC -> "$name is set to $value"
+    SPEED -> "$name is on $value"
     TEMPERATURE -> if (value?.firstOrNull()?.isDigit() == true) "$name is set to $value" else "the change"
     else -> "that worked"
 }

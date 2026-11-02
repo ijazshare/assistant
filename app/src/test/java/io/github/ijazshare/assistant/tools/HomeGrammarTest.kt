@@ -15,6 +15,7 @@ import io.github.ijazshare.assistant.tools.HomeCommand.Companion.CLOSE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.HVAC
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.LOCK
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.RUN
+import io.github.ijazshare.assistant.tools.HomeCommand.Companion.SPEED
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.STATE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TEMPERATURE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_OFF
@@ -192,5 +193,21 @@ class HomeGrammarTest {
         assertThat(HomeGrammar.read("Hey house, turn off the ceiling light", "hey house", home)).isEqualTo(ceiling)
         assertThat(HomeGrammar.addressed("Hey, turn off the hall light", "hey house")).isFalse()
         assertThat(HomeGrammar.addressed("anything", "")).isFalse()
+    }
+
+    @Test
+    fun aFanSpeedIsSetByName() {
+        val fan = { level: String -> Act(SPEED, listOf("fan.pink_bedroom_fan"), "Pink Bedroom Fan", level) }
+        assertThat(read("homie pink bedroom fan high")).isEqualTo(fan("high"))
+        assertThat(read("Homie, set the pink bedroom fan to medium.")).isEqualTo(fan("medium"))
+        assertThat(read("homie turn the pink bedroom fan to low speed")).isEqualTo(fan("low"))
+        assertThat(read("homie pink bedroom fan on med")).isEqualTo(fan("medium"))
+        assertThat(
+            read("homie pink bedroom fan off"),
+        ).isEqualTo(Act(TURN_OFF, listOf("fan.pink_bedroom_fan"), "Pink Bedroom Fan"))
+        // The owner's own script of that name still wins.
+        assertThat(read("homie pink fan medium")).isEqualTo(act(RUN, "script.pink_fan_medium", "Pink fan medium"))
+        assertThat(declined("homie pink bedroom light high")).isEqualTo("Pink Bedroom Light has no speeds.")
+        assertThat(read("homie high")).isInstanceOf(Decline::class.java)
     }
 }

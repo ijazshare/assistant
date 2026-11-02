@@ -14,6 +14,7 @@ import io.github.ijazshare.assistant.tools.HomeCommand.Companion.CLOSE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.HVAC
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.LOCK
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.RUN
+import io.github.ijazshare.assistant.tools.HomeCommand.Companion.SPEED
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.STATE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TEMPERATURE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_OFF
@@ -49,7 +50,8 @@ object HomeGrammar {
             rest.firstOrNull() in NEVER -> Decline("I don't unlock or open anything by voice.")
 
             // The owner's own phrases first, so a script called "Movie on" is never read as a switch.
-            else -> asked(rest, home) ?: ran(rest, home) ?: switched(rest, home) ?: thermostat(rest, home)
+            else -> asked(rest, home) ?: ran(rest, home) ?: switched(rest, home) ?: speed(rest, home)
+                ?: thermostat(rest, home)
                 ?: lockedOrClosed(rest, home)
                 ?: Decline("I didn't catch a home command. Say: $trigger, turn off the kitchen light.")
         }
@@ -95,6 +97,26 @@ object HomeGrammar {
                 in SWITCHABLE -> controlled(device) { it.act(if (on) TURN_ON else TURN_OFF) }
                 CLIMATE -> if (on) Decline(SAY_MODE) else controlled(device) { it.act(HVAC, value = OFF) }
                 else -> Decline("I can't switch ${device.name} on or off.")
+            }
+        }
+    }
+
+    /** "pink bedroom fan high", "set the living room fan to medium", "turn the fan to low speed". */
+    private fun speed(rest: List<String>, home: HomeDevices): HomeCommand? {
+        val said = rest.dropLastWhile { it == "speed" }
+        val level = SPEEDS[said.lastOrNull()] ?: return null
+        val target = said.dropLast(1).dropWhile { it in VERBS || it == "set" }.dropLastWhile {
+            it in
+                setOf("to", "on", "at")
+        }
+        if (target.isEmpty()) return null
+        return home.one(target) { device ->
+            if (device.domain ==
+                "fan"
+            ) {
+                controlled(device) { it.act(SPEED, value = level) }
+            } else {
+                Decline("${device.name} has no speeds.")
             }
         }
     }
@@ -177,6 +199,8 @@ private const val SAY_MODE = "Say heat or cool, and the temperature."
 private val HEAT_COOL = setOf("heat", "cool")
 private val MODES = HEAT_COOL + "off"
 private val UNITS = setOf("degrees", "degree", "mode")
+
+private val SPEEDS = mapOf("low" to "low", "med" to "medium", "medium" to "medium", "high" to "high")
 
 // ponytail: a fixed 2-degree step, right for °F; a °C home may want 1, make it a setting if that comes up.
 private val STEPS = mapOf("warmer" to "+2", "cooler" to "-2")
