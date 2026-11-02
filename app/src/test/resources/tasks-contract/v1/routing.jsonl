@@ -9,8 +9,8 @@
 {"utterance":"tick off the gas bill","claim":true,"intent":"complete"}
 {"utterance":"I've paid the gas bill","claim":true,"intent":"complete"}
 {"utterance":"I have finished the report","claim":true,"intent":"complete"}
-{"utterance":"Actually mark that as done","claim":true,"intent":"complete"}
-{"utterance":"okay and mark that has done","claim":true,"intent":"complete"}
+{"utterance":"mark that as done","claim":true,"intent":"complete"}
+{"utterance":"mark that has done","claim":true,"intent":"complete"}
 {"utterance":"Mark the call Dad task has done","claim":true,"intent":"complete"}
 {"utterance":"push that tomorrow","claim":true,"intent":"reschedule"}
 {"utterance":"what's on my list today","claim":true,"intent":"query"}

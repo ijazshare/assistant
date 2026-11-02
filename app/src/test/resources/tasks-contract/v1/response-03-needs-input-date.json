@@ -10,7 +10,7 @@
         "id": "c_1",
         "expects": "date",
         "expires_epoch_ms": 1793109870000,
-        "rounds_left": 1,
+        "rounds_left": 3,
         "options": [
             {
                 "id": "o1",
