@@ -160,7 +160,7 @@ internal fun VoiceSession.listenForAnswer() {
 internal data class TaskPending(val conversationId: String, val round: Int, val expiresAtMillis: Long)
 
 private const val NOT_MINE = "I cannot do that yet."
-private const val MAX_TASK_ROUNDS = 2
+private const val MAX_TASK_ROUNDS = 4
 private val migrating = AtomicBoolean(false)
 
 /**
@@ -231,7 +231,7 @@ private suspend fun VoiceSession.showTasks(
 ) {
     val round = (waiting?.round ?: 0) + 1
     taskRecentUntil = System.currentTimeMillis() + TaskRouting.FOLLOW_UP_MS
-    // A question Tasks asked a third time is its mistake, not ours to follow: it ends the conversation.
+    // A question Tasks asked a fifth time is its mistake, not ours to follow: it ends the conversation.
     val asking = answer.conversation?.takeIf { answer.status == "needs_input" && round <= MAX_TASK_ROUNDS }
     asking?.let { taskPending = TaskPending(it.id, round, it.expiresEpochMs) }
     present(
