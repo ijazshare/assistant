@@ -175,7 +175,9 @@ internal suspend fun VoiceSession.answeredByTasks(transcript: String, sttMillis:
     }
     if (!viaTasks) return false
     if (TaskRouting.isUndo(transcript) && taskClient.canUndo()) return undo(transcript, sttMillis)
-    return TaskRouting.claims(transcript) && sendToTasks(transcript, "keyword", sttMillis, 0, Resolution.CACHE)
+    val recent = System.currentTimeMillis() < taskRecentUntil
+    return (recent || TaskRouting.claims(transcript)) &&
+        sendToTasks(transcript, "keyword", sttMillis, 0, Resolution.CACHE)
 }
 
 /** Sends the words to Tasks and shows what it says. False only for a keyword or follow-up that Tasks did not claim. */
@@ -226,6 +228,7 @@ private suspend fun VoiceSession.showTasks(
     waiting: TaskPending?,
 ) {
     val round = (waiting?.round ?: 0) + 1
+    taskRecentUntil = System.currentTimeMillis() + TaskRouting.FOLLOW_UP_MS
     // A question Tasks asked a third time is its mistake, not ours to follow: it ends the conversation.
     val asking = answer.conversation?.takeIf { answer.status == "needs_input" && round <= MAX_TASK_ROUNDS }
     asking?.let { taskPending = TaskPending(it.id, round, it.expiresEpochMs) }

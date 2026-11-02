@@ -2,7 +2,7 @@
     "v": 1,
     "request_id": "00000000-0000-4000-8000-000000000023",
     "status": "done",
-    "speech": "Okay. Set 'Pay the gas bill' to priority 1.",
+    "speech": "Okay. Moved 'Pay the gas bill' to the Home list.",
     "display": {
         "title": "Pay the gas bill",
         "lines": [
@@ -19,7 +19,7 @@
             "recurrence": null,
             "reminder_at_epoch_ms": null,
             "changed": [
-                "priority"
+                "project"
             ]
         }
     ],

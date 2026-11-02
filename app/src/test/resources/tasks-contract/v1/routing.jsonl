@@ -9,6 +9,10 @@
 {"utterance":"tick off the gas bill","claim":true,"intent":"complete"}
 {"utterance":"I've paid the gas bill","claim":true,"intent":"complete"}
 {"utterance":"I have finished the report","claim":true,"intent":"complete"}
+{"utterance":"Actually mark that as done","claim":true,"intent":"complete"}
+{"utterance":"okay and mark that has done","claim":true,"intent":"complete"}
+{"utterance":"Mark the call Dad task has done","claim":true,"intent":"complete"}
+{"utterance":"push that tomorrow","claim":true,"intent":"reschedule"}
 {"utterance":"what's on my list today","claim":true,"intent":"query"}
 {"utterance":"what do I have tomorrow","claim":true,"intent":"query"}
 {"utterance":"anything overdue","claim":true,"intent":"query"}
@@ -20,8 +24,7 @@
 {"utterance":"snooze that for an hour","claim":true,"intent":"reschedule"}
 {"utterance":"delete the gym task","claim":true,"intent":"delete"}
 {"utterance":"remove the gym reminder","claim":true,"intent":"delete"}
-{"utterance":"priority one call the insurer tomorrow morning","claim":true,"intent":"create"}
-{"utterance":"make the gas bill task priority one","claim":true,"intent":"change"}
+{"utterance":"add a task to call the insurer tomorrow morning","claim":true,"intent":"create"}
 {"utterance":"create a list called Garden","claim":true,"intent":"create_project"}
 {"utterance":"create a label called errands","claim":true,"intent":"create_label"}
 {"utterance":"start a brain dump","claim":true,"intent":"ramble"}

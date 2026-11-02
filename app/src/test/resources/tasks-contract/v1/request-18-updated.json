@@ -2,7 +2,7 @@
     "v": 1,
     "request_id": "00000000-0000-4000-8000-000000000023",
     "type": "utterance",
-    "utterance": "make the gas bill task priority one",
+    "utterance": "move the gas bill task to the Home list",
     "context": {
         "now_epoch_ms": 1793109780000,
         "speech_end_epoch_ms": 1793109779400,

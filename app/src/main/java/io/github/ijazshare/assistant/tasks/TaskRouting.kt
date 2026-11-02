@@ -10,12 +10,14 @@
 package io.github.ijazshare.assistant.tasks
 
 /**
- * The deterministic pre-route (spec 4.12 step 3): words that are plainly for Tasks go there without the model.
+ * The deterministic pre-route (spec 4.12 step 3): words that are plainly for Tasks go there without the model,
+ * and so does anything said within [FOLLOW_UP_MS] of a Tasks reply (VoiceSession.answeredByTasks).
  * Over-claiming is cheap, because a `not_mine` answer falls back to the normal path. The phrases are tested
  * against the shared fixture `contract/v1/routing.jsonl`.
  */
 object TaskRouting {
-    private val FILLER = Regex("^(okay|ok|hey|so|right|please|um|uh)[,.!]?\\s+", RegexOption.IGNORE_CASE)
+    private val FILLER =
+        Regex("^(actually|okay|ok|and|oh|no|wait|hey|so|right|please|um|uh)[,.!]?\\s+", RegexOption.IGNORE_CASE)
     private val CLOCK = Regex("\\b(timer|alarm|wake me)\\b", RegexOption.IGNORE_CASE)
     private val UNDO = Regex("^(undo|undo that|scratch that|take that back)\\b", RegexOption.IGNORE_CASE)
     private val RAMBLE = Regex("\\b(brain ?dump|ramble)\\b", RegexOption.IGNORE_CASE)
@@ -24,7 +26,7 @@ object TaskRouting {
         "^remind me\\b",
         "^(add|put) .+ (to|on|in) (my|the) .*\\b(list|tasks?|to-?dos?)\\b",
         "^(add|create|new) (a )?(task|to-?do)\\b",
-        "^(mark|tick|check) .+ (as )?(done|complete|completed|off)\\b",
+        "^(mark|tick|check) .+ ((as|has) )?(done|complete|completed|off)\\b",
         "^tick off\\b",
         "^(i['’]ve|i have) (done|finished|completed|paid|sent|called|booked|bought|posted|emailed)\\b",
         "^(what['’]s|what is|what do i have|anything|is there anything)\\b.*" +
@@ -34,10 +36,8 @@ object TaskRouting {
         "^my (tasks|to-?do( list)?)\\b",
         "^to-?do\\b",
         "^(move|push|reschedule|postpone|snooze) .+ (to|until|for|by)\\b",
-        "^(snooze|push) (that|it)\\b",
+        "^(snooze|push|move) (that|it|this)\\b",
         "^(delete|remove) .+ (task|reminder|from my list)\\b",
-        "^(priority|p) ?(one|two|three|four|[1-4])\\b",
-        "^(make|set) .+ priority\\b",
         "^(create|make|add) (a )?(new )?(list|project|label) (called|named)\\b",
     ).map { Regex(it, RegexOption.IGNORE_CASE) }
 
@@ -57,4 +57,7 @@ object TaskRouting {
     }
 
     private const val RAMBLE_WORDS = 5
+
+    /** After a Tasks reply, the next words go to Tasks first ("actually mark that as done"). */
+    const val FOLLOW_UP_MS = 60_000L
 }

@@ -229,6 +229,9 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
 
     /** The question Tasks is waiting on, and when the speech that began this command ended (for "in 20 minutes"). */
     internal var taskPending: TaskPending? = null
+
+    /** Until when the next words go to Tasks first: 60 s after its last reply. */
+    internal var taskRecentUntil = 0L
     internal var speechEnd = System.currentTimeMillis()
 
     @Suppress("VariableNaming", "ktlint:standard:backing-property-naming")

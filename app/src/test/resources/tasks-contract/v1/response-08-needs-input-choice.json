@@ -2,7 +2,7 @@
     "v": 1,
     "request_id": "00000000-0000-4000-8000-000000000011",
     "status": "needs_input",
-    "speech": "I don't have a Garden list. Create it, or put this in Inbox?",
+    "speech": "I don't have a Garden list. Create it, or add it without a list?",
     "display": null,
     "effects": [],
     "warnings": [],
@@ -18,7 +18,7 @@
             },
             {
                 "id": "o2",
-                "label": "Inbox"
+                "label": "Without a list"
             }
         ]
     },

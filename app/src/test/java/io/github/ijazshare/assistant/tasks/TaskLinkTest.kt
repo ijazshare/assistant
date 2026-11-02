@@ -69,7 +69,11 @@ class TaskLinkTest {
             if (r.status == "error") assertThat(r.error!!.code).isNotEmpty()
         }
         val question = TaskContract.decode(fixture("response-08-needs-input-choice.json"))!!
-        assertThat(question.conversation!!.options.map { it.label }).containsExactly("Create it", "Inbox").inOrder()
+        assertThat(
+            question.conversation!!.options.map {
+                it.label
+            },
+        ).containsExactly("Create it", "Without a list").inOrder()
         assertThat(TaskContract.decode(fixture("response-23-undo.json"))!!.speech).startsWith("Undone.")
         assertThat(TaskContract.decode(fixture("response-01-created.json"))!!.undo!!.token).isEqualTo("u_41fe")
         assertThat(TaskContract.decode(fixture("response-26-migrate.json"))!!.doneAll).isTrue()
