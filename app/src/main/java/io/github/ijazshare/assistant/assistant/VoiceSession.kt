@@ -278,10 +278,11 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
             // Bias the transcriber toward the caller's contacts, so a name like "Hasan" is
             // heard as itself and not the nearest English word. Read once and reused, unless
             // it came back empty (no permission yet, no signal): that is tried again next time.
-            whisper.setBias(
-                contactBias ?: withContext(Dispatchers.IO) { ContactNames(context).forBias() }
-                    .also { if (it.isNotEmpty()) contactBias = it },
-            )
+            val names = contactBias ?: withContext(Dispatchers.IO) { ContactNames(context).forBias() }
+                .also { if (it.isNotEmpty()) contactBias = it }
+            // With the home link on, the trigger word too: base.en heard "homie" as "Oh me" and "Call me".
+            val trigger = if (settings.homeKeyNow() != null) settings.homeTriggerNow() else ""
+            whisper.setBias(listOf(trigger, names).filter(String::isNotBlank).joinToString(", "))
             // The voice is prepared in the background too. Unpacking it is a one-off
             // that costs a few seconds, and doing it here means the first reply is
             // spoken rather than silently skipped.

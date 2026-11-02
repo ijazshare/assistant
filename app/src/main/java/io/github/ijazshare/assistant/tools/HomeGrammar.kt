@@ -36,13 +36,16 @@ object HomeGrammar {
 
     /** Whether [transcript] starts with the trigger word, which makes it a home command, understood or not. */
     fun addressed(transcript: String, trigger: String): Boolean {
-        val said = words(trigger)
-        return said.isNotEmpty() && words(transcript).take(said.size) == said
+        val said = greeted(trigger)
+        return said.isNotEmpty() && greeted(transcript).take(said.size) == said
     }
+
+    /** The words after any opening "hey" or "okay": "Hey homie, ..." is addressed to homie. */
+    private fun greeted(text: String) = words(text).dropWhile { it in GREETINGS }
 
     /** What to hand to Home Assistant for [transcript], or why not. */
     fun read(transcript: String, trigger: String, home: HomeDevices): HomeCommand {
-        val rest = words(transcript).drop(words(trigger).size)
+        val rest = greeted(transcript).drop(greeted(trigger).size)
             .dropWhile { it == PLEASE }.dropLastWhile { it == PLEASE }
         return when {
             home.all.isEmpty() -> Decline("Paste your Home Assistant device list into Context first.")
@@ -180,6 +183,7 @@ object HomeGrammar {
     }
 
     private const val PLEASE = "please"
+    private val GREETINGS = setOf("hey", "hi", "ok", "okay")
     private const val OFF = "off"
     private const val CLIMATE = "climate"
     private const val COVER = "cover"

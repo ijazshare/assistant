@@ -186,7 +186,7 @@ class HomeGrammarTest {
     fun onlyASentenceThatStartsWithTheTriggerIsForTheHome() {
         assertThat(HomeGrammar.addressed("Homie, lights off", "homie")).isTrue()
         assertThat(HomeGrammar.addressed("Turn on the light", "homie")).isFalse()
-        assertThat(HomeGrammar.addressed("Hey homie, turn on the light", "homie")).isFalse()
+        // The owner says "Hey homie" (query log, 2026-11-02), so an opening greeting is allowed.
         assertThat(HomeGrammar.addressed("Homies turn on the light", "homie")).isFalse()
         assertThat(HomeGrammar.addressed("Text Sam homie turn on the light", "homie")).isFalse()
         // The trigger is a setting, and may be more than one word.
@@ -209,5 +209,14 @@ class HomeGrammarTest {
         assertThat(read("homie pink fan medium")).isEqualTo(act(RUN, "script.pink_fan_medium", "Pink fan medium"))
         assertThat(declined("homie pink bedroom light high")).isEqualTo("Pink Bedroom Light has no speeds.")
         assertThat(read("homie high")).isInstanceOf(Decline::class.java)
+    }
+
+    @Test
+    fun aGreetingBeforeTheTriggerWordIsAllowed() {
+        assertThat(HomeGrammar.addressed("Hey homie, turn off the pink bedroom light", "homie")).isTrue()
+        assertThat(HomeGrammar.addressed("Okay homie turn off the pink bedroom light", "homie")).isTrue()
+        assertThat(read("Hey, homie. Turn on the pink bedroom light.")).isEqualTo(pinkLight)
+        assertThat(HomeGrammar.addressed("Hey Jarvis, lights off", "hey jarvis")).isTrue()
+        assertThat(HomeGrammar.addressed("Call me, turn off the light", "homie")).isFalse()
     }
 }
