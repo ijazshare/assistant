@@ -42,8 +42,11 @@ object AssistantColors {
     /** Secondary readout: labels, units, timestamps. */
     val Dim = Color(0xFF83AAC6)
 
-    /** Tertiary: hint text, disabled. */
-    val Ghost = Color(0xFF4C6D84)
+    /**
+     * Tertiary: hints. Was 0xFF4C6D84, about 2.8:1 on PanelActive, which fails AA for body
+     * text; raised so it reads at 4.5:1 or better on every surface (see ContrastTest).
+     */
+    val Ghost = Color(0xFF7898B0)
 
     // ---- HUD accents ------------------------------------------------------------
 
