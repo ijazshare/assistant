@@ -37,7 +37,7 @@ androidxDatastore = "1.2.1"
 androidxWork = "2.11.2"
 
 # ---- Networking (model downloads only - see Privacy invariants in CLAUDE.md) ----
-okhttp = "5.5.0"
+okhttp = "5.5.1"
 commonsCompress = "1.28.0"
 
 # ---- Static analysis / formatting ----
