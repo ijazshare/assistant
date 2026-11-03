@@ -14,10 +14,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -29,6 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.ijazshare.assistant.assistant.CommandCache
 import io.github.ijazshare.assistant.diagnostics.CrashLog
@@ -37,6 +38,8 @@ import io.github.ijazshare.assistant.history.QueryLog
 import io.github.ijazshare.assistant.history.QueryRecord
 import io.github.ijazshare.assistant.history.QuerySource
 import io.github.ijazshare.assistant.history.Resolution
+import io.github.ijazshare.assistant.ui.ActionText
+import io.github.ijazshare.assistant.ui.heading
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
 import io.github.ijazshare.assistant.ui.theme.AssistantReadout
@@ -77,43 +80,26 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
     ) {
         item {
             Column {
-                Text("HISTORY", style = AssistantLabel, color = AssistantColors.Admin)
                 Text(
                     text = "${records.size} COMMANDS, ${learned.size} LEARNED",
                     style = AssistantReadout,
                     color = AssistantColors.Dim,
                 )
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    Text(
-                        text = "CLEAR HISTORY",
-                        style = AssistantLabel,
-                        color = AssistantColors.Relevant,
-                        modifier = Modifier.clickable {
-                            log.clear()
-                            captures.clear()
-                            records = emptyList()
-                        },
-                    )
-                    Text(
-                        text = "FORGET ALL",
-                        style = AssistantLabel,
-                        color = AssistantColors.Relevant,
-                        modifier = Modifier.clickable {
-                            cache.clear()
-                            learned = cache.all()
-                        },
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    ActionText("CLEAR HISTORY", AssistantColors.Relevant, {
+                        log.clear()
+                        captures.clear()
+                        records = emptyList()
+                    })
+                    ActionText("FORGET ALL", AssistantColors.Relevant, {
+                        cache.clear()
+                        learned = cache.all()
+                    })
                     if (crashes.isNotEmpty()) {
-                        Text(
-                            text = "CLEAR CRASHES",
-                            style = AssistantLabel,
-                            color = AssistantColors.Relevant,
-                            modifier = Modifier.clickable {
-                                CrashLog.clear(context)
-                                crashes = emptyList()
-                            },
-                        )
+                        ActionText("CLEAR CRASHES", AssistantColors.Relevant, {
+                            CrashLog.clear(context)
+                            crashes = emptyList()
+                        })
                     }
                 }
             }
@@ -133,14 +119,23 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
         }
 
         if (learned.isNotEmpty()) {
-            item { Text("LEARNED PHRASES", style = AssistantLabel, color = AssistantColors.Admin) }
+            item {
+                Text(
+                    "LEARNED PHRASES",
+                    style = AssistantLabel,
+                    color = AssistantColors.Admin,
+                    modifier = Modifier.heading(),
+                )
+            }
             items(learned, key = { "learned:" + it.key }) { entry ->
                 LearnedRow(entry) {
                     cache.forgetKey(entry.key)
                     learned = cache.all()
                 }
             }
-            item { Text("COMMANDS", style = AssistantLabel, color = AssistantColors.Admin) }
+            item {
+                Text("COMMANDS", style = AssistantLabel, color = AssistantColors.Admin, modifier = Modifier.heading())
+            }
         }
 
         if (records.isEmpty()) {
@@ -168,7 +163,8 @@ private fun LearnedRow(entry: CommandCache.Entry, onForget: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onForget),
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClickLabel = "Forget this phrase", onClick = onForget),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(entry.tool.uppercase(), style = AssistantReadout, color = AssistantColors.Relevant)
@@ -181,7 +177,7 @@ private fun LearnedRow(entry: CommandCache.Entry, onForget: () -> Unit) {
 
 @Composable
 private fun RecordRow(record: QueryRecord) {
-    Column(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 text = TIME.format(Instant.ofEpochMilli(record.atEpochMillis)),
@@ -201,6 +197,10 @@ private fun RecordRow(record: QueryRecord) {
                     Resolution.FAILED -> AssistantColors.Dim
                 },
             )
+            // Not colour alone: a command that ran but did not work says so in words.
+            if (!record.success && record.resolution != Resolution.FAILED) {
+                Text("NOT DONE", style = AssistantReadout, color = AssistantColors.Relevant)
+            }
             if (record.source == QuerySource.TYPED) {
                 Text("TYPED", style = AssistantReadout, color = AssistantColors.Dim)
             }

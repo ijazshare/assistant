@@ -15,5 +15,6 @@ import io.github.ijazshare.assistant.ui.history.HistoryScreen
 
 /** What has been asked, what was done about it, and what has been learned. */
 class HistoryActivity : ScreenActivity() {
+    override val title = "History"
     override val content: @Composable (Modifier) -> Unit = { HistoryScreen(it) }
 }

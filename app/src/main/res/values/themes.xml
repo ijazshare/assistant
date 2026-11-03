@@ -10,5 +10,17 @@
         <item name="android:windowBackground">@color/window_background</item>
         <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:windowAnimationStyle">@style/Animation.Assistant.Activity</item>
+    </style>
+
+    <!--
+      Slide in when going deeper, slide out going back (UI-BRIEF 8.8). Window animations
+      follow the system transition scale, so they are off when that is 0.
+    -->
+    <style name="Animation.Assistant.Activity" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/halo_open_enter</item>
+        <item name="android:activityOpenExitAnimation">@anim/halo_open_exit</item>
+        <item name="android:activityCloseEnterAnimation">@anim/halo_close_enter</item>
+        <item name="android:activityCloseExitAnimation">@anim/halo_close_exit</item>
     </style>
 </resources>

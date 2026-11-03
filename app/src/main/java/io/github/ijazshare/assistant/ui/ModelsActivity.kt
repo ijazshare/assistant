@@ -15,5 +15,6 @@ import io.github.ijazshare.assistant.ui.models.ModelManagerScreen
 
 /** Pick and download the speech, language and voice models. */
 class ModelsActivity : ScreenActivity() {
+    override val title = "Models"
     override val content: @Composable (Modifier) -> Unit = { ModelManagerScreen(it) }
 }

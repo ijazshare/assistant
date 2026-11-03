@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -36,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.github.ijazshare.assistant.audio.AssistantSounds
@@ -45,8 +46,8 @@ import io.github.ijazshare.assistant.permissions.GrantMechanism
 import io.github.ijazshare.assistant.permissions.PermissionInspector
 import io.github.ijazshare.assistant.permissions.PermissionState
 import io.github.ijazshare.assistant.permissions.PermissionTier
-import io.github.ijazshare.assistant.ui.assistant.AssistantRule
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
+import io.github.ijazshare.assistant.ui.heading
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
 import io.github.ijazshare.assistant.ui.theme.AssistantReadout
@@ -106,22 +107,15 @@ fun AccessChecklist(modifier: Modifier = Modifier) {
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("SYSTEM ACCESS", style = AssistantLabel, color = AssistantColors.Admin)
-            Text(
-                text = "$grantedCount / ${AssistantPermissions.all.size}",
-                style = AssistantLabel,
-                color = if (grantedCount == AssistantPermissions.all.size) {
-                    AssistantColors.Asset
-                } else {
-                    AssistantColors.Dim
-                },
-            )
-        }
-        AssistantRule(Modifier.fillMaxWidth().height(1.dp))
+        Text(
+            text = "$grantedCount / ${AssistantPermissions.all.size} GRANTED",
+            style = AssistantLabel,
+            color = if (grantedCount == AssistantPermissions.all.size) {
+                AssistantColors.Asset
+            } else {
+                AssistantColors.Dim
+            },
+        )
 
         for (tier in PermissionTier.entries) {
             val inTier = AssistantPermissions.all.filter { it.tier == tier }
@@ -130,7 +124,7 @@ fun AccessChecklist(modifier: Modifier = Modifier) {
                 text = tier.heading(),
                 style = AssistantLabel,
                 color = AssistantColors.Ghost,
-                modifier = Modifier.padding(top = 6.dp),
+                modifier = Modifier.padding(top = 6.dp).heading(),
             )
             for (permission in inTier) {
                 AccessRow(
@@ -185,7 +179,13 @@ private fun AccessRow(
     TrackingBox(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (actionable) Modifier.clickable(onClick = onGrant) else Modifier),
+            .then(
+                if (actionable) {
+                    Modifier.clickable(role = Role.Button, onClick = onGrant)
+                } else {
+                    Modifier.semantics(mergeDescendants = true) {}
+                },
+            ),
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -243,13 +243,18 @@ private fun RestrictedSettingsNote(visible: Boolean) {
     TrackingBox(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { context.safeStart(inspector.appDetailsIntent()) },
+            .clickable(role = Role.Button) { context.safeStart(inspector.appDetailsIntent()) },
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("IF THE TOGGLE IS GREYED OUT", style = AssistantLabel, color = AssistantColors.Admin)
+            Text(
+                "IF THE TOGGLE IS GREYED OUT",
+                style = AssistantLabel,
+                color = AssistantColors.Admin,
+                modifier = Modifier.heading(),
+            )
             Text(
                 text = "Android blocks sideloaded apps from enabling accessibility until you " +
                     "allow it. Open App info, tap the three dots at the top right, and choose " +

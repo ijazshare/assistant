@@ -15,5 +15,6 @@ import io.github.ijazshare.assistant.ui.context.ContextScreen
 
 /** Your name and the Markdown files the assistant reads before every command. */
 class ContextActivity : ScreenActivity() {
+    override val title = "Context"
     override val content: @Composable (Modifier) -> Unit = { ContextScreen(it) }
 }

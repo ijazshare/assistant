@@ -15,13 +15,11 @@ import android.content.ClipboardManager
 import android.os.PersistableBundle
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -49,14 +47,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
+import io.github.ijazshare.assistant.BuildConfig
 import io.github.ijazshare.assistant.context.AssistantFile
 import io.github.ijazshare.assistant.context.AssistantFiles
 import io.github.ijazshare.assistant.settings.AssistantSettings
 import io.github.ijazshare.assistant.tasks.TaskMigration
 import io.github.ijazshare.assistant.tools.HomeLink
-import io.github.ijazshare.assistant.ui.assistant.AssistantRule
+import io.github.ijazshare.assistant.ui.ActionText
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
-import io.github.ijazshare.assistant.ui.assistant.scanlines
+import io.github.ijazshare.assistant.ui.heading
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantDump
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
@@ -116,21 +115,10 @@ fun ContextScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(AssistantColors.Void)
-            .scanlines()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("CONTEXT", style = AssistantLabel, color = AssistantColors.Admin)
-            Text("READ BEFORE EVERY COMMAND", style = AssistantLabel, color = AssistantColors.Ghost)
-        }
-        AssistantRule(Modifier.fillMaxWidth().height(1.dp))
-
         Text(
             text = "These are ordinary Markdown files on the phone. The assistant reads them " +
                 "before deciding what to do, and writes tasks back into them. Nothing here " +
@@ -201,25 +189,22 @@ fun ContextScreen(modifier: Modifier = Modifier) {
             },
             kind = FieldKind.SECRET,
         )
-        Text(
+        ActionText(
             text = if (homeKey.isBlank()) "MAKE A KEY AND COPY IT" else "COPY THE KEY",
-            style = AssistantLabel,
             color = AssistantColors.Admin,
-            modifier = Modifier
-                .clickable {
-                    val key = homeKey.ifBlank { HomeLink.newKey() }
-                    homeKey = key
-                    scope.launch { settings.setHomeKey(key) }
-                    // Marked sensitive, so the clipboard preview does not show it.
-                    val clip = ClipData.newPlainText("Home Assistant key", key).apply {
-                        description.extras = PersistableBundle().apply {
-                            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
-                        }
+            onClick = {
+                val key = homeKey.ifBlank { HomeLink.newKey() }
+                homeKey = key
+                scope.launch { settings.setHomeKey(key) }
+                // Marked sensitive, so the clipboard preview does not show it.
+                val clip = ClipData.newPlainText("Home Assistant key", key).apply {
+                    description.extras = PersistableBundle().apply {
+                        putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
                     }
-                    context.getSystemService<ClipboardManager>()?.setPrimaryClip(clip)
-                    Toast.makeText(context, "Key copied. Paste it into your automation.", Toast.LENGTH_SHORT).show()
                 }
-                .padding(vertical = 4.dp),
+                context.getSystemService<ClipboardManager>()?.setPrimaryClip(clip)
+                Toast.makeText(context, "Key copied. Paste it into your automation.", Toast.LENGTH_SHORT).show()
+            },
         )
         SettingField(
             label = "HOME ASSISTANT · TRIGGER WORD",
@@ -234,20 +219,17 @@ fun ContextScreen(modifier: Modifier = Modifier) {
 
         var tasksStatus by remember { mutableStateOf("Checking the task app") }
         LaunchedEffect(Unit) { tasksStatus = TaskMigration(context).status() }
-        Text("TASKS APP", style = AssistantLabel, color = AssistantColors.Admin)
+        Text("TASKS APP", style = AssistantLabel, color = AssistantColors.Admin, modifier = Modifier.heading())
         Text(tasksStatus, style = AssistantReadout, color = AssistantColors.Ghost)
-        Text(
+        ActionText(
             text = "RUN MIGRATION",
-            style = AssistantLabel,
             color = AssistantColors.Admin,
-            modifier = Modifier
-                .clickable {
-                    scope.launch {
-                        tasksStatus = "Moving the old list"
-                        tasksStatus = withContext(Dispatchers.IO) { TaskMigration(context).run() }
-                    }
+            onClick = {
+                scope.launch {
+                    tasksStatus = "Moving the old list"
+                    tasksStatus = withContext(Dispatchers.IO) { TaskMigration(context).run() }
                 }
-                .padding(vertical = 4.dp),
+            },
         )
 
         for (spec in EDITED) {
@@ -289,6 +271,13 @@ fun ContextScreen(modifier: Modifier = Modifier) {
                 },
             )
         }
+
+        // The version lives here, not on Home: a number that never changes is not a readout.
+        Text(
+            text = "Assistant ${BuildConfig.VERSION_NAME}",
+            style = AssistantDump,
+            color = AssistantColors.Ghost,
+        )
     }
 }
 

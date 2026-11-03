@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.work.WorkInfo
@@ -43,11 +44,11 @@ import io.github.ijazshare.assistant.models.ModelRegistry
 import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
-import io.github.ijazshare.assistant.ui.assistant.AssistantRule
+import io.github.ijazshare.assistant.ui.ActionText
 import io.github.ijazshare.assistant.ui.assistant.IndeterminateCells
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
 import io.github.ijazshare.assistant.ui.assistant.formatBytes
-import io.github.ijazshare.assistant.ui.assistant.scanlines
+import io.github.ijazshare.assistant.ui.heading
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
 import io.github.ijazshare.assistant.ui.theme.AssistantReadout
@@ -79,24 +80,15 @@ fun ModelManagerScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(AssistantColors.Void)
-            .scanlines()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("MODELS", style = AssistantLabel, color = AssistantColors.Admin)
-            Text(
-                text = formatBytes(storage.freeBytes()) + " FREE",
-                style = AssistantLabel,
-                color = AssistantColors.Dim,
-            )
-        }
-        AssistantRule(Modifier.fillMaxWidth().height(1.dp))
+        Text(
+            text = formatBytes(storage.freeBytes()) + " FREE",
+            style = AssistantLabel,
+            color = AssistantColors.Dim,
+        )
 
         Text(
             text = "Downloaded once, then never again. Every file is checked against a " +
@@ -113,7 +105,7 @@ fun ModelManagerScreen(modifier: Modifier = Modifier) {
                 text = role.heading(),
                 style = AssistantLabel,
                 color = AssistantColors.Ghost,
-                modifier = Modifier.padding(top = 6.dp),
+                modifier = Modifier.padding(top = 6.dp).heading(),
             )
             for (asset in assets) {
                 ModelRow(
@@ -198,7 +190,7 @@ private fun ModelRow(
     TrackingBox(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = !downloading) { if (ready) onDelete() else onDownload() },
+            .clickable(enabled = !downloading, role = Role.Button) { if (ready) onDelete() else onDownload() },
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -246,13 +238,7 @@ private fun ModelRow(
                         color = AssistantColors.Admin,
                     )
                     ProgressBar(fraction = if (total > 0) done.toFloat() / total else 0f)
-                    Text("TAP CANCEL BELOW", style = AssistantLabel, color = AssistantColors.Ghost)
-                    Text(
-                        text = "CANCEL →",
-                        style = AssistantLabel,
-                        color = AssistantColors.Relevant,
-                        modifier = Modifier.clickable(onClick = onCancel),
-                    )
+                    ActionText("CANCEL DOWNLOAD", AssistantColors.Relevant, onCancel)
                 }
 
                 ready -> Text("INSTALLED  ·  TAP TO DELETE", style = AssistantLabel, color = AssistantColors.Asset)
