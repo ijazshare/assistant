@@ -50,6 +50,9 @@ junit = "4.13.2"
 androidxTestJunit = "1.3.0"
 androidxTestRunner = "1.7.0"
 truth = "1.4.5"
+# Screenshots (test only). Resolved against Maven Central on 2026-11-03: latest stable of each.
+roborazzi = "1.77.0"
+robolectric = "4.17"
 
 [libraries]
 # ---- Kotlin ----
@@ -76,6 +79,11 @@ commons-compress = { group = "org.apache.commons", name = "commons-compress", ve
 # ---- Test ----
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 

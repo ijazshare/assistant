@@ -157,6 +157,17 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            // Robolectric needs merged resources and manifest to draw real screens.
+            isIncludeAndroidResources = true
+            all { test ->
+                // -Pscreens.dir=<folder> records the screenshots there; without it they are only composed.
+                providers.gradleProperty("screens.dir").orNull?.let {
+                    test.systemProperty("roborazzi.test.record", "true")
+                    test.systemProperty("assistant.screens.dir", it)
+                }
+                // Keep Robolectric's downloaded Android jars under the dev folder, not in ~/.m2.
+                test.systemProperty("maven.repo.local", rootProject.file(".gradle/robolectric-m2").path)
+            }
         }
     }
 
@@ -358,6 +369,13 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
+    // Screenshots only; nothing here reaches the APK.
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(libs.compose.ui.test.junit4)
 
     androidTestImplementation(libs.truth)
     androidTestImplementation(libs.androidx.test.junit)
