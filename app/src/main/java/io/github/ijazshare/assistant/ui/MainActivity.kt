@@ -20,28 +20,36 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.ijazshare.assistant.BuildConfig
 import io.github.ijazshare.assistant.R
 import io.github.ijazshare.assistant.context.AssistantFiles
+import io.github.ijazshare.assistant.history.QueryLog
 import io.github.ijazshare.assistant.models.ModelRegistry
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
@@ -49,15 +57,20 @@ import io.github.ijazshare.assistant.permissions.AssistantPermissions
 import io.github.ijazshare.assistant.permissions.PermissionInspector
 import io.github.ijazshare.assistant.settings.AssistantSettings
 import io.github.ijazshare.assistant.tools.ReminderReceiver
-import io.github.ijazshare.assistant.ui.assistant.AssistantRule
 import io.github.ijazshare.assistant.ui.assistant.MemoryReadout
 import io.github.ijazshare.assistant.ui.assistant.TrackingBox
 import io.github.ijazshare.assistant.ui.assistant.scanlines
 import io.github.ijazshare.assistant.ui.theme.AssistantColors
 import io.github.ijazshare.assistant.ui.theme.AssistantLabel
 import io.github.ijazshare.assistant.ui.theme.AssistantReadout
-import io.github.ijazshare.assistant.ui.theme.AssistantStatus
 import io.github.ijazshare.assistant.ui.theme.AssistantTheme
+import io.github.ijazshare.assistant.ui.theme.HaloLabel
+import io.github.ijazshare.assistant.ui.theme.HaloTitle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,10 +93,27 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** What Home shows; plain values so the screen can be drawn without a phone behind it. */
+internal data class HomeState(
+    val accessGranted: Int,
+    val accessTotal: Int,
+    val modelsReady: Int,
+    val modelsTotal: Int,
+    val adminName: String,
+    /** When the last command ran, or null while there is none. */
+    val lastCommandMillis: Long?,
+) {
+    val accessMissing: Boolean get() = accessGranted < accessTotal
+    val modelsComplete: Boolean get() = modelsReady == modelsTotal
+}
+
+/** The four places Home leads to. */
+internal enum class HomeDoor { HISTORY, MODELS, CONTEXT, ACCESS }
+
 /**
- * Deliberately sparse: identity, a three-line readout, and two doors. Anything with a
- * long list behind it — permissions, models — lives on its own page, so this one can be
- * taken in at a glance instead of scrolled.
+ * Sparse on purpose: the app's name, the memory readout, and a few doors in the order they
+ * are used. Every readout varies (last command, models installed, access granted), and
+ * System access is a banner only while something is missing.
  */
 @Composable
 internal fun HomeScreen(modifier: Modifier = Modifier) {
@@ -110,11 +140,39 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
     val models = remember(revision) {
         val registry = ModelRegistry(context)
         val storage = ModelStorage(context)
-        // Counts roles covered, not defaults present — choosing base.en over tiny.en
+        // Counts roles covered, not defaults present: choosing base.en over tiny.en
         // still leaves speech recognition fully working.
         registry.rolesSatisfied { storage.quickState(it) == ModelState.Ready }
     }
+    // Read off the main thread: the log is a file.
+    val lastCommand by produceState<Long?>(null, revision) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { QueryLog(context).recent(1).firstOrNull()?.atEpochMillis }.getOrNull()
+        }
+    }
 
+    HomeContent(
+        state = HomeState(access.first, access.second, models.first, models.second, adminName, lastCommand),
+        onOpen = { door ->
+            val target = when (door) {
+                HomeDoor.HISTORY -> HistoryActivity::class.java
+                HomeDoor.MODELS -> ModelsActivity::class.java
+                HomeDoor.CONTEXT -> ContextActivity::class.java
+                HomeDoor.ACCESS -> PermissionsActivity::class.java
+            }
+            context.startActivity(Intent(context, target))
+        },
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun HomeContent(
+    state: HomeState,
+    onOpen: (HomeDoor) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -124,61 +182,85 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("ADMIN", style = AssistantLabel, color = AssistantColors.Admin)
-                Text("v${BuildConfig.VERSION_NAME}", style = AssistantLabel, color = AssistantColors.Ghost)
+            if (state.accessMissing) {
+                AccessBanner(state) { onOpen(HomeDoor.ACCESS) }
             }
-            AssistantRule(Modifier.fillMaxWidth().height(1.dp))
 
             Identity()
 
             MemoryReadout(context = context, modifier = Modifier.fillMaxWidth())
 
-            Spacer(Modifier.height(2.dp))
-
-            Door(
-                label = "SYSTEM ACCESS",
-                value = "${access.first} / ${access.second}",
-                complete = access.first == access.second,
-                onClick = { context.startActivity(Intent(context, PermissionsActivity::class.java)) },
-            )
-            Door(
-                label = "CONTEXT",
-                value = adminName.uppercase(),
-                complete = true,
-                onClick = { context.startActivity(Intent(context, ContextActivity::class.java)) },
-            )
             Door(
                 label = "HISTORY",
-                value = "LOG",
-                complete = true,
-                onClick = { context.startActivity(Intent(context, HistoryActivity::class.java)) },
+                value = state.lastCommandMillis?.let { LAST.format(Instant.ofEpochMilli(it)).uppercase() }
+                    ?: "NO COMMANDS YET",
+                tone = AssistantColors.Admin,
+                onClick = { onOpen(HomeDoor.HISTORY) },
             )
             Door(
                 label = "MODELS",
-                value = "${models.first} / ${models.second}",
-                complete = models.first == models.second,
-                onClick = { context.startActivity(Intent(context, ModelsActivity::class.java)) },
+                value = "${state.modelsReady} / ${state.modelsTotal}",
+                tone = if (state.modelsComplete) AssistantColors.Asset else AssistantColors.Relevant,
+                onClick = { onOpen(HomeDoor.MODELS) },
             )
-
-            Spacer(Modifier.height(2.dp))
+            Door(
+                label = "CONTEXT",
+                value = state.adminName.uppercase(),
+                tone = AssistantColors.Admin,
+                onClick = { onOpen(HomeDoor.CONTEXT) },
+            )
+            if (!state.accessMissing) {
+                Door(
+                    label = "SYSTEM ACCESS",
+                    value = "${state.accessGranted} / ${state.accessTotal}",
+                    tone = AssistantColors.Asset,
+                    onClick = { onOpen(HomeDoor.ACCESS) },
+                )
+            }
 
             Text(
-                text = if (models.first == models.second) {
+                text = if (state.modelsComplete) {
                     "HOLD THE SIDE BUTTON TO SPEAK."
                 } else {
                     "DOWNLOAD THE MODELS TO BEGIN."
                 },
                 style = AssistantReadout,
-                color = AssistantColors.Ghost,
+                color = AssistantColors.Dim,
             )
+        }
+    }
+}
+
+private val LAST: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEE HH:mm").withZone(ZoneId.systemDefault())
+
+/** Shown only while access is incomplete; says so in words as well as orange. */
+@Composable
+private fun AccessBanner(state: HomeState, onClick: () -> Unit) {
+    TrackingBox(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .clickable(role = Role.Button, onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("ACCESS MISSING", style = HaloLabel, color = AssistantColors.Relevant)
+                Text(
+                    text = "${state.accessGranted} of ${state.accessTotal} granted. Tap to finish.",
+                    style = AssistantReadout,
+                    color = AssistantColors.Bone,
+                )
+            }
+            Text("›", style = HaloTitle, color = AssistantColors.Relevant)
         }
     }
 }
@@ -195,8 +277,9 @@ private fun Identity() {
         ) {
             Text(
                 text = stringResource(R.string.app_name).uppercase(),
-                style = AssistantStatus,
+                style = HaloTitle,
                 color = AssistantColors.Bone,
+                modifier = Modifier.heading(),
             )
             Text(
                 text = stringResource(R.string.app_tagline).uppercase(),
@@ -212,20 +295,20 @@ private fun Identity() {
 private fun Door(
     label: String,
     value: String,
-    complete: Boolean,
+    tone: Color,
     onClick: () -> Unit,
 ) {
-    val tone = if (complete) AssistantColors.Asset else AssistantColors.Admin
     TrackingBox(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(label, style = AssistantLabel, color = AssistantColors.Bone)
-            Text("$value   →", style = AssistantLabel, color = tone)
+            Text(label, style = HaloLabel, color = AssistantColors.Bone, modifier = Modifier.weight(1f))
+            Text(value, style = HaloLabel, color = tone, textAlign = TextAlign.End)
+            Text("›", style = HaloTitle, color = AssistantColors.Dim)
         }
     }
 }
