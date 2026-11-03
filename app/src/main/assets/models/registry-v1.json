@@ -4,6 +4,20 @@
   "note": "Every sha256 and byteSize here was read from the live Hugging Face LFS metadata or computed from an actual download on the date above, not copied from documentation. Verification is by SHA-256 on the downloaded bytes, so a wrong value here fails loudly rather than installing a corrupt model.",
   "assets": [
     {
+      "id": "stt-small-en",
+      "role": "STT",
+      "displayName": "Whisper small.en",
+      "detail": "Most accurate here, about three times base.en's work. On the owner's clips it got 88 of 100 commands exactly right against base.en's 78.",
+      "fileName": "ggml-small.en-q5_1.bin",
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin",
+      "sha256": "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
+      "byteSize": 190098681,
+      "minRamMb": 1024,
+      "isDefault": false,
+      "license": "MIT",
+      "source": "ggerganov/whisper.cpp"
+    },
+    {
       "id": "stt-tiny-en",
       "role": "STT",
       "displayName": "Whisper tiny.en",
