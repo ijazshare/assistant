@@ -617,6 +617,7 @@ It builds on work by others, each under its own licence:
 | Language model | [Gemma 3](https://ai.google.dev/gemma) | Gemma Terms of Use |
 | Speech synthesis | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | Apache-2.0 |
 | Voice | [Piper](https://github.com/rhasspy/piper) `en_US-amy-medium` | see the voice's model card |
+| Titles and labels font | [Saira](https://github.com/Omnibus-Type/Saira) (bundled variable TTF, from [google/fonts](https://github.com/google/fonts/tree/main/ofl/saira)) | SIL OFL 1.1, text in [third_party/Saira-OFL.txt](third_party/Saira-OFL.txt) |
 
 Model weights are downloaded from their upstream hosts at runtime and are not redistributed
 by this project. Using Gemma means accepting the Gemma Terms of Use.

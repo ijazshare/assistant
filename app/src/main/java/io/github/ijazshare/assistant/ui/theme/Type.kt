@@ -11,9 +11,12 @@ package io.github.ijazshare.assistant.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import io.github.ijazshare.assistant.R
 
 /**
  * The device's own sans-serif family. Clean and modern, and using the system font
@@ -22,6 +25,45 @@ import androidx.compose.ui.unit.sp
  * ask for tabular figures where columns must line up.
  */
 private val Sans = FontFamily.Default
+
+/**
+ * Saira (SIL OFL 1.1), a squared HUD face, for titles, row labels and big numerals only.
+ * One variable file serves both weights. It has `tnum`, so numerals keep their width.
+ * Body text stays on [Sans]. Not used by the voice overlay, whose first frame must not
+ * wait on a font.
+ */
+private val Saira = FontFamily(
+    Font(
+        R.font.saira,
+        weight = FontWeight.Medium,
+        variationSettings = FontVariation.Settings(FontVariation.weight(500)),
+    ),
+    Font(
+        R.font.saira,
+        weight = FontWeight.SemiBold,
+        variationSettings = FontVariation.Settings(FontVariation.weight(600)),
+    ),
+)
+
+/** Tracked caps row labels on Home and the section labels of the secondary screens. */
+val HaloLabel = TextStyle(
+    fontFamily = Saira,
+    fontWeight = FontWeight.Medium,
+    fontSize = 13.sp,
+    lineHeight = 18.sp,
+    letterSpacing = 0.8.sp,
+    fontFeatureSettings = "tnum",
+)
+
+/** Screen titles and the app name. */
+val HaloTitle = TextStyle(
+    fontFamily = Saira,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 22.sp,
+    lineHeight = 28.sp,
+    letterSpacing = 0.4.sp,
+    fontFeatureSettings = "tnum",
+)
 
 /** Small tracked labels: section headers, units, captions. */
 val AssistantLabel = TextStyle(
