@@ -127,6 +127,10 @@ class HomeGrammarTest {
     @Test
     fun questionsAskForTheState() {
         assertThat(read("Homie, is the garage door open?")).isEqualTo(garage.copy(asked = "open"))
+        // The owner's words on the phone, 2026-11-03: the room alone, and "is" heard as "it's".
+        assertThat(read("Hey homie, is the garage open?")).isEqualTo(garage.copy(asked = "open"))
+        assertThat(read("Hey homie, it's the garage door open")).isEqualTo(garage.copy(asked = "open"))
+        assertThat(declined("Homie, is the den open?")).startsWith("Which den?")
         assertThat(read("Homie, is the back door locked?"))
             .isEqualTo(act(STATE, "lock.back_door", "Back Door").copy(asked = "locked"))
         assertThat(read("Homie, is the den window open"))

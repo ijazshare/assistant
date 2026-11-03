@@ -61,13 +61,17 @@ object HomeGrammar {
     }
 
     /** "is the garage door open", "what's the thermostat set to", "what is the status of the back door". */
-    private fun asked(rest: List<String>, home: HomeDevices): HomeCommand? = when {
-        rest.firstOrNull() in IS && rest.size > 2 && rest.last() in CONDITIONS ->
-            home.one(rest.drop(1).dropLast(1)) { it.act(STATE, asked = rest.last()) }
+    private fun asked(said: List<String>, home: HomeDevices): HomeCommand? {
+        // Whisper hears "is the garage door open" as "it's the garage door open".
+        val rest = if (said.take(2) == IT_S) listOf("is") + said.drop(2) else said
+        return when {
+            rest.firstOrNull() in IS && rest.size > 2 && rest.last() in CONDITIONS ->
+                home.one(rest.drop(1).dropLast(1)) { it.act(STATE, asked = rest.last()) }
 
-        rest.take(2) in WHAT_IS -> home.one(questioned(rest.drop(2))) { it.act(STATE) }
+            rest.take(2) in WHAT_IS -> home.one(questioned(rest.drop(2))) { it.act(STATE) }
 
-        else -> null
+            else -> null
+        }
     }
 
     /** "turn off the light", "turn the light off", "pink bedroom lights off". Both at once is neither. */
@@ -193,6 +197,7 @@ object HomeGrammar {
     private val SWITCHED = setOf("on", OFF)
     private val SWITCHABLE = setOf("light", "switch", "fan")
     private val IS = setOf("is", "are")
+    private val IT_S = listOf("it", "s")
     private val CONDITIONS = setOf("on", OFF, "open", "closed", "locked", "unlocked")
 
     // Whisper writes "what's" as two words once the apostrophe goes.

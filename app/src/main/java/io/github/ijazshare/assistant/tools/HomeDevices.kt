@@ -44,7 +44,9 @@ class HomeDevices(val all: List<HomeDevice>) {
     /** The one device [words] name, made into a command by [make], or why there is not one. */
     fun one(words: List<String>, make: (HomeDevice) -> HomeCommand): HomeCommand {
         val said = withoutArticles(words)
-        val found = named(said)
+        // A room said alone means what is in it: "is the garage open" is the Garage's one door, and a
+        // room holding several gets "Which ...?" below rather than a guess.
+        val found = named(said).ifEmpty { all.filter { it.area?.let(::words)?.let(::withoutArticles) == said } }
         return when {
             said.isEmpty() -> HomeCommand.Decline("Say which one.")
 
