@@ -10,10 +10,13 @@
 package io.github.ijazshare.assistant.tools
 
 import android.Manifest
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
+import android.util.Log
 import androidx.core.content.ContextCompat
 
 /** A contact that matched, carrying the number so a chosen option can be acted on. */
@@ -63,6 +66,104 @@ class ContactLookup(
 
             else -> lookupByName(trimmed).takeUnless { it == ContactResolution.None } ?: lookupByTag(trimmed)
         }
+    }
+
+    /**
+     * Whether [spoken] is a name to ask about: contacts can be searched and nothing on them answers to it.
+     * Never a number or "me", which are not names, and never without contacts access, where every name is unknown.
+     */
+    fun unknown(spoken: String): Boolean {
+        val trimmed = spoken.trim()
+        return trimmed.isNotEmpty() && hasContactsPermission() && !looksLikeNumber(trimmed) &&
+            !ContactMatch.isSelf(trimmed) && resolve(trimmed) == ContactResolution.None
+    }
+
+    /** Contacts whose names sound like [spoken], to ask about and never to act on. */
+    fun soundsLike(spoken: String): List<Contact> {
+        if (!hasContactsPermission()) return emptyList()
+        val found = LinkedHashMap<Long, Contact>()
+        context.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(
+                ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                ContactsContract.CommonDataKinds.Phone.NUMBER,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            ),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val number = cursor.getString(1) ?: continue
+                val display = cursor.getString(2).orEmpty()
+                if (!found.containsKey(cursor.getLong(0)) && ContactMatch.soundsAlike(spoken, display)) {
+                    found[cursor.getLong(0)] = Contact(display, number)
+                }
+            }
+        }
+        return found.values.take(MAX_OPTIONS)
+    }
+
+    /**
+     * Adds [heard] as a line of the notes of the contact with [number], so the next "text [heard]" finds
+     * them (see [lookupByTag]). Only after the owner said who [heard] was. False if it could not be saved.
+     */
+    fun remember(number: String, heard: String): Boolean {
+        val line = ContactMatch.tagLine(heard)
+        if (line.isEmpty()) return false
+        return try {
+            val contactId = contactIdOf(number) ?: return false
+            val note = noteOf(contactId)
+            when {
+                note == null -> addNote(contactId, line)
+                ContactMatch.taggedAs(note.second, line) -> true
+                else -> setNote(note.first, note.second.trimEnd().let { if (it.isEmpty()) line else "$it\n$line" })
+            }
+        } catch (e: SecurityException) {
+            Log.w("Assistant", "no permission to change contacts", e)
+            false
+        }
+    }
+
+    private fun contactIdOf(number: String): Long? = context.contentResolver.query(
+        Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)),
+        arrayOf(ContactsContract.PhoneLookup._ID),
+        null,
+        null,
+        null,
+    )?.use { if (it.moveToFirst()) it.getLong(0) else null }
+
+    /** The contact's note row and its text, if it has one. */
+    private fun noteOf(contactId: Long): Pair<Long, String>? = context.contentResolver.query(
+        ContactsContract.Data.CONTENT_URI,
+        arrayOf(ContactsContract.Data._ID, ContactsContract.CommonDataKinds.Note.NOTE),
+        "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+        arrayOf(contactId.toString(), ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE),
+        null,
+    )?.use { if (it.moveToFirst()) it.getLong(0) to it.getString(1).orEmpty() else null }
+
+    private fun setNote(rowId: Long, text: String): Boolean = context.contentResolver.update(
+        ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, rowId),
+        ContentValues().apply { put(ContactsContract.CommonDataKinds.Note.NOTE, text) },
+        null,
+        null,
+    ) == 1
+
+    /** A first note, on the contact's first account. */
+    private fun addNote(contactId: Long, text: String): Boolean {
+        val rawId = context.contentResolver.query(
+            ContactsContract.RawContacts.CONTENT_URI,
+            arrayOf(ContactsContract.RawContacts._ID),
+            "${ContactsContract.RawContacts.CONTACT_ID} = ? AND ${ContactsContract.RawContacts.DELETED} = 0",
+            arrayOf(contactId.toString()),
+            null,
+        )?.use { if (it.moveToFirst()) it.getLong(0) else null } ?: return false
+        val values = ContentValues().apply {
+            put(ContactsContract.Data.RAW_CONTACT_ID, rawId)
+            put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE)
+            put(ContactsContract.CommonDataKinds.Note.NOTE, text)
+        }
+        return context.contentResolver.insert(ContactsContract.Data.CONTENT_URI, values) != null
     }
 
     /** The single unambiguous number, or null when absent OR ambiguous. Used by dry probes. */

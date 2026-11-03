@@ -59,9 +59,57 @@ object ContactMatch {
      * sentence: a note mentioning "Sam's dad" must not make "text Sam" his father.
      */
     fun taggedAs(note: String, spoken: String): Boolean {
-        val tag = spoken.trim().lowercase().removePrefix("my ").trim()
-        return tag.isNotEmpty() && note.lines().any { it.trim().lowercase() == tag }
+        // Compared without spaces or punctuation: Whisper writes one heard name as "Be lol", "Be-lol" or "Belol".
+        val tag = compact(tagLine(spoken))
+        return tag.isNotEmpty() && note.lines().any { compact(it) == tag }
     }
+
+    /** The note line that tags a contact as [spoken]: "my assistant" is "assistant". */
+    fun tagLine(spoken: String): String =
+        spoken.lowercase().trim().removePrefix("my ").split(SEP).filter { it.isNotEmpty() }.joinToString(" ")
+
+    private fun compact(text: String) = text.lowercase().filter(Char::isLetterOrDigit)
+
+    /**
+     * True if [spoken] sounds like a word of [display], or all of it: "Be lol" and "Bilal Khan", "Has an" and
+     * "Hassan". Only ever a guess to ask about ("Did you mean Bilal?"), never one to act on.
+     */
+    fun soundsAlike(spoken: String, display: String): Boolean {
+        val heard = soundKey(tagLine(spoken))
+        if (heard.length < MIN_KEY) return false
+        val words = display.lowercase().split(SEP).filter { it.isNotEmpty() }
+        val allowed = if (heard.length > LONG_KEY) 1 else 0
+        return (words + words.joinToString("")).any {
+            val key = soundKey(it)
+            key.length >= MIN_KEY && distance(heard, key) <= allowed
+        }
+    }
+
+    // ponytail: a crude sound key (vowels alike, h silent, c/k/q, s/z, v/w) and one edit, tuned on no real
+    // mishearings yet; Double Metaphone or espeak phonemes if it misses names the owner says.
+    private fun soundKey(text: String): String {
+        val letters = text.lowercase().filter { it in 'a'..'z' }.replace("ph", "f").replace("x", "ks").replace("h", "")
+        val mapped = letters.map { if (it in VOWELS) 'a' else ALIKE[it] ?: it }
+        return buildString { mapped.forEach { if (isEmpty() || last() != it) append(it) } }
+    }
+
+    private fun distance(a: String, b: String): Int {
+        var row = IntArray(b.length + 1) { it }
+        for (i in a.indices) {
+            val next = IntArray(b.length + 1)
+            next[0] = i + 1
+            for (j in b.indices) {
+                next[j + 1] = minOf(row[j + 1] + 1, next[j] + 1, row[j] + if (a[i] == b[j]) 0 else 1)
+            }
+            row = next
+        }
+        return row[b.length]
+    }
+
+    private const val MIN_KEY = 3
+    private const val LONG_KEY = 4
+    private const val VOWELS = "aeiouy"
+    private val ALIKE = mapOf('c' to 'k', 'q' to 'k', 'z' to 's', 'w' to 'v')
 
     /**
      * Names for the user themselves, which must resolve to their own number, not a contact. Read

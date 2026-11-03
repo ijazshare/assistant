@@ -96,7 +96,12 @@ sealed interface SessionState {
      * A spoken name matched several contacts. The command is held and the user picks who it
      * was meant for, rather than the assistant guessing and texting the wrong person.
      */
-    data class ChooseContact(val spokenName: String, val options: List<Contact>) : SessionState
+    data class ChooseContact(
+        val spokenName: String,
+        val options: List<Contact>,
+        /** No contact answered to [spokenName]: the one chosen gets it saved in their notes. */
+        val remember: Boolean = false,
+    ) : SessionState
 }
 
 /** Where the time went, so a regression against the latency budget is visible. */
@@ -339,6 +344,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     fun dismissed() {
         PendingSend.dismiss()
         PendingReminder.dismiss()
+        PendingName.dismiss()
         cancelTaskQuestion()
         stopListening()
         // The command in flight is abandoned too. stopListening only ends the capture, so a "Text Sam"
@@ -424,12 +430,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
      */
     internal suspend fun act(transcript: String, sttMillis: Long, viaTasks: Boolean = true) {
         // Left to right, and only until one answers: a home command first, then a follow-up's answer.
-        if (answeredHome(transcript, sttMillis) ||
-            answeredPendingSend(transcript, sttMillis) ||
-            answeredPendingReminder(transcript, sttMillis)
-        ) {
-            return
-        }
+        if (answeredHome(transcript, sttMillis) || answeredFollowUp(transcript, sttMillis)) return
         // Then Tasks (the answer to its open question, an undo, or words that are plainly its own), then the rest.
         if (answeredByTasks(transcript, sttMillis, viaTasks) || answeredWithoutTheModel(transcript, sttMillis)) return
 
@@ -544,6 +545,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
         if (!HomeGrammar.addressed(transcript, trigger)) return false
         PendingSend.dismiss()
         PendingReminder.dismiss()
+        PendingName.dismiss()
         cancelTaskQuestion()
         val home = withContext(Dispatchers.IO) { HomeDevices.parse(files.read(AssistantFiles.HOME)) }
         val call = HomeGrammar.read(transcript, trigger, home).toCall()
@@ -552,12 +554,15 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     }
 
     /** Executes a resolved call, then records, remembers, shows and speaks the outcome. */
+    @Suppress("LongParameterList") // the command's timing and how it was resolved travel together
     internal suspend fun carryOut(
         transcript: String,
         call: ToolCall,
         sttMillis: Long,
         llmMillis: Long,
         resolution: Resolution,
+        /** Said before the result: that the name just heard was saved to the chosen contact. */
+        before: String? = null,
     ) {
         val ready = CallChecks.reconciled(transcript, call)
 
@@ -569,6 +574,8 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
             _state.value = SessionState.ChooseContact(ready.arguments["recipient"].orEmpty(), choices)
             return
         }
+        // A name nobody answers to: ask who it was, and remember the answer, rather than give up.
+        if (askedWhoUnknown(transcript, ready, sttMillis, llmMillis, resolution)) return
 
         // The model chose Tasks: the words as they were said, never an argument it wrote (spec 4.12 step 5c).
         if (ready.tool == AssistantTools.TASKS) {
@@ -585,6 +592,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
             PendingReminder.holdUnlessDismissed(transcript, dismissalsAtStart)
 
         result = summarisedScreen(transcript, call, result)
+        before?.let { result = result.copy(spoken = "$it ${result.spoken}") }
         present(transcript, call, result, sttMillis, llmMillis, resolution, listenAfter = askedForWords || askedForTask)
     }
 
@@ -701,6 +709,7 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     internal fun fail(message: String, actionable: String? = null, transcript: String = "") {
         // An answer that never came: the next command must not be taken for what the reminder is about.
         PendingReminder.dismiss()
+        PendingName.dismiss()
         cancelTaskQuestion()
         // Recorded, not just spoken. The history held eleven entries and zero failures
         // over a period with more than a hundred failed summons, so the one log the user

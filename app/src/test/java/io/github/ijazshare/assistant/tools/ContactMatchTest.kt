@@ -84,4 +84,25 @@ class ContactMatchTest {
         assertThat(ContactMatch.taggedAs("Assistant manager at the bank", "assistant")).isFalse()
         assertThat(ContactMatch.taggedAs("Assistant", "my")).isFalse()
     }
+
+    @Test
+    fun `a saved note line matches however Whisper spaces the name`() {
+        assertThat(ContactMatch.taggedAs("be lol", "Be-lol")).isTrue()
+        assertThat(ContactMatch.taggedAs("be lol", "Belol.")).isTrue()
+        assertThat(ContactMatch.tagLine("My Assistant.")).isEqualTo("assistant")
+    }
+
+    @Test
+    fun `a misheard name sounds like the contact's`() {
+        assertThat(ContactMatch.soundsAlike("Be lol", "Tariq Bilal")).isTrue()
+        assertThat(ContactMatch.soundsAlike("zoo bear", "Zubair Noor")).isTrue()
+        assertThat(ContactMatch.soundsAlike("fa reed", "Farid")).isTrue()
+    }
+
+    @Test
+    fun `a different or too short name does not sound alike`() {
+        assertThat(ContactMatch.soundsAlike("Bill", "Bilal")).isFalse()
+        assertThat(ContactMatch.soundsAlike("Sam", "Samuel Ortiz")).isFalse()
+        assertThat(ContactMatch.soundsAlike("the", "Teo")).isFalse()
+    }
 }

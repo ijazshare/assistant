@@ -165,10 +165,11 @@ object AssistantPermissions {
         AssistantPermission(
             id = CONTACTS,
             title = "Contacts",
-            rationale = "So \"remind me to call Osman\" can match a name you actually know.",
+            rationale = "So \"text Osman\" reaches a name you actually know, and a name I mishear can be " +
+                "saved to the right contact's notes when you say who it was.",
             tier = PermissionTier.DATA,
             mechanism = GrantMechanism.RUNTIME_DIALOG,
-            manifestPermissions = listOf(Manifest.permission.READ_CONTACTS),
+            manifestPermissions = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS),
         ),
         AssistantPermission(
             id = MESSAGES,

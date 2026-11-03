@@ -321,7 +321,15 @@ private fun SessionBody(
         }
 
         is SessionState.ChooseContact -> {
-            Text("Which ${state.spokenName}?", style = LabelStyle, color = Accent)
+            Text(
+                if (state.remember) {
+                    "Who is \"${state.spokenName}\"? I'll remember it."
+                } else {
+                    "Which ${state.spokenName}?"
+                },
+                style = LabelStyle,
+                color = Accent,
+            )
             state.options.forEach { option ->
                 Row(
                     modifier = Modifier

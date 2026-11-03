@@ -122,12 +122,7 @@ internal suspend fun VoiceSession.holdSendFor(call: ToolCall, dismissalsBefore: 
 fun VoiceSession.chooseContact(contact: Contact) {
     val pending = pendingChoice ?: return
     pendingChoice = null
-    val chosen = pending.call.copy(
-        arguments = pending.call.arguments + mapOf("recipient" to contact.number, "display" to contact.name),
-    )
-    processing = scope.launch {
-        carryOut(pending.transcript, chosen, pending.sttMillis, pending.llmMillis, pending.resolution)
-    }
+    processing = scope.launch { rememberAndCarryOut(pending, contact) }
 }
 
 /**
