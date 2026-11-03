@@ -34,7 +34,6 @@ import io.github.ijazshare.assistant.models.ModelRole
 import io.github.ijazshare.assistant.models.ModelState
 import io.github.ijazshare.assistant.models.ModelStorage
 import io.github.ijazshare.assistant.settings.AssistantSettings
-import io.github.ijazshare.assistant.stt.ContactNames
 import io.github.ijazshare.assistant.stt.JunkTranscript
 import io.github.ijazshare.assistant.stt.WhisperEngine
 import io.github.ijazshare.assistant.tasks.TaskAppClient
@@ -219,9 +218,6 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
     /** Whether this session has already written its prompt cache. */
     private var cacheWritten = false
 
-    /** The caller's contact names for transcriber biasing, read once and reused; null until there are some. */
-    private var contactBias: String? = null
-
     /** A messaging/calling command held while the user chooses among several contacts. */
     internal var pendingChoice: PendingChoice? = null
 
@@ -293,14 +289,10 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
                 fail("The speech model could not be loaded.")
                 return@launch
             }
-            // Bias the transcriber toward the caller's contacts, so a name like "Hasan" is
-            // heard as itself and not the nearest English word. Read once and reused, unless
-            // it came back empty (no permission yet, no signal): that is tried again next time.
-            val names = contactBias ?: withContext(Dispatchers.IO) { ContactNames(context).forBias() }
-                .also { if (it.isNotEmpty()) contactBias = it }
-            // With the home link on, the trigger word too: base.en heard "homie" as "Oh me" and "Call me".
-            val trigger = if (settings.homeKeyNow() != null) settings.homeTriggerNow() else ""
-            whisper.setBias(listOf(trigger, names).filter(String::isNotBlank).joinToString(", "))
+            // With the home link on, bias toward the trigger word alone: base.en heard "homie" as "Oh me".
+            // Contact names were dropped (owner's clips, 2026-11-03): with small.en they cut "homie"
+            // from 16 of 16 heard to 5 and put a contact's name where none was said 8 times.
+            whisper.setBias(if (settings.homeKeyNow() != null) settings.homeTriggerNow() else "")
             // The voice is prepared in the background too. Unpacking it is a one-off
             // that costs a few seconds, and doing it here means the first reply is
             // spoken rather than silently skipped.

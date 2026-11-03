@@ -54,7 +54,7 @@ ocr/          ScreenReader (accessibility tree first, OCR when it has little tex
 permissions/  permission catalog and inspector used by onboarding
 services/     AssistantAccessibilityService (tap, scroll, navigate, read screen, screenshot) and AssistantNotificationListener
 settings/     DataStore-backed settings: admin name, own number, remote model URL/key/name, Home Assistant key and trigger word
-stt/          WhisperEngine (JNI wrapper), contact-name bias, contact ranking, junk-transcript filter
+stt/          WhisperEngine (JNI wrapper; biased only toward the home trigger word), junk-transcript filter
 tasks/        the Tasks link: TaskAppClient (the bound service, undo token), TaskContract (the JSON), TaskRouting (words that are plainly Tasks'), TaskMigration (tasks.md into Tasks); the AIDL file and test fixtures are copies of `tasks-app/contract/`
 tools/        AssistantTools (the tool list), ToolGrammar, ToolExecutor, time resolution, contact and app lookup, ReminderStore and its receivers (legacy), the Home Assistant link (HomeDevices, the owner's pasted list; HomeGrammar, the words; HomeCommand; HomeReplies; HomeLink, the hand-off)
 tts/          PiperEngine (sherpa-onnx)
