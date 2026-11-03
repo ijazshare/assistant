@@ -7,7 +7,7 @@
       "id": "stt-small-en",
       "role": "STT",
       "displayName": "Whisper small.en",
-      "detail": "Most accurate here, about three times base.en's work. On the owner's clips it got 88 of 100 commands exactly right against base.en's 78.",
+      "detail": "Most accurate, about three times base.en's work. In testing on real spoken commands it got 88 in 100 exactly right, against base.en's 78.",
       "fileName": "ggml-small.en-q5_1.bin",
       "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin",
       "sha256": "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
