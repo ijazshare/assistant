@@ -105,4 +105,20 @@ class ContactMatchTest {
         assertThat(ContactMatch.soundsAlike("Sam", "Samuel Ortiz")).isFalse()
         assertThat(ContactMatch.soundsAlike("the", "Teo")).isFalse()
     }
+
+    @Test
+    fun `Ml is Molana, and saying it is optional either way`() {
+        assertThat(ContactMatch.matches("molana idris", "Ml Idris Karim")).isTrue()
+        assertThat(ContactMatch.matches("Maulana Idris Karim", "Ml Idris Karim")).isTrue()
+        assertThat(ContactMatch.matches("idris karim", "Ml Idris Karim")).isTrue()
+        assertThat(ContactMatch.matches("molana idris", "Idris Karim")).isTrue()
+        assertThat(ContactMatch.matches("ml idris", "Maulana Idris")).isTrue()
+    }
+
+    @Test
+    fun `the title alone names only a contact that has it`() {
+        assertThat(ContactMatch.matches("molana", "Ml Idris Karim")).isTrue()
+        assertThat(ContactMatch.matches("molana", "Idris Karim")).isFalse()
+        assertThat(ContactMatch.matches("molana yusuf", "Ml Idris Karim")).isFalse()
+    }
 }

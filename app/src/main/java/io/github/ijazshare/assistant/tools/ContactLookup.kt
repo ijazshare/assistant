@@ -185,7 +185,9 @@ class ContactLookup(
     private fun lookupByName(name: String): ContactResolution {
         val words = name.trim().split(WHITESPACE).filter { it.isNotEmpty() }
         val byContact = LinkedHashMap<Long, Contact>()
-        for (key in words.sortedByDescending { it.length }) {
+        // The provider's filter knows no titles: "Molana" finds nobody saved as "Ml", so a title asks for both.
+        val keys = words.flatMap { if (ContactMatch.isTitle(it)) TITLE_KEYS else listOf(it) }.distinct()
+        for (key in keys.sortedByDescending { it.length }) {
             collectMatches(key, name, byContact)
         }
         // Prefer an exact whole-name match: "Hasan" should reach the contact named exactly
@@ -296,5 +298,6 @@ class ContactLookup(
         /** A selector longer than this is unusable; the user says a fuller name instead. */
         const val MAX_OPTIONS = 6
         val WHITESPACE = Regex("\\s+")
+        val TITLE_KEYS = listOf("ml", "molana", "maulana", "moulana")
     }
 }

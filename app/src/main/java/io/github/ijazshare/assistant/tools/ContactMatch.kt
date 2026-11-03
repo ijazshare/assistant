@@ -28,12 +28,23 @@ object ContactMatch {
         if (query.isEmpty() || display.isBlank()) return false
         val name = display.lowercase().trim()
         if (name == query) return true
-        val words = name.split(SEP).filter { it.isNotEmpty() }
+        val words = name.split(SEP).filter { it.isNotEmpty() }.map(::titled)
         // Every spoken word must be one of the contact's name words: "osman" matches
         // "Osman Khan", "john smith" matches "John Smith", but "me" does not match "MI Aziz".
-        val queryWords = query.split(SEP).filter { it.isNotEmpty() }
+        // The owner writes Molana as "Ml" and says it or not either way: "Molana Idris" is "Ml Idris
+        // Karim" and "Idris Karim"; the title alone names only a contact that has it.
+        val queryWords = query.split(SEP).filter { it.isNotEmpty() }.map(::titled)
+            .filter { it != TITLE || TITLE in words }
         return queryWords.isNotEmpty() && queryWords.all { it in words }
     }
+
+    /** Whether [word] is the title the owner writes "Ml", in any spelling Whisper or a contact uses. */
+    fun isTitle(word: String): Boolean = word.lowercase() in TITLES
+
+    private fun titled(word: String) = if (word in TITLES) TITLE else word
+
+    private const val TITLE = "ml"
+    private val TITLES = setOf(TITLE, "molana", "maulana", "moulana", "mowlana", "mawlana", "mulana", "maolana")
 
     /**
      * True if [number]'s digits were said, in order and together: "text 555 0123", or digit by
@@ -93,19 +104,6 @@ object ContactMatch {
         return buildString { mapped.forEach { if (isEmpty() || last() != it) append(it) } }
     }
 
-    private fun distance(a: String, b: String): Int {
-        var row = IntArray(b.length + 1) { it }
-        for (i in a.indices) {
-            val next = IntArray(b.length + 1)
-            next[0] = i + 1
-            for (j in b.indices) {
-                next[j + 1] = minOf(row[j + 1] + 1, next[j] + 1, row[j] + if (a[i] == b[j]) 0 else 1)
-            }
-            row = next
-        }
-        return row[b.length]
-    }
-
     private const val MIN_KEY = 3
     private const val LONG_KEY = 4
     private const val VOWELS = "aeiouy"
@@ -118,4 +116,18 @@ object ContactMatch {
     fun isSelf(spoken: String): Boolean =
         spoken.lowercase().split(SEP).filter { it.isNotEmpty() }.joinToString(" ") in
             setOf("me", "myself", "my number", "my phone", "my cell")
+}
+
+/** Levenshtein distance: the fewest letters added, dropped or changed to turn [a] into [b]. */
+private fun distance(a: String, b: String): Int {
+    var row = IntArray(b.length + 1) { it }
+    for (i in a.indices) {
+        val next = IntArray(b.length + 1)
+        next[0] = i + 1
+        for (j in b.indices) {
+            next[j + 1] = minOf(row[j + 1] + 1, next[j] + 1, row[j] + if (a[i] == b[j]) 0 else 1)
+        }
+        row = next
+    }
+    return row[b.length]
 }
