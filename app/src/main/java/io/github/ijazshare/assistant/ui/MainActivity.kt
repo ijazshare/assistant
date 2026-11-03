@@ -34,10 +34,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -141,15 +139,6 @@ internal fun HomeScreen(modifier: Modifier = Modifier) {
 
             Identity()
 
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                ReadoutRow("INTERFACE", "ONLINE", AssistantColors.Asset)
-                ReadoutRow("NETWORK", "NOT REQUIRED", AssistantColors.Admin)
-                ReadoutRow("TELEMETRY", "NONE", AssistantColors.Admin)
-            }
-
             MemoryReadout(context = context, modifier = Modifier.fillMaxWidth())
 
             Spacer(Modifier.height(2.dp))
@@ -238,24 +227,5 @@ private fun Door(
             Text(label, style = AssistantLabel, color = AssistantColors.Bone)
             Text("$value   →", style = AssistantLabel, color = tone)
         }
-    }
-}
-
-/** A status line: a label on the left, a value on the right. */
-@Composable
-private fun ReadoutRow(label: String, value: String, tone: Color) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = AssistantLabel,
-            color = AssistantColors.Dim,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Text(text = value, style = AssistantReadout, color = tone, maxLines = 1)
     }
 }
