@@ -21,8 +21,8 @@ internal object WhisperNative {
     external fun nativeFree(handle: Long)
 
     /**
-     * 16 kHz mono float PCM in [-1, 1]. [prompt] biases decoding toward its words (contact
-     * names); pass "" for none. Returns the transcript, or "" on failure.
+     * 16 kHz mono float PCM in [-1, 1]. [prompt] biases decoding toward its words (the home
+     * trigger word); pass "" for none. Returns the transcript, or "" on failure.
      */
     external fun nativeTranscribe(handle: Long, samples: FloatArray, threads: Int, prompt: String): String
 }
