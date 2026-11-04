@@ -48,6 +48,7 @@ import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
 import io.github.ijazshare.assistant.tools.ToolGrammar
 import io.github.ijazshare.assistant.tools.ToolResult
+import io.github.ijazshare.assistant.tools.WebSearch
 import io.github.ijazshare.assistant.tts.PiperEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -514,6 +515,11 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
      * whole point of remembering them.
      */
     private suspend fun answeredWithoutTheModel(transcript: String, sttMillis: Long): Boolean {
+        WebSearch.query(transcript)?.let { q ->
+            val call = ToolCall(AssistantTools.WEB_SEARCH, mapOf("query" to q))
+            carryOut(transcript, call, sttMillis, llmMillis = 0, resolution = Resolution.CACHE)
+            return true
+        }
         (LocalAnswers.of(transcript) ?: Arithmetic.answer(transcript))?.let { answer ->
             carryOut(
                 transcript,

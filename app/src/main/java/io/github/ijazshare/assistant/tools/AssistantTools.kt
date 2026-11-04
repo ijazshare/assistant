@@ -48,6 +48,9 @@ object AssistantTools {
      */
     const val HOME = "home"
 
+    /** Opens the browser on a search. Never in [all]: [WebSearch] reads it from the words. */
+    const val WEB_SEARCH = "web_search"
+
     val all: List<Tool> = listOf(
         Tool(
             name = SET_ALARM,

@@ -74,6 +74,14 @@ class ToolExecutor(private val context: Context, private val contacts: ContactLo
             ToolResult.failed("I cannot do that yet.", call.string("reason"))
         },
         AssistantTools.HOME to { call -> homeLink.run(call) },
+        AssistantTools.WEB_SEARCH to { call ->
+            val q = call.string("query").orEmpty()
+            launch(
+                Intent(Intent.ACTION_VIEW, (WebSearch.URL + android.net.Uri.encode(q)).toUri()),
+                "Searching the web for $q.",
+                "No browser could open that search.",
+            )
+        },
     )
 
     suspend fun execute(call: ToolCall): ToolResult = withContext(Dispatchers.Main) {
