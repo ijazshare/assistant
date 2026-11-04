@@ -15,8 +15,8 @@ optional model such as the voice check that helps end-of-speech detection) and o
 exception, a remote model for answering questions, described under Privacy. Otherwise
 airplane mode changes nothing.
 
-> **Status: a working build, developed and tested on the owner's phone. No release has been
-> published on this repo yet** — build it from source (see Building). [PROGRESS.md](PROGRESS.md) is the
+> **Status: a working build, developed and tested on the owner's phone.** Signed APKs are on
+> the [Releases](https://github.com/ijazshare/assistant/releases) page. [PROGRESS.md](PROGRESS.md) is the
 > running log of what was built and verified.
 
 ## What this fork changes
@@ -101,8 +101,9 @@ multilingual recognition, and user-defined automations.
 
 ## Install
 
-This repo has no Releases yet, so build it from source (see Building) and install the debug
-APK with `adb install`. There is no Play Store build. Open the Permissions screen to grant
+Download the APK from [Releases](https://github.com/ijazshare/assistant/releases), check it
+against its `.sha256` file and sideload it (or build from source, see Building). There is no
+Play Store build. The release build installs as its own app, next to a debug build. Open the Permissions screen to grant
 what the assistant needs and set it as your default assistant, then download the models from
 the Models screen.
 
@@ -571,15 +572,14 @@ target for Android.
 ### Release signing
 
 Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml) when a
-`v*` tag is pushed. It ran successfully for v0.1.0 on the upstream repo; this repo has no
-signing secrets yet and has published no release. The workflow expects four repository
-secrets. To set them up once:
+`v*` tag is pushed (v0.1.0 was the first). The workflow expects four repository secrets. To
+set them up once:
 
 ```bash
 # 1. Create a keystore (keep the .jks and these passwords somewhere safe and offline —
 #    losing them means you can never ship an update that upgrades an installed copy).
 keytool -genkeypair -v \
-  -keystore release.jks -alias assistant \
+  -keystore release.jks -alias release \
   -keyalg RSA -keysize 4096 -validity 10000
 
 # 2. Base64-encode it for the secret.
@@ -592,7 +592,7 @@ Then add, under *Settings → Secrets and variables → Actions*:
 |---|---|
 | `SIGNING_KEYSTORE_B64` | contents of `release.jks.b64` |
 | `SIGNING_KEYSTORE_PASSWORD` | the keystore password |
-| `SIGNING_KEY_ALIAS` | `assistant` |
+| `SIGNING_KEY_ALIAS` | `release` |
 | `SIGNING_KEY_PASSWORD` | the key password |
 
 Delete `release.jks.b64` afterwards. The workflow refuses to run if any secret is missing —
