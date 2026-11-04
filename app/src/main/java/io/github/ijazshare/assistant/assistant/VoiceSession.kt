@@ -44,6 +44,7 @@ import io.github.ijazshare.assistant.tools.ContactLookup
 import io.github.ijazshare.assistant.tools.ContactRecency
 import io.github.ijazshare.assistant.tools.HomeDevices
 import io.github.ijazshare.assistant.tools.HomeGrammar
+import io.github.ijazshare.assistant.tools.MessageRouting
 import io.github.ijazshare.assistant.tools.ToolCall
 import io.github.ijazshare.assistant.tools.ToolExecutor
 import io.github.ijazshare.assistant.tools.ToolGrammar
@@ -433,7 +434,11 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
         // Left to right, and only until one answers: a home command first, then a follow-up's answer.
         if (answeredHome(transcript, sttMillis) || answeredFollowUp(transcript, sttMillis)) return
         // Then Tasks (the answer to its open question, an undo, or words that are plainly its own), then the rest.
-        if (answeredByTasks(transcript, sttMillis, viaTasks) || answeredWithoutTheModel(transcript, sttMillis)) return
+        if (answeredByTasks(transcript, sttMillis, viaTasks) || answeredAsMessage(transcript, sttMillis) ||
+            answeredWithoutTheModel(transcript, sttMillis)
+        ) {
+            return
+        }
 
         if (!ensureLanguageModel()) {
             failCommand(
@@ -504,6 +509,15 @@ class VoiceSession(internal val context: Context, internal val scope: CoroutineS
             }
         }
         carryOut(transcript, CallChecks.withMessageFromWords(transcript, call), sttMillis, llmMillis, Resolution.MODEL)
+    }
+
+    /** A sentence that opens as a request to text goes to send_message, not to the model (it chose read_screen). */
+    private suspend fun answeredAsMessage(transcript: String, sttMillis: Long): Boolean {
+        val who = MessageRouting.addressee(transcript) ?: return false
+        // Only routes: the executor still matches the contact, asks for the words and confirms.
+        val call = ToolCall(AssistantTools.SEND_MESSAGE, mapOf("recipient" to who))
+        carryOut(transcript, CallChecks.withMessageFromWords(transcript, call), sttMillis, 0, Resolution.CACHE)
+        return true
     }
 
     /**

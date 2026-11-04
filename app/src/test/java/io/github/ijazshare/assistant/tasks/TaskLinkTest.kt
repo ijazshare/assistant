@@ -51,6 +51,9 @@ class TaskLinkTest {
     fun `fillers are stripped repeatedly and the clock words are never claimed`() {
         assertThat(TaskRouting.claims("okay, so please remind me to call Amira")).isTrue()
         assertThat(TaskRouting.claims("remind me when the timer ends")).isFalse()
+        assertThat(TaskRouting.claims("When I get home, remind me to buy milk")).isTrue()
+        assertThat(TaskRouting.claims("when I leave work remind me to call Sam")).isTrue()
+        assertThat(TaskRouting.claims("when I get home turn on the lights")).isFalse()
         assertThat(TaskRouting.claims("brain dump call the garage")).isTrue()
         assertThat(TaskRouting.claims("tell me a long story about a brain dump")).isFalse()
     }

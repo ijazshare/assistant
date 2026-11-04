@@ -38,3 +38,4 @@
 {"utterance":"open the camera","claim":false,"intent":"not_mine"}
 {"utterance":"Thank you.","claim":false,"intent":"not_mine"}
 {"utterance":"what time is it","claim":false,"intent":"not_mine"}
+{"utterance":"remind me to buy milk when I get home","claim":true,"intent":"create"}

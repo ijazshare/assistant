@@ -24,6 +24,9 @@ object TaskRouting {
 
     private val CLAIMS = listOf(
         "^remind me\\b",
+        // A place reminder that starts with the place: "When I get home, remind me to ...".
+        "^(when|whenever|once|as soon as)\\s+i(['’]m| am| get| got| leave| arrive| reach| come| walk)\\b" +
+            ".*\\bremind me\\b",
         "^(add|put) .+ (to|on|in) (my|the) .*\\b(list|tasks?|to-?dos?)\\b",
         "^(add|create|new) (a )?(task|to-?do)\\b",
         "^(mark|tick|check) .+ ((as|has) )?(done|complete|completed|off)\\b",
