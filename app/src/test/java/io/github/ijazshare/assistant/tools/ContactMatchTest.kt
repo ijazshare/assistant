@@ -121,4 +121,20 @@ class ContactMatchTest {
         assertThat(ContactMatch.matches("molana", "Idris Karim")).isFalse()
         assertThat(ContactMatch.matches("molana yusuf", "Ml Idris Karim")).isFalse()
     }
+
+    @Test
+    fun `a name misheard word by word, with the title said, sounds alike`() {
+        // The shape of the owner's first real mishearing, with made-up names.
+        assertThat(ContactMatch.soundsAlike("Molana Rahid Mia", "Ml Rohed Miah")).isTrue()
+        assertThat(ContactMatch.soundsAlike("Molana Rehidmia", "Ml Rohed Miah")).isTrue()
+        assertThat(ContactMatch.soundsAlike("Molana", "Ml Rohed Miah")).isFalse()
+        assertThat(ContactMatch.soundsAlike("Rahid Lee", "Ml Rohed Miah")).isFalse()
+    }
+
+    @Test
+    fun `a saved line leaves the title out, so either way of saying it finds the contact`() {
+        assertThat(ContactMatch.tagLine("Molana Rahid Mia")).isEqualTo("rahid mia")
+        assertThat(ContactMatch.taggedAs("rahid mia", "Maulana Rahid Mia")).isTrue()
+        assertThat(ContactMatch.taggedAs("rahid mia", "Rahid Mia")).isTrue()
+    }
 }

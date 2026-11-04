@@ -115,14 +115,23 @@ internal suspend fun VoiceSession.answeredPendingName(transcript: String, sttMil
                 _state.value = SessionState.ChooseContact(said, recency.sortByRecency(found.options), remember = true)
             }
 
-            ContactResolution.None -> present(
-                transcript,
-                waiting.held.call,
-                ToolResult.failed("I couldn't find $said either. Say the whole command again."),
-                sttMillis,
-                llmMillis = 0,
-                resolution = Resolution.CACHE,
-            )
+            // The answer misheard too ("I'm a child"): one more guess at what it sounds like, then give up.
+            ContactResolution.None -> when (
+                val alike = withContext(Dispatchers.IO) {
+                    contacts.soundsLike(said)
+                }.singleOrNull()
+            ) {
+                null -> present(
+                    transcript,
+                    waiting.held.call,
+                    ToolResult.failed("I couldn't find $said either. Say the whole command again."),
+                    sttMillis,
+                    llmMillis = 0,
+                    resolution = Resolution.CACHE,
+                )
+
+                else -> ask(transcript, waiting.copy(suggestion = alike))
+            }
         }
     }
     return true

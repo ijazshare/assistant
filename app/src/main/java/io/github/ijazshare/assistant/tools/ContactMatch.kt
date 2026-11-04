@@ -70,44 +70,35 @@ object ContactMatch {
      * sentence: a note mentioning "Sam's dad" must not make "text Sam" his father.
      */
     fun taggedAs(note: String, spoken: String): Boolean {
-        // Compared without spaces or punctuation: Whisper writes one heard name as "Be lol", "Be-lol" or "Belol".
+        // Compared without spaces, punctuation or the title: Whisper writes one heard name as "Be lol",
+        // "Be-lol" or "Belol", and "Molana Rahid Mia" is saved as "rahid mia".
         val tag = compact(tagLine(spoken))
-        return tag.isNotEmpty() && note.lines().any { compact(it) == tag }
+        return tag.isNotEmpty() && note.lines().any { compact(tagLine(it)) == tag }
     }
 
-    /** The note line that tags a contact as [spoken]: "my assistant" is "assistant". */
+    /** The note line that tags a contact as [spoken]: "my assistant" is "assistant", "Molana Rahid" is "rahid". */
     fun tagLine(spoken: String): String =
-        spoken.lowercase().trim().removePrefix("my ").split(SEP).filter { it.isNotEmpty() }.joinToString(" ")
+        spoken.lowercase().trim().removePrefix("my ").split(SEP).filter { it.isNotEmpty() && it !in TITLES }
+            .joinToString(" ")
 
     private fun compact(text: String) = text.lowercase().filter(Char::isLetterOrDigit)
 
     /**
-     * True if [spoken] sounds like a word of [display], or all of it: "Be lol" and "Bilal Khan", "Has an" and
-     * "Hassan". Only ever a guess to ask about ("Did you mean Bilal?"), never one to act on.
+     * True if [spoken] sounds like [display], titles aside: word by word ("Rahid Mia" and "Ml Rohed Miah"),
+     * or run together, since Whisper splits and joins names ("Be lol" and "Bilal Khan", "Rehidmia" and
+     * "Rohed Miah"). Only ever a guess to ask about ("Did you mean ...?"), never one to act on.
      */
     fun soundsAlike(spoken: String, display: String): Boolean {
-        val heard = soundKey(tagLine(spoken))
-        if (heard.length < MIN_KEY) return false
-        val words = display.lowercase().split(SEP).filter { it.isNotEmpty() }
-        val allowed = if (heard.length > LONG_KEY) 1 else 0
-        return (words + words.joinToString("")).any {
-            val key = soundKey(it)
-            key.length >= MIN_KEY && distance(heard, key) <= allowed
-        }
-    }
-
-    // ponytail: a crude sound key (vowels alike, h silent, c/k/q, s/z, v/w) and one edit, tuned on no real
-    // mishearings yet; Double Metaphone or espeak phonemes if it misses names the owner says.
-    private fun soundKey(text: String): String {
-        val letters = text.lowercase().filter { it in 'a'..'z' }.replace("ph", "f").replace("x", "ks").replace("h", "")
-        val mapped = letters.map { if (it in VOWELS) 'a' else ALIKE[it] ?: it }
-        return buildString { mapped.forEach { if (isEmpty() || last() != it) append(it) } }
+        val heard = tagLine(spoken).split(' ').filter { it.isNotEmpty() }
+        val name = tagLine(display).split(' ').filter { it.isNotEmpty() }
+        val joined = soundKey(heard.joinToString(""))
+        if (joined.length < MIN_KEY || name.isEmpty()) return false
+        val keys = name.map(::soundKey)
+        val runTogether = (keys + soundKey(name.joinToString(""))).any { close(joined, it) }
+        return runTogether || heard.all { word -> keys.any { close(soundKey(word), it) } }
     }
 
     private const val MIN_KEY = 3
-    private const val LONG_KEY = 4
-    private const val VOWELS = "aeiouy"
-    private val ALIKE = mapOf('c' to 'k', 'q' to 'k', 'z' to 's', 'w' to 'v')
 
     /**
      * Names for the user themselves, which must resolve to their own number, not a contact. Read
@@ -131,3 +122,19 @@ private fun distance(a: String, b: String): Int {
     }
     return row[b.length]
 }
+
+// ponytail: a crude sound key (vowels alike, h silent, c/k/q, s/z, v/w), tuned on one real mishearing
+// ("Rahid Mia" for "Rohed Miah"); Double Metaphone or espeak phonemes if it misses names the owner says.
+private fun soundKey(text: String): String {
+    val letters = text.lowercase().filter { it in 'a'..'z' }.replace("ph", "f").replace("x", "ks").replace("h", "")
+    val mapped = letters.map { if (it in VOWELS) 'a' else ALIKE[it] ?: it }
+    return buildString { mapped.forEach { if (isEmpty() || last() != it) append(it) } }
+}
+
+/** The same sound, or one letter off for a key longer than [LONG_KEY]. */
+private fun close(a: String, b: String): Boolean =
+    a.isNotEmpty() && b.isNotEmpty() && distance(a, b) <= if (minOf(a.length, b.length) > LONG_KEY) 1 else 0
+
+private const val LONG_KEY = 5
+private const val VOWELS = "aeiouy"
+private val ALIKE = mapOf('c' to 'k', 'q' to 'k', 'z' to 's', 'w' to 'v')
