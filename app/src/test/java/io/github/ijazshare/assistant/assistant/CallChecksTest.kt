@@ -17,6 +17,17 @@ import org.junit.Test
 class CallChecksTest {
 
     @Test
+    fun aTextRequestReadAsTheScreenAsksWhoToText() {
+        val screen = ToolCall(AssistantTools.READ_SCREEN, emptyMap())
+        val checked = CallChecks.reconciled("text Amira Khan I'm running late", screen)
+        assertThat(checked.tool).isEqualTo(AssistantTools.SEND_MESSAGE)
+        assertThat(checked.arguments).isEmpty()
+        assertThat(
+            CallChecks.reconciled("read the text on my screen", screen).tool,
+        ).isEqualTo(AssistantTools.READ_SCREEN)
+    }
+
+    @Test
     fun `read_screen with nothing pointing at the screen becomes unsupported`() {
         val call = ToolCall(AssistantTools.READ_SCREEN, emptyMap())
 

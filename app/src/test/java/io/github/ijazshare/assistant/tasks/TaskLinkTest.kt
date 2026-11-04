@@ -54,6 +54,8 @@ class TaskLinkTest {
         assertThat(TaskRouting.claims("When I get home, remind me to buy milk")).isTrue()
         assertThat(TaskRouting.claims("when I leave work remind me to call Sam")).isTrue()
         assertThat(TaskRouting.claims("when I get home turn on the lights")).isFalse()
+        assertThat(TaskRouting.claims("Mark done.")).isTrue()
+        assertThat(TaskRouting.claims("mark my words")).isFalse()
         assertThat(TaskRouting.claims("brain dump call the garage")).isTrue()
         assertThat(TaskRouting.claims("tell me a long story about a brain dump")).isFalse()
     }

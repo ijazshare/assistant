@@ -30,6 +30,8 @@ object TaskRouting {
         "^(add|put) .+ (to|on|in) (my|the) .*\\b(list|tasks?|to-?dos?)\\b",
         "^(add|create|new) (a )?(task|to-?do)\\b",
         "^(mark|tick|check) .+ ((as|has) )?(done|complete|completed|off)\\b",
+        // A bare "mark done" is about the task just talked about; Tasks asks which when there is none.
+        "^mark,? (as )?(done|complete|completed)\\b",
         "^tick off\\b",
         "^(i['’]ve|i have) (done|finished|completed|paid|sent|called|booked|bought|posted|emailed)\\b",
         "^(what['’]s|what is|what do i have|anything|is there anything)\\b.*" +

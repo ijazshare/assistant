@@ -39,3 +39,4 @@
 {"utterance":"Thank you.","claim":false,"intent":"not_mine"}
 {"utterance":"what time is it","claim":false,"intent":"not_mine"}
 {"utterance":"remind me to buy milk when I get home","claim":true,"intent":"create"}
+{"utterance":"mark done","claim":true,"intent":"complete"}

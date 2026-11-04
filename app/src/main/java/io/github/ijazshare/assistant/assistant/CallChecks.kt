@@ -13,6 +13,7 @@ import android.util.Log
 import io.github.ijazshare.assistant.tools.AssistantTools
 import io.github.ijazshare.assistant.tools.ContactMatch
 import io.github.ijazshare.assistant.tools.MessageBody
+import io.github.ijazshare.assistant.tools.MessageRouting
 import io.github.ijazshare.assistant.tools.StatedTime
 import io.github.ijazshare.assistant.tools.TimeExpressions
 import io.github.ijazshare.assistant.tools.TimeResolver
@@ -47,10 +48,16 @@ internal object CallChecks {
         return when {
             // Nobody asked about the screen, so reading it out answers nothing; a decline at
             // least says so. Unsuccessful, so the guess is never learned either.
-            call.tool == AssistantTools.READ_SCREEN && !ScreenQuestion.pointsAtScreen(transcript) -> {
-                Log.i(TAG, "declining read_screen, nothing points at the screen in [$transcript]")
-                ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "For the screen, say \"read this\"."))
-            }
+            call.tool == AssistantTools.READ_SCREEN && !ScreenQuestion.pointsAtScreen(transcript) ->
+                if (MessageRouting.addressee(transcript) != null) {
+                    // "Text Sam ..." the model read as a screen request: a message, and the executor asks
+                    // who. Nothing from the words is kept, so a misheard name is never the recipient or body.
+                    Log.i(TAG, "read_screen for a text request, asking who instead: [$transcript]")
+                    ToolCall(AssistantTools.SEND_MESSAGE, emptyMap())
+                } else {
+                    Log.i(TAG, "declining read_screen, nothing points at the screen in [$transcript]")
+                    ToolCall(AssistantTools.UNSUPPORTED, mapOf("reason" to "For the screen, say \"read this\"."))
+                }
 
             call.tool == AssistantTools.CALL_CONTACT -> checkedCall(transcript, call)
 
