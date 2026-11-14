@@ -175,7 +175,8 @@ accident):
 - Locks and covers: "Homie, lock the front door", "Homie, close the garage door". Nothing is
   ever unlocked or opened by voice, by Assistant or by the automation.
 - Questions: "Homie, is the garage door open?", "Homie, what's the thermostat set to?",
-  "Homie, what's the temperature in the kitchen?"
+  "Homie, what's the temperature in the kitchen?", "Homie, which lights are on?" (it names the
+  lights Home Assistant can see, and says which ones it can't)
 - Your own phrases: a script labelled `assistant` runs when you say its whole name. Name a
   script "Pink fan medium" and "Homie, pink fan medium" runs it. A script can do anything and
   nobody asks "are you sure?", so never give `assistant` to a script, or a switch, that unlocks
@@ -186,7 +187,8 @@ bedroom light", "ceiling light in the den". Case, punctuation and "the" don't ma
 a name never counts: "bedroom light" doesn't find "Pink Bedroom Light", since it could be the
 wrong bedroom's. When two things answer to what you said, Assistant asks which, and every
 word must be accounted for, so "turn on the light in ten minutes" is declined, not done now.
-Home Assistant's own aliases aren't used; rename the entity instead (its entity id, and your
+"Kitchen lights" is every light in the kitchen, and a switch whose name ends in "light" counts as
+one. Home Assistant's own aliases aren't used; rename the entity instead (its entity id, and your
 automations, stay as they are).
 
 Assistant says a device is on, locked or closing only when Home Assistant saw it happen. For
@@ -234,7 +236,8 @@ description: >-
   "assistant": it switches lights, switches and fans on or off, runs scripts, locks locks,
   closes covers, sets fan speeds, and sets a thermostat's mode (heat, cool or off) and target temperature
   within the limits in the variables below. It tells the state of anything labelled
-  "assistant" or "assistant_read". Nothing is ever unlocked or opened: there is no command for
+  "assistant" or "assistant_read", and which of a list of such lights are on, leaving out any it
+  can't see (one-way RF). Nothing is ever unlocked or opened: there is no command for
   either. Anything else is refused.
 mode: queued
 triggers:
@@ -292,6 +295,40 @@ actions:
                 {%- if t is not none -%}{%- set ex = ex + ['temperature:' ~ (t | string | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
                 {%- if g is not none -%}{%- set ex = ex + ['target:' ~ (g | string | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
                 {%- if state_attr(e, 'assumed_state') == true -%}{%- set ex = ex + ['assumed:true:String'] -%}{%- endif -%}
+                {{ ex | join(',') }}
+          - action: "{{ phone }}"
+            data:
+              message: command_broadcast_intent
+              data:
+                intent_package_name: io.github.ijazshare.assistant
+                intent_action: io.github.ijazshare.assistant.HA_REPLY
+                intent_extras: "{{ extras }}"
+                ttl: 10000
+                priority: high
+      - alias: Tell which lights are on
+        # Every id is a light or switch labelled "assistant" or "assistant_read". A one-way (RF)
+        # light, or one that is unavailable, is "blind": Home Assistant only knows what it last sent.
+        conditions: >-
+          {{ want == 'which_on' and ok
+             and ids | reject('in', label_entities('assistant') + label_entities('assistant_read'))
+                 | list | count == 0
+             and ids | map('regex_replace', '[.].*$', '') | reject('in', ['light', 'switch'])
+                 | list | count == 0 }}
+        sequence:
+          - variables:
+              extras: >-
+                {%- set ns = namespace(on=[], blind=[]) -%}
+                {%- for e in ids -%}
+                  {%- set n = state_attr(e, 'friendly_name') or e -%}
+                  {%- if state_attr(e, 'assumed_state') == true or states(e) not in ['on', 'off'] -%}
+                    {%- set ns.blind = ns.blind + [n] -%}
+                  {%- elif is_state(e, 'on') -%}
+                    {%- set ns.on = ns.on + [n] -%}
+                  {%- endif -%}
+                {%- endfor -%}
+                {%- set ex = ['id:' ~ reply_id ~ ':String.urlencoded', 'status:done:String'] -%}
+                {%- if ns.on -%}{%- set ex = ex + ['on:' ~ (ns.on | join('\n') | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
+                {%- if ns.blind -%}{%- set ex = ex + ['blind:' ~ (ns.blind | join('\n') | urlencode) ~ ':String.urlencoded'] -%}{%- endif -%}
                 {{ ex | join(',') }}
           - action: "{{ phone }}"
             data:
@@ -375,7 +412,7 @@ actions:
             data:
               message: command_broadcast_intent
               data:
-                intent_package_name: io.github.ijazshare.assistant.debug
+                intent_package_name: io.github.ijazshare.assistant
                 intent_action: io.github.ijazshare.assistant.HA_REPLY
                 intent_extras: "id:{{ reply_id }}:String.urlencoded,status:done:String"
                 ttl: 10000
