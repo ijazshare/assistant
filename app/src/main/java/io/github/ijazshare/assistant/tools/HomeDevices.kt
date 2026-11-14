@@ -18,6 +18,10 @@ data class HomeDevice(val id: String, val name: String, val area: String? = null
 
     /** "Lamp in Den", so two lamps can be told apart. */
     val placed: String get() = area?.let { "$name in $it" } ?: name
+
+    /** A light, or a switch named as one ("Kitchen Light"): what "lights" means. */
+    val isLight: Boolean
+        get() = domain == "light" || (domain == "switch" && HomeDevices.words(name).lastOrNull() == "light")
 }
 
 /**
@@ -73,7 +77,7 @@ class HomeDevices(val all: List<HomeDevice>) {
             said.size > 2 && said.take(2) == listOf(LIGHTS, IN) -> said.drop(2)
             else -> return emptyList()
         }
-        return all.filter { it.domain == LIGHT && it.area?.let(::words)?.let(::withoutArticles) == room }
+        return all.filter { it.isLight && it.area?.let(::words)?.let(::withoutArticles) == room }
     }
 
     companion object {
@@ -113,7 +117,6 @@ class HomeDevices(val all: List<HomeDevice>) {
         private fun withoutArticles(words: List<String>) = words.filter { it !in ARTICLES }
 
         val ARTICLES = setOf("the", "my")
-        private const val LIGHT = "light"
         private const val LIGHTS = "lights"
         private const val IN = "in"
         private const val NO_AREA = "No area"

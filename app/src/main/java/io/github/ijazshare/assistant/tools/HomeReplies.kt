@@ -19,6 +19,7 @@ import io.github.ijazshare.assistant.tools.HomeCommand.Companion.STATE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TEMPERATURE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_OFF
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_ON
+import io.github.ijazshare.assistant.tools.HomeCommand.Companion.WHICH_ON
 
 /**
  * What to say for Home Assistant's [reply] to this command, or for no reply at all. Only what the
@@ -29,16 +30,14 @@ fun Act.said(reply: Map<String, String>?): ToolResult {
     val status = reply?.get("status")
     return when {
         reply == null -> ToolResult.failed(
-            if (action ==
-                STATE
-            ) {
+            if (asks) {
                 "Home Assistant did not answer."
             } else {
                 "Home Assistant did not answer, so I do not know if that worked."
             },
         )
 
-        status == "done" -> if (action == STATE) answer(reply) else ToolResult.ok(done(reply))
+        status == "done" -> answered(reply)
 
         status == "unsure" -> ToolResult.failed("I asked, but Home Assistant cannot confirm ${expected()}.")
 
@@ -55,6 +54,15 @@ fun Act.said(reply: Map<String, String>?): ToolResult {
             "Home Assistant refused. Check the label on $name, and that your home list is current.",
         )
     }
+}
+
+/** A question, answered from what Home Assistant read, rather than a change it made. */
+private val Act.asks get() = action == STATE || action == WHICH_ON
+
+private fun Act.answered(reply: Map<String, String>): ToolResult = when (action) {
+    STATE -> answer(reply)
+    WHICH_ON -> lightsOn(reply)
+    else -> ToolResult.ok(done(reply))
 }
 
 private const val SAY_HEAT_OR_COOL = "Say heat or cool, and the temperature."
@@ -134,6 +142,28 @@ private fun Act.answer(reply: Map<String, String>): ToolResult {
         else -> ToolResult.ok("$name: $value.${climate(reply)}")
     }
 }
+
+/**
+ * "Kitchen Light is on. Home Assistant can't see Pink Bedroom Light." A one-way (RF) light, or one
+ * Home Assistant can't reach, is never counted as on or off: Home Assistant only knows what it last sent.
+ */
+private fun lightsOn(reply: Map<String, String>): ToolResult {
+    val on = names(reply["on"])
+    val blind = names(reply["blind"])
+    val seen = when {
+        on.size == 1 -> "${on.single()} is on."
+        on.isNotEmpty() -> "${listed(on, "and")} are on."
+        blind.isEmpty() -> "No lights are on."
+        else -> "None of the lights Home Assistant can see are on."
+    }
+    return ToolResult.ok(if (blind.isEmpty()) seen else "$seen Home Assistant can't see ${listed(blind, "or")}.")
+}
+
+// The automation sends one name per line.
+private fun names(text: String?) = text.orEmpty().lines().map(String::trim).filter(String::isNotEmpty)
+
+private fun listed(names: List<String>, last: String) =
+    if (names.size == 1) names.single() else names.dropLast(1).joinToString(", ") + " $last " + names.last()
 
 private fun climate(reply: Map<String, String>): String {
     val now = number(reply["temperature"].orEmpty())

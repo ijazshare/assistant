@@ -19,6 +19,7 @@ import io.github.ijazshare.assistant.tools.HomeCommand.Companion.STATE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TEMPERATURE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_OFF
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_ON
+import io.github.ijazshare.assistant.tools.HomeCommand.Companion.WHICH_ON
 import io.github.ijazshare.assistant.tools.HomeCommand.Decline
 import io.github.ijazshare.assistant.tools.HomeDevices.Companion.ARTICLES
 import io.github.ijazshare.assistant.tools.HomeDevices.Companion.words
@@ -65,6 +66,9 @@ object HomeGrammar {
         // Whisper hears "is the garage door open" as "it's the garage door open".
         val rest = if (said.take(2) == IT_S) listOf("is") + said.drop(2) else said
         return when {
+            // Before "is/are ... on", which would read "are any lights on" as a device called "any lights".
+            rest in WHICH_LIGHTS_ON -> lightsOn(home)
+
             rest.firstOrNull() in IS && rest.size > 2 && rest.last() in CONDITIONS ->
                 home.one(rest.drop(1).dropLast(1)) { it.act(STATE, asked = rest.last()) }
 
@@ -200,6 +204,14 @@ object HomeGrammar {
     private val IT_S = listOf("it", "s")
     private val CONDITIONS = setOf("on", OFF, "open", "closed", "locked", "unlocked")
 
+    private val WHICH_LIGHTS_ON = setOf(
+        listOf("which", "lights", "are", "on"),
+        listOf("what", "lights", "are", "on"),
+        listOf("which", "lights", "on"),
+        listOf("are", "any", "lights", "on"),
+        listOf("any", "lights", "on"),
+    )
+
     // Whisper writes "what's" as two words once the apostrophe goes.
     private val WHAT_IS = setOf(listOf("what", "is"), listOf("what", "s"))
 }
@@ -261,5 +273,18 @@ private fun questioned(words: List<String>): List<String> {
         target.drop(2)
     } else {
         target
+    }
+}
+
+// The automation takes at most 20 entity ids per command.
+private const val MAX_LIGHTS = 20
+
+/** Every light on the list, readable or not; Home Assistant says which are on and which it can't see. */
+private fun lightsOn(home: HomeDevices): HomeCommand {
+    val lights = home.all.filter { it.isLight }
+    return when {
+        lights.isEmpty() -> Decline("Your home list has no lights.")
+        lights.size > MAX_LIGHTS -> Decline("I can only ask about $MAX_LIGHTS lights at once.")
+        else -> Act(WHICH_ON, lights.map { it.id }, "lights")
     }
 }

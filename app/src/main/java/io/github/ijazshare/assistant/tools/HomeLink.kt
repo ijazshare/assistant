@@ -110,7 +110,8 @@ class HomeLink(private val context: Context) {
         private fun randomHex(bytes: Int) =
             ByteArray(bytes).also(SecureRandom()::nextBytes).joinToString("") { "%02x".format(it) }
 
-        private val REPLY_EXTRAS = listOf("status", "state", "unit", "temperature", "target", "assumed", "low", "high")
+        private val REPLY_EXTRAS =
+            listOf("status", "state", "unit", "temperature", "target", "assumed", "low", "high", "on", "blind")
 
         // The Play build, then the F-Droid one; both keep the share screen under the same class name.
         private val HA_PACKAGES =

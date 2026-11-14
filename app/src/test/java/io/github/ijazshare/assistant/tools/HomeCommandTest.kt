@@ -19,6 +19,7 @@ import io.github.ijazshare.assistant.tools.HomeCommand.Companion.STATE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TEMPERATURE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_OFF
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_ON
+import io.github.ijazshare.assistant.tools.HomeCommand.Companion.WHICH_ON
 import io.github.ijazshare.assistant.tools.HomeCommand.Decline
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -146,5 +147,23 @@ class HomeCommandTest {
         assertThat(
             Act(STATE, listOf("sensor.k"), "Kitchen Temperature").said(done("state" to "21.5", "unit" to "°C")).spoken,
         ).isEqualTo("Kitchen Temperature: 21.5 degrees Celsius.")
+    }
+
+    @Test
+    fun whichLightsAreOnSaysOnlyWhatHomeAssistantCanSee() {
+        val lights = Act(WHICH_ON, listOf("light.a", "light.b", "switch.c"), "lights")
+        assertThat(HomeCommand.of(lights.toCall())).isEqualTo(lights)
+        assertThat(lights.said(done()).spoken).isEqualTo("No lights are on.")
+        assertThat(lights.said(done("on" to "Kitchen Light")).spoken).isEqualTo("Kitchen Light is on.")
+        assertThat(lights.said(done("on" to "Kitchen Light\nDen Lamp\nHall")).spoken)
+            .isEqualTo("Kitchen Light, Den Lamp and Hall are on.")
+        assertThat(
+            lights.said(done("on" to "Kitchen Light", "blind" to "Pink Bedroom Light\nLiving Room Light")).spoken,
+        )
+            .isEqualTo("Kitchen Light is on. Home Assistant can't see Pink Bedroom Light or Living Room Light.")
+        assertThat(lights.said(done("blind" to "Pink Bedroom Light")).spoken)
+            .isEqualTo("None of the lights Home Assistant can see are on. Home Assistant can't see Pink Bedroom Light.")
+        assertThat(lights.said(null).spoken).isEqualTo("Home Assistant did not answer.")
+        assertThat(lights.said(mapOf("status" to "refused")).success).isFalse()
     }
 }

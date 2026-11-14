@@ -20,6 +20,7 @@ import io.github.ijazshare.assistant.tools.HomeCommand.Companion.STATE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TEMPERATURE
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_OFF
 import io.github.ijazshare.assistant.tools.HomeCommand.Companion.TURN_ON
+import io.github.ijazshare.assistant.tools.HomeCommand.Companion.WHICH_ON
 import io.github.ijazshare.assistant.tools.HomeCommand.Decline
 import org.junit.Test
 
@@ -222,5 +223,43 @@ class HomeGrammarTest {
         assertThat(read("Hey, homie. Turn on the pink bedroom light.")).isEqualTo(pinkLight)
         assertThat(HomeGrammar.addressed("Hey Jarvis, lights off", "hey jarvis")).isTrue()
         assertThat(HomeGrammar.addressed("Call me, turn off the light", "homie")).isFalse()
+    }
+
+    @Test
+    fun aSwitchNamedAsALightIsOneOfTheLights() {
+        val kitchen = HomeDevices.parse(
+            """
+            ## Kitchen
+            - Kitchen Light (switch.kitchen_light)
+            - Coffee Maker (switch.coffee_maker)
+            """.trimIndent(),
+        )
+        assertThat(read("Homie, turn on the kitchen lights", kitchen))
+            .isEqualTo(Act(TURN_ON, listOf("switch.kitchen_light"), "Kitchen lights"))
+        assertThat(read("Homie, which lights are on?", kitchen))
+            .isEqualTo(Act(WHICH_ON, listOf("switch.kitchen_light"), "lights"))
+    }
+
+    @Test
+    fun whichLightsAreOnAsksAboutEveryLight() {
+        val every = Act(
+            WHICH_ON,
+            listOf("light.pink_bedroom_light", "light.pink_lamp", "light.den_lamp", "light.den_ceiling"),
+            "lights",
+        )
+        listOf(
+            "Homie, which lights are on?",
+            "Homie, what lights are on",
+            "Homie, are any lights on?",
+            "Hey homie, any lights on",
+        ).forEach { assertThat(read(it)).isEqualTo(every) }
+        assertThat(
+            declined("Homie, which lights are on?", HomeDevices.parse("## Den\n- Window (binary_sensor.w) read only")),
+        )
+            .isEqualTo("Your home list has no lights.")
+        val many = HomeDevices.parse((1..21).joinToString("\n") { "- Lamp $it (light.lamp_$it)" })
+        assertThat(declined("Homie, which lights are on", many)).isEqualTo("I can only ask about 20 lights at once.")
+        // Not a question about every light.
+        assertThat(read("Homie, which lighter on?")).isInstanceOf(Decline::class.java)
     }
 }

@@ -69,6 +69,7 @@ sealed interface HomeCommand {
         const val HVAC = "hvac"
         const val TEMPERATURE = "temperature"
         const val SPEED = "speed"
+        const val WHICH_ON = "which_on"
 
         /** The command a [toCall] call carries, or null for a call the words did not make. */
         fun of(call: ToolCall): HomeCommand? {
@@ -83,7 +84,7 @@ sealed interface HomeCommand {
             }
         }
 
-        private val ACTIONS = setOf(STATE, TURN_ON, TURN_OFF, RUN, LOCK, CLOSE, HVAC, TEMPERATURE, SPEED)
+        private val ACTIONS = setOf(STATE, TURN_ON, TURN_OFF, RUN, LOCK, CLOSE, HVAC, TEMPERATURE, SPEED, WHICH_ON)
         private const val DO = "do"
         private const val ENTITY = "entity"
         private const val NAME = "name"
