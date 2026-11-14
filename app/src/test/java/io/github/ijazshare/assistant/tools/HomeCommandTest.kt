@@ -86,6 +86,9 @@ class HomeCommandTest {
         assertThat(
             Act(TURN_OFF, listOf("light.a", "light.b"), "Den lights").said(done()).spoken,
         ).isEqualTo("Den lights are off.")
+        assertThat(
+            Act(TURN_ON, listOf("switch.k"), "Kitchen lights").said(done()).spoken,
+        ).isEqualTo("Kitchen lights are on.")
         assertThat(light.said(mapOf("status" to "unsure")).spoken)
             .isEqualTo("I asked, but Home Assistant cannot confirm Pink Bedroom Light is on.")
         assertThat(light.said(mapOf("status" to "refused")).spoken).startsWith("Home Assistant refused.")

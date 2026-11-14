@@ -111,7 +111,8 @@ private fun Act.expected(): String = when (action) {
 
 private fun Act.onOff() = if (action == TURN_ON) "on" else "off"
 
-private fun Act.isAre() = if (entities.size > 1) "are" else "is"
+// "Kitchen lights" is plural even when the kitchen has one light.
+private fun Act.isAre() = if (entities.size > 1 || name.endsWith(" lights")) "are" else "is"
 
 private fun Act.answer(reply: Map<String, String>): ToolResult {
     val state = reply["state"].orEmpty().lowercase()
