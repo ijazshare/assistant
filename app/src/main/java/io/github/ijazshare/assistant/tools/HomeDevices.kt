@@ -50,7 +50,9 @@ class HomeDevices(val all: List<HomeDevice>) {
         val said = withoutArticles(words)
         // A room said alone means what is in it: "is the garage open" is the Garage's one door, and a
         // room holding several gets "Which ...?" below rather than a guess.
+        // "The lock" is the list's lock; with two, "Which lock?" below.
         val found = named(said).ifEmpty { all.filter { it.area?.let(::words)?.let(::withoutArticles) == said } }
+            .ifEmpty { KINDS[said.singleOrNull()]?.let { kind -> all.filter { it.domain == kind } }.orEmpty() }
         return when {
             said.isEmpty() -> HomeCommand.Decline("Say which one.")
 
@@ -117,6 +119,9 @@ class HomeDevices(val all: List<HomeDevice>) {
         private fun withoutArticles(words: List<String>) = words.filter { it !in ARTICLES }
 
         val ARTICLES = setOf("the", "my")
+
+        // ponytail: only "lock" so far; add a word here when the owner says one ("the thermostat" has its own path).
+        private val KINDS = mapOf("lock" to "lock")
         private const val LIGHTS = "lights"
         private const val IN = "in"
         private const val NO_AREA = "No area"

@@ -262,4 +262,22 @@ class HomeGrammarTest {
         // Not a question about every light.
         assertThat(read("Homie, which lighter on?")).isInstanceOf(Decline::class.java)
     }
+
+    @Test
+    fun theLockIsTheListsOnlyLock() {
+        val one = HomeDevices.parse("## Back door\n- Side (lock.side) read only\n- Porch Light (light.porch)")
+        assertThat(
+            read("Homie, is the lock open?", one),
+        ).isEqualTo(Act(STATE, listOf("lock.side"), "Side", asked = "open"))
+        assertThat(
+            read("Homie is the lock locked", one),
+        ).isEqualTo(Act(STATE, listOf("lock.side"), "Side", asked = "locked"))
+        assertThat(declined("Homie, lock the lock", one)).isEqualTo("You let me check Side, not change it.")
+        // Two locks: it asks, never guesses.
+        assertThat(
+            declined("Homie, is the lock locked?"),
+        ).isEqualTo("Which lock? Front Door in Hallway, Back Door in Hallway.")
+        // Only a lock is a lock: "the light" is not the only light.
+        assertThat(declined("Homie, is the porch locked?", one)).isEqualTo("Your home list has nothing called porch.")
+    }
 }
